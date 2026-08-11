@@ -19,6 +19,12 @@ class Draw extends Model
         'status',
         'started_at',
         'completed_at',
+        'snapshot_at',
+        'random_provider',
+        'random_request_id',
+        'random_request',
+        'random_response',
+        'randomized_at',
         'created_by',
     ];
 
@@ -27,6 +33,10 @@ class Draw extends Model
         'draw_date' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'snapshot_at' => 'datetime',
+        'random_request' => 'array',
+        'random_response' => 'array',
+        'randomized_at' => 'datetime',
     ];
 
     public function drawPrizes(): HasMany
@@ -50,5 +60,10 @@ class Draw extends Model
     public function entries(): HasMany
     {
         return $this->hasMany(DrawEntry::class);
+    }
+
+    public function winners(): HasMany
+    {
+        return $this->hasMany(DrawWinner::class);
     }
 }

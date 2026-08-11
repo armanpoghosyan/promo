@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Services\Random\LocalRandomProvider;
+use App\Services\Random\RandomProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,7 +13,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(
+            RandomProvider::class,
+            LocalRandomProvider::class
+        );
     }
 
     /**

@@ -48,10 +48,7 @@ class Receipt extends Model
 
     public function auditLogs(): MorphMany
     {
-        return $this->morphMany(
-            AuditLog::class,
-            'auditable'
-        );
+        return $this->morphMany(AuditLog::class,'auditable');
     }
 
     public function drawEntries(): HasMany
@@ -62,5 +59,12 @@ class Receipt extends Model
     public function notes(): HasMany
     {
         return $this->hasMany(ReceiptNote::class);
+    }
+
+    public function drawWinners(): HasMany
+    {
+        return $this->hasMany(
+            DrawWinner::class
+        );
     }
 }
