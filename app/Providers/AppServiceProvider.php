@@ -3,8 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use App\Services\Random\LocalRandomProvider;
 use App\Services\Random\RandomProvider;
+use App\Services\Random\RandomOrgProvider;
+use App\Services\Random\LocalRandomProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -13,9 +14,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+
         $this->app->bind(
             RandomProvider::class,
-            LocalRandomProvider::class
+            function () {
+                return match (config('services.random.provider')) {
+                    'random_org' => app(RandomOrgProvider::class),
+                    default => app(LocalRandomProvider::class),
+                };
+            }
         );
     }
 

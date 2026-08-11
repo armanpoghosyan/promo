@@ -10,4 +10,5 @@ enum DrawStatus: string
     case CANCELLED = 'cancelled';
     case DRAFT = 'draft';
     case RUNNING = 'running';
+    case SELECTED = 'selected';
 }

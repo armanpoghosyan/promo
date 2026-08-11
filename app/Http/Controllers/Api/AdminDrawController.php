@@ -159,15 +159,13 @@ class AdminDrawController extends Controller
             ], 422);
         }
 
-        $drawPrize = DrawPrize::create([
-            [
-                'draw_id' => $draw->id,
-                'prize_id' => $prize->id,
-            ],
-            [
-                'quantity' => $data['quantity'],
-            ]
-        ]);
+        $drawPrize = new DrawPrize();
+
+        $drawPrize->draw_id = $draw->id;
+        $drawPrize->prize_id = $prize->id;
+        $drawPrize->quantity = $data['quantity'];
+
+        $drawPrize->save();
 
         return response()->json([
             'message' => 'Prize added to draw successfully.',

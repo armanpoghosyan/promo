@@ -40,4 +40,12 @@ return [
         'secret' => env('TURNSTILE_SECRET'),
     ],
 
+    'random' => [
+        'provider' => env('RANDOM_PROVIDER', 'local'),
+    ],
+
+    'random_org' => [
+        'api_key' => env('RANDOM_ORG_API_KEY'),
+    ],
+
 ];
