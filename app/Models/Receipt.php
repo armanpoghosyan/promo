@@ -53,8 +53,14 @@ class Receipt extends Model
             'auditable'
         );
     }
+
     public function drawEntries(): HasMany
     {
         return $this->hasMany(DrawEntry::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(ReceiptNote::class);
     }
 }
