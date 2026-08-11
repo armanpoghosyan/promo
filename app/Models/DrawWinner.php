@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\DrawWinnerStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\DrawWinnerStatus;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DrawWinner extends Model
 {
@@ -21,6 +23,7 @@ class DrawWinner extends Model
         'confirmed_at',
         'cancelled_at',
         'cancellation_reason',
+        'replaced_winner_id',
     ];
 
     protected $casts = [
@@ -43,5 +46,28 @@ class DrawWinner extends Model
     public function receipt(): BelongsTo
     {
         return $this->belongsTo(Receipt::class);
+    }
+
+    public function contactAttempts(): HasMany
+    {
+        return $this->hasMany(
+            WinnerContactAttempt::class
+        );
+    }
+
+    public function replacedWinner(): BelongsTo
+    {
+        return $this->belongsTo(
+            DrawWinner::class,
+            'replaced_winner_id'
+        );
+    }
+
+    public function replacementWinner(): HasOne
+    {
+        return $this->hasOne(
+            DrawWinner::class,
+            'replaced_winner_id'
+        );
     }
 }

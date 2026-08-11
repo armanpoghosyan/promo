@@ -178,4 +178,89 @@ class DrawService
             );
         }
     }
+
+    public function selectReplacementWinner(
+        DrawWinner $cancelledWinner
+    ): DrawWinner {
+        return DB::transaction(function () use ($cancelledWinner) {
+
+            $cancelledWinner->load([
+                'draw',
+                'drawPrize',
+            ]);
+
+            $draw = Draw::query()
+                ->with('drawPrizes')
+                ->whereKey($cancelledWinner->draw_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /*
+             * Find entries that have NOT already won
+             * in this draw.
+             */
+            $alreadyWonEntryNumbers = DrawWinner::query()
+                ->where('draw_id', $draw->id)
+                ->whereNotNull('entry_number')
+                ->pluck('entry_number');
+
+            $eligibleEntries = DrawEntry::query()
+                ->where('draw_id', $draw->id)
+                ->whereNotIn(
+                    'entry_number',
+                    $alreadyWonEntryNumbers
+                )
+                ->where(
+                    'entry_number',
+                    '!=',
+                    $cancelledWinner->entry_number
+                )
+                ->get();
+
+            if ($eligibleEntries->isEmpty()) {
+                throw new RuntimeException(
+                    'There are no eligible entries for a replacement winner.'
+                );
+            }
+
+            /*
+             * Randomize the eligible entries.
+             */
+            $entryNumbers = $eligibleEntries
+                ->pluck('entry_number')
+                ->values()
+                ->all();
+
+            $randomizedEntryNumbers =
+                $this->randomProvider->shuffle($entryNumbers);
+
+            $entryNumber = $randomizedEntryNumbers[0];
+
+            $entry = $eligibleEntries->firstWhere(
+                'entry_number',
+                $entryNumber
+            );
+
+            if (!$entry) {
+                throw new RuntimeException(
+                    "Replacement entry {$entryNumber} was not found."
+                );
+            }
+
+            /*
+             * Create a NEW winner.
+             *
+             * The cancelled winner remains untouched.
+             */
+            return DrawWinner::create([
+                'draw_id' => $draw->id,
+                'draw_prize_id' => $cancelledWinner->draw_prize_id,
+                'receipt_id' => $entry->receipt_id,
+                'entry_number' => $entryNumber,
+                'status' => DrawWinnerStatus::SELECTED,
+                'selected_at' => now(),
+                'replaced_winner_id' => $cancelledWinner->id,
+            ]);
+        });
+    }
 }

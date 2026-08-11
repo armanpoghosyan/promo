@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminReceiptController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminDrawController;
+use App\Http\Controllers\Api\AdminWinnerController;
 
 Route::post(
     '/participants/receipts',
@@ -108,5 +109,15 @@ Route::middleware('auth:sanctum')
         Route::post(
             '/draws/{draw}/execute',
             [AdminDrawController::class, 'execute']
+        );
+
+         Route::post(
+            'winners/{winner}/confirm',
+            [AdminWinnerController::class, 'confirm']
+        );
+
+        Route::post(
+            'winners/{winner}/contact-attempts',
+            [AdminWinnerController::class, 'addContactAttempt']
         );
     });
