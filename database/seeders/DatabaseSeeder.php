@@ -2,24 +2,38 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Enums\ReceiptStatus;
+use App\Models\Participant;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            PrizeSeeder::class,
+            DrawSeeder::class,
         ]);
+
+        Participant::factory()
+            ->count(10)
+            ->create()
+            ->each(function (Participant $participant) {
+                $participant->receipts()->createMany([
+                    [
+                        'receipt_number' => fake()->unique()->numerify('##########'),
+                        'receipt_image' => 'receipts/test.jpg',
+                        'status' => ReceiptStatus::SUBMITTED,
+                        'submitted_at' => now(),
+                    ],
+                    [
+                        'receipt_number' => fake()->unique()->numerify('##########'),
+                        'receipt_image' => 'receipts/test.jpg',
+                        'status' => ReceiptStatus::APPROVED,
+                        'submitted_at' => now(),
+                        'verified_at' => now(),
+                    ],
+                ]);
+            });
     }
 }
