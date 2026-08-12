@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\AdminReceiptController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminDrawController;
 use App\Http\Controllers\Api\AdminWinnerController;
+use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\ReportExportController;
+use App\Http\Controllers\Api\Admin\DashboardController;
 
 Route::post(
     '/participants/receipts',
@@ -119,5 +122,30 @@ Route::middleware('auth:sanctum')
         Route::post(
             'winners/{winner}/contact-attempts',
             [AdminWinnerController::class, 'addContactAttempt']
+        );
+
+        Route::get(
+            '/reports/overview',
+            [ReportController::class, 'overview']
+        );
+
+        Route::get(
+            '/reports/export/receipts',
+            [ReportExportController::class, 'receipts']
+        );
+
+        Route::get(
+            '/reports/export/winners',
+            [ReportExportController::class, 'winners']
+        );
+
+        Route::get(
+            '/reports/export/draws',
+            [ReportExportController::class, 'draws']
+        );
+
+        Route::get(
+            '/dashboard',
+            [DashboardController::class, 'overview']
         );
     });
