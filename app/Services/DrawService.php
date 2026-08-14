@@ -116,6 +116,11 @@ class DrawService
                 }
             }
 
+            $draw->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+            ]);
+
             return $draw->fresh([
                 'drawPrizes.prize',
                 'entries',
@@ -126,6 +131,15 @@ class DrawService
 
     private function validateDraw(Draw $draw): void
     {
+        /*
+         * A draw must be running.
+         */
+        if ($draw->status->value !== 'running') {
+            throw new RuntimeException(
+                'Only a running draw can be executed.'
+            );
+        }
+
         /*
          * The draw must have a participant snapshot.
          */

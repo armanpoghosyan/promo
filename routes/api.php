@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\AdminWinnerController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
 use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\AdminParticipantController;
 
 Route::post(
     '/participants/receipts',
@@ -35,8 +36,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-Route::middleware('auth:sanctum')
-    ->prefix('admin')
+
+//Route::middleware('auth:sanctum')
+Route::prefix('admin')
     ->group(function () {
 
         Route::get(
@@ -114,6 +116,17 @@ Route::middleware('auth:sanctum')
             [AdminDrawController::class, 'execute']
         );
 
+        Route::get(
+            '/winners',
+            [AdminWinnerController::class, 'index']
+        );
+
+        Route::get(
+            '/winners/{winner}',
+            [AdminWinnerController::class, 'show']
+        );
+
+
          Route::post(
             'winners/{winner}/confirm',
             [AdminWinnerController::class, 'confirm']
@@ -122,6 +135,16 @@ Route::middleware('auth:sanctum')
         Route::post(
             'winners/{winner}/contact-attempts',
             [AdminWinnerController::class, 'addContactAttempt']
+        );
+
+        Route::post(
+            'winners/{winner}/cancel',
+            [AdminWinnerController::class, 'cancel']
+        );
+
+        Route::post(
+            'winners/{winner}/replace',
+            [AdminWinnerController::class, 'replace']
         );
 
         Route::get(
@@ -145,7 +168,22 @@ Route::middleware('auth:sanctum')
         );
 
         Route::get(
+            '/prizes',
+            [AdminDrawController::class, 'prizes']
+        );
+
+        Route::get(
             '/dashboard',
             [DashboardController::class, 'overview']
+        );
+
+        Route::get(
+            '/participants',
+            [AdminParticipantController::class, 'index']
+        );
+
+        Route::get(
+            '/participants/{participant}',
+            [AdminParticipantController::class, 'show']
         );
     });

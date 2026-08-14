@@ -58,7 +58,7 @@ class Receipt extends Model
 
     public function notes(): HasMany
     {
-        return $this->hasMany(ReceiptNote::class);
+        return $this->hasMany(ReceiptNote::class)->latest('created_at');
     }
 
     public function drawWinners(): HasMany

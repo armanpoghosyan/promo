@@ -39,7 +39,8 @@ class AdminDrawController extends Controller
         $draw->load([
             'drawPrizes.prize',
             'entries',
-            'winners.receipt',
+            'winners.receipt.participant',
+            'winners.contactAttempts',
         ]);
 
         return response()->json([
@@ -269,7 +270,8 @@ class AdminDrawController extends Controller
             ]);
 
             AuditLog::create([
-                'user_id' => $request->user()->id,
+                //'user_id' => $request->user()->id,
+                'user_id' => 1, //TODO fix auth
                 'action' => 'draw.snapshot_created',
                 'auditable_type' => Draw::class,
                 'auditable_id' => $draw->id,
@@ -316,5 +318,35 @@ class AdminDrawController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    public function prizes(): JsonResponse
+    {
+        $prizes = Prize::query()
+            ->orderBy('id')
+            ->get()
+            ->map(function (Prize $prize) {
+                $allocatedQuantity = DrawPrize::query()
+                    ->where('prize_id', $prize->id)
+                    ->sum('quantity');
+
+                return [
+                    'id' => $prize->id,
+                    'name' => $prize->name,
+                    'type' => $prize->type,
+                    'value' => $prize->value,
+                    'currency' => $prize->currency,
+                    'total_quantity' => $prize->total_quantity,
+                    'allocated_quantity' => $allocatedQuantity,
+                    'available_quantity' => max(
+                        0,
+                        $prize->total_quantity - $allocatedQuantity
+                    ),
+                ];
+            });
+
+        return response()->json([
+            'data' => $prizes,
+        ]);
     }
 }

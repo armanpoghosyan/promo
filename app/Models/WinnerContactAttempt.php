@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
+use App\Enums\ContactAttemptResult;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\ContactAttemptResult;
 
 class WinnerContactAttempt extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'winner_id',
+        'draw_winner_id',
         'created_by',
         'attempted_at',
         'result',
@@ -26,7 +26,10 @@ class WinnerContactAttempt extends Model
 
     public function winner(): BelongsTo
     {
-        return $this->belongsTo(Winner::class);
+        return $this->belongsTo(
+            DrawWinner::class,
+            'draw_winner_id'
+        );
     }
 
     public function createdBy(): BelongsTo

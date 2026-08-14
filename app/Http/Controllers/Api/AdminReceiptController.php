@@ -70,6 +70,7 @@ class AdminReceiptController extends Controller
     ): JsonResponse {
         $receipt->load([
             'participant',
+            'notes.user',
         ]);
 
         return response()->json([
@@ -92,11 +93,13 @@ class AdminReceiptController extends Controller
         $receipt->update([
             'status' => ReceiptStatus::APPROVED,
             'verified_at' => now(),
-            'verified_by' => $request->user()->id,
+            //'verified_by' => $request->user()->id,
+            'verified_by' => 1, //TODO fix auth
         ]);
 
         AuditLog::create([
-            'user_id' => $request->user()->id,
+            //'user_id' => $request->user()->id,
+            'user_id' => 1, //TODO fix auth
             'action' => 'receipt.approved',
             'auditable_type' => Receipt::class,
             'auditable_id' => $receipt->id,
@@ -111,9 +114,14 @@ class AdminReceiptController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+         $receipt->load([
+            'participant',
+            'notes.user',
+        ]);
+
         return response()->json([
             'message' => 'Receipt approved successfully.',
-            'data' => $receipt->fresh(),
+            'data' => $receipt,
         ]);
     }
 
@@ -135,15 +143,16 @@ class AdminReceiptController extends Controller
             ], 422);
         }
 
-        $oldStatus = $receipt->status->value;
-
         $receipt->update([
             'status' => ReceiptStatus::REJECTED,
             'rejection_reason' => $data['reason'],
         ]);
 
+
+        $oldStatus = $receipt->status->value;
         AuditLog::create([
-            'user_id' => $request->user()->id,
+            //'user_id' => $request->user()->id,
+            'user_id' => 1, //TODO fix auth
             'action' => 'receipt.rejected',
             'auditable_type' => Receipt::class,
             'auditable_id' => $receipt->id,
@@ -159,9 +168,14 @@ class AdminReceiptController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+        $receipt->load([
+            'participant',
+            'notes.user',
+        ]);
+
         return response()->json([
             'message' => 'Receipt rejected successfully.',
-            'data' => $receipt->fresh(),
+            'data' => $receipt,
         ]);
     }
 
@@ -178,12 +192,16 @@ class AdminReceiptController extends Controller
         ]);
 
         $note = $receipt->notes()->create([
-            'user_id' => $request->user()->id,
+            //'user_id' => $request->user()->id,
+            'user_id' => 1, //TODO fix auth
             'note' => $data['note'],
         ]);
 
+        $note->load(['user']);
+
         AuditLog::create([
-            'user_id' => $request->user()->id,
+            //'user_id' => $request->user()->id,
+            'user_id' => 1, //TODO fix auth
             'action' => 'receipt.note_added',
             'auditable_type' => Receipt::class,
             'auditable_id' => $receipt->id,
