@@ -1,0 +1,646 @@
+import {useState, type ChangeEvent, type FormEvent, type ReactNode} from 'react';
+
+import api from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
+
+type FormState = {
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email: string;
+    receipt_number: string;
+
+    privacy_policy_accepted: boolean;
+    official_rules_accepted: boolean;
+    personal_data_consent: boolean;
+};
+
+type FormErrors = Partial<
+    Record<
+        | 'first_name'
+        | 'last_name'
+        | 'phone'
+        | 'email'
+        | 'receipt_number'
+        | 'receipt_image'
+        | 'privacy_policy_accepted'
+        | 'official_rules_accepted'
+        | 'personal_data_consent',
+        string
+    >
+>;
+
+type ModalType =
+    | 'privacy'
+    | 'rules'
+    | null;
+
+const initialForm: FormState = {
+    first_name: '',
+    last_name: '',
+    phone: '',
+    email: '',
+    receipt_number: '',
+
+    privacy_policy_accepted: false,
+    official_rules_accepted: false,
+    personal_data_consent: false,
+};
+
+export default function Landing() {
+    const {language, setLanguage, tr} = useLanguage();
+
+    const [form, setForm] = useState<FormState>(initialForm);
+    const [receiptImage, setReceiptImage] = useState<File | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
+    const [submitting, setSubmitting,] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
+    const [modal, setModal] = useState<ModalType>(null);
+
+    const updateField = (field: keyof FormState, value: string | boolean) => {
+        setForm((current) => ({
+            ...current,
+            [field]: value,
+        }));
+    };
+
+    const clearFieldError = (field: keyof FormErrors) => {
+        setFieldErrors((current) => ({
+            ...current,
+            [field]: undefined,
+        }));
+    };
+
+    const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0] ?? null;
+
+        setReceiptImage(file);
+        if (file) {
+            clearFieldError('receipt_image');
+        }
+    };
+
+    const validateForm = (): boolean => {
+        const errors: FormErrors = {};
+
+        if (!form.first_name.trim()) {
+            errors.first_name = t.public.validation.required;
+        }
+
+        if (!form.last_name.trim()) {
+            errors.last_name = t.public.validation.required;
+        }
+
+        if (!form.phone.trim()) {
+            errors.phone = t.public.validation.required;
+        }
+
+        if (!form.email.trim()) {
+            errors.email = t.public.validation.required;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+            errors.email = t.public.validation.invalidEmail;
+        }
+
+        if (!form.receipt_number.trim()) {
+            errors.receipt_number = t.public.validation.required;
+        }
+
+        if (!receiptImage) {
+            errors.receipt_image = t.public.validation.receiptImageRequired;
+        }
+
+        if (!form.privacy_policy_accepted) {
+            errors.privacy_policy_accepted = t.public.validation.acceptRequired;
+        }
+
+        if (!form.official_rules_accepted) {
+            errors.official_rules_accepted = t.public.validation.acceptRequired;
+        }
+
+        if (!form.personal_data_consent) {
+            errors.personal_data_consent = t.public.validation.acceptRequired;
+        }
+
+        setFieldErrors(errors);
+
+        return (Object.keys(errors).length === 0);
+    };
+
+    const resetForm = () => {
+        setForm(initialForm);
+        setReceiptImage(null);
+        setFieldErrors({});
+    };
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        setError(null);
+        setSuccess(null);
+
+        if (!validateForm()) {
+            return;
+        }
+
+        if (!receiptImage) {
+            return;
+        }
+
+        const data = new FormData();
+
+        data.append('first_name', form.first_name.trim());
+        data.append('last_name', form.last_name.trim());
+        data.append('phone', form.phone.trim());
+        data.append('email',form.email.trim());
+        data.append('receipt_number', form.receipt_number.trim());
+        data.append('receipt_image', receiptImage);
+        data.append('privacy_policy_accepted', '1');
+        data.append('official_rules_accepted', '1');
+        data.append('personal_data_consent', '1');
+
+        /*
+         * CAPTCHA token will be
+         * added here later.
+         */
+
+        setSubmitting(true);
+
+        try {
+            const response = await api.post(
+                '/participants/receipts',
+                data,
+                {
+                    headers: {
+                        'Content-Type':
+                        undefined,
+                    },
+                }
+            );
+
+            setSuccess(
+                response.data?.message ??
+                t.public.participation.success
+            );
+
+            resetForm();
+        } catch (err: any) {
+            console.error(err);
+            const validationErrors = err.response?.data?.errors;
+
+            if (validationErrors && typeof validationErrors === 'object') {
+                const backendErrors: FormErrors = {};
+
+                Object.entries(validationErrors).forEach(
+                    ([field, messages]) => {
+                        if (Array.isArray(messages) && typeof messages[0] === 'string') {
+                            backendErrors[field as keyof FormErrors] = messages[0];
+                        }
+                    }
+                );
+
+                if (Object.keys(backendErrors).length > 0) {
+                    setFieldErrors(backendErrors);
+                    return;
+                }
+            }
+
+            setError(
+                err.response?.data?.message ??
+                t.public.participation.errors.generic
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+
+            <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+
+                {/* Participation Form */}
+
+                <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+
+                    <div className="flex items-start justify-between gap-4">
+
+                        <div>
+
+                            <h1 className="text-2xl font-bold text-gray-900">
+                                {t.public.participation.title}
+                            </h1>
+
+                            <p className="mt-2 text-sm leading-6 text-gray-500">
+                                {t.public.participation.description}
+                            </p>
+
+                        </div>
+
+                        {/* Language Toggle */}
+
+                        <button
+                            type="button"
+                            onClick={() => setLanguage(language === 'hy' ? 'en' : 'hy')}
+                            aria-label="Change language"
+                            className="flex shrink-0 items-center gap-2"
+                        >
+                            <span className={['text-xs font-semibold transition-colors',
+                                language === 'hy'
+                                    ? 'text-gray-900'
+                                    : 'text-gray-400',
+                                ].join(' ')}
+                            >
+                                ՀԱՅ
+                            </span>
+
+                            <span
+                                className="relative inline-flex h-6 w-11 shrink-0 rounded-full bg-gray-900 transition-colors"
+                                aria-hidden="true"
+                            >
+                                <span className={['pointer-events-none absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+                                    language === 'en'
+                                        ? 'translate-x-[22px]'
+                                        : 'translate-x-0.5',
+                                    ].join(' ')}
+                                />
+                            </span>
+
+                            <span
+                                className={['text-xs font-semibold transition-colors',
+                                language === 'en'
+                                    ? 'text-gray-900'
+                                    : 'text-gray-400',
+                            ].join(' ')}
+                            >
+                                EN
+                            </span>
+                        </button>
+
+                    </div>
+
+                    {/* Success */}
+
+                    {success && (
+                        <div className="mt-6 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+
+                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-100 text-xs font-bold">
+                                ✓
+                            </div>
+
+                            <div>
+                                {success}
+                            </div>
+
+                        </div>
+                    )}
+
+                    {/* API error */}
+
+                    {error && (
+                        <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+
+                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold">
+                                !
+                            </div>
+
+                            <div>
+                                {error}
+                            </div>
+
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} noValidate className="mt-7">
+                        <div className="grid gap-5 sm:grid-cols-2">
+                            <Field
+                                label={t.public.participation.firstName}
+                                value={form.first_name}
+                                error={fieldErrors.first_name}
+                                onChange={(value) => {
+                                    updateField('first_name', value);
+                                    clearFieldError('first_name');
+                                }}
+                                autoComplete="given-name"
+                            />
+                            <Field
+                                label={t.public.participation.lastName}
+                                value={form.last_name}
+                                error={fieldErrors.last_name}
+                                onChange={(value) => {
+                                    updateField('last_name', value);
+                                    clearFieldError('last_name');
+                                }}
+                                autoComplete="family-name"
+                            />
+                            <Field
+                                label={t.public.participation.phone} value={form.phone}
+                                type="tel"
+                                error={fieldErrors.phone}
+                                onChange={(value) => {
+                                    updateField('phone', value);
+                                    clearFieldError('phone');
+                                }}
+                                autoComplete="tel"
+                            />
+                            <Field
+                                label={t.public.participation.email}
+                                value={form.email}
+                                type="email"
+                                error={fieldErrors.email}
+                                onChange={(value) => {
+                                    updateField('email', value);
+                                    clearFieldError('email');
+                                }}
+                                autoComplete="email"
+                            />
+                        </div>
+                        <div className="mt-5">
+                            <Field
+                                label={t.public.participation.receiptNumber}
+                                value={form.receipt_number}
+                                error={fieldErrors.receipt_number}
+                                onChange={(value) => {
+                                    updateField('receipt_number', value);
+                                    clearFieldError('receipt_number');
+                                }}
+                            />
+                        </div>
+
+                        {/* Receipt Image */}
+
+                        <div className="mt-5">
+                            <label className="block text-sm font-medium text-gray-700">
+                                {t.public.participation.receiptImage}
+                                <span className="ml-1 text-red-500">*</span>
+                            </label>
+                            <label className={['mt-2 block cursor-pointer rounded-lg border border-dashed p-5 text-center transition',
+                                fieldErrors
+                                    .receipt_image
+                                    ? 'border-red-300 bg-red-50'
+                                    : 'border-gray-300 bg-gray-50 hover:bg-gray-100',
+                            ].join(
+                                ' '
+                            )}>
+                                <div className="text-sm font-medium text-gray-700">
+                                    {receiptImage ? receiptImage.name : t.public.participation.chooseImage}
+                                </div>
+                                <div className="mt-1 text-xs text-gray-400">
+                                    {t.public.participation.imageHelp}
+                                </div>
+                                <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={handleImageChange}
+                                    className="sr-only"
+                                />
+                            </label>
+
+                            {fieldErrors.receipt_image && (
+                                <InlineError>{fieldErrors.receipt_image}</InlineError>
+                            )}
+
+                        </div>
+
+                        {/* CAPTCHA */}
+
+                        <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+                            <div className="text-sm font-medium text-gray-700">
+                                CAPTCHA
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                                {t.public.participation.captchaPlaceholder}
+                            </div>
+                        </div>
+
+                        {/* Consents */}
+
+                        <div className="mt-6 space-y-4">
+                            <Consent
+                                checked={form.privacy_policy_accepted}
+                                error={fieldErrors.privacy_policy_accepted}
+                                onChange={(checked) => {
+                                    updateField('privacy_policy_accepted', checked);
+                                    clearFieldError('privacy_policy_accepted');
+                                }}
+                            >
+                                <span>
+                                    {t.public.participation.privacyPrefix}{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setModal('privacy')}
+                                        className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                                    >
+                                        {t.public.footer.privacy}
+                                    </button>
+                                </span>
+                            </Consent>
+
+                            <Consent
+                                checked={form.official_rules_accepted}
+                                error={fieldErrors.official_rules_accepted}
+                                onChange={(checked) => {
+                                    updateField('official_rules_accepted', checked);
+                                    clearFieldError('official_rules_accepted');
+                                }}
+                            >
+                                <span>
+                                    {t.public.participation.rulesPrefix}{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setModal('rules')}
+                                        className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                                    >
+                                        {t.public.footer.rules}
+                                    </button>
+                                </span>
+                            </Consent>
+
+                            <Consent
+                                checked={form.personal_data_consent}
+                                error={fieldErrors.personal_data_consent}
+                                onChange={(checked) => {
+                                    updateField('personal_data_consent', checked);
+                                    clearFieldError('personal_data_consent');
+                                }}
+                            >
+                                {t.public.participation.acceptPersonalData}
+                            </Consent>
+
+                        </div>
+
+                        {/* Submit */}
+
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="mt-7 w-full rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {submitting ?
+                                t.public.participation.submitting :
+                                t.public.participation.submit}
+                        </button>
+
+                    </form>
+
+                </section>
+
+                {/* FAQ */}
+
+                <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                        {t.public.faq.title}
+                    </h2>
+
+                    <div className="mt-4 divide-y divide-gray-200">
+                        {t.public.faq.items.map((item, index) => (
+                            <details key={index} className="group py-4">
+                                <summary className="cursor-pointer list-none font-medium text-gray-800">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span>{item.question}</span>
+                                        <span className="text-xl text-gray-400 transition group-open:rotate-45">+</span>
+                                    </div>
+                                </summary>
+                                <p className="mt-3 text-sm leading-6 text-gray-500">
+                                    {item.answer}
+                                </p>
+                            </details>
+                        ))}
+
+                    </div>
+
+                </section>
+
+            </main>
+
+            {/* Legal Modal */}
+
+            {modal && (
+                <LegalModal
+                    title={modal === 'privacy' ?
+                        t.public.footer.privacy :
+                        t.public.footer.rules
+                    }
+                    content={modal === 'privacy' ?
+                        t.public.legal.privacy :
+                        t.public.legal.rules
+                    }
+                    closeLabel={t.public.legal.close}
+                    onClose={() => setModal(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+function Field({label, value, onChange, type = 'text', autoComplete, error,}: { label: string; value: string; onChange: (value: string) => void; type?: string; autoComplete?: string; error?: string; }) {
+    return (
+        <div>
+            <label className="block text-sm font-medium text-gray-700">
+                {label}
+                <span className="ml-1 text-red-500">*</span>
+            </label>
+
+            <input
+                type={type}
+                value={value}
+                autoComplete={autoComplete}
+                onChange={(event) => onChange(event.target.value)}
+                className={['mt-2 w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition',
+                    error
+                        ? 'border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-1 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-gray-500 focus:ring-1 focus:ring-gray-500',
+                ].join(' ')}
+            />
+
+            {error && (
+                <InlineError>
+                    {error}
+                </InlineError>
+            )}
+
+        </div>
+    );
+}
+
+function InlineError({children,}: { children: ReactNode; }) {
+    return (
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-600">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold">
+                !
+            </span>
+            <span>
+                {children}
+            </span>
+        </div>
+    );
+}
+
+function Consent({checked, onChange, children, error,}: { checked: boolean; onChange: (checked: boolean) => void; children: ReactNode; error?: string; }) {
+    return (
+        <div>
+            <label
+                className={['flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition',
+                    error
+                        ? 'border-red-200 bg-red-50'
+                        : 'border-transparent hover:bg-gray-50',
+                ].join(' ')}
+            >
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => onChange(event.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300"
+                />
+                <span className="text-sm leading-6 text-gray-600">
+                    {children}
+                </span>
+
+            </label>
+
+            {error && (
+                <div className="ml-3">
+                    <InlineError>
+                        {error}
+                    </InlineError>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function LegalModal({title, content, closeLabel, onClose,}: { title: string; content: string; closeLabel: string; onClose: () => void; }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+            <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <h3 className="font-semibold text-gray-900">
+                        {title}
+                    </h3>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label={closeLabel}
+                        className="rounded-lg px-2 py-1 text-xl text-gray-400 hover:bg-gray-100 hover:text-gray-900"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div className="max-h-[65vh] overflow-y-auto p-5">
+                    <p className="whitespace-pre-line text-sm leading-7 text-gray-600">
+                        {content}
+                    </p>
+                </div>
+                <div className="border-t border-gray-200 p-4 text-right">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                    >
+                        {closeLabel}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
