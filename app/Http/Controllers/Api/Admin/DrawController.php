@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\DrawStatus;
-use App\Enums\DrawWinnerStatus;
 use App\Enums\ReceiptStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
@@ -24,84 +23,44 @@ class DrawController extends Controller
     public function index(): JsonResponse
     {
         $draws = Draw::query()
-            ->with([
-                'drawPrizes.prize',
-            ])
+            ->with('drawPrizes.prize')
             ->withCount('entries')
             ->orderBy('week_number')
             ->get();
 
-        /*
-         * Live eligible receipt count.
-         *
-         * All unprepared draws currently share
-         * the same eligible pool.
-         */
-        $liveEligibleCount =
-            $this
-                ->eligibleReceiptsQuery()
-                ->count();
+        $liveEligibleCount = $this->eligibleReceiptsQuery()->count();
 
-        $data = $draws->map(
-            function (Draw $draw) use (
-                $liveEligibleCount
-            ) {
-                $requiredWinners =
-                    $draw
-                        ->drawPrizes
-                        ->sum(
-                            'quantity'
-                        );
+        $data = $draws->map(function (Draw $draw) use ($liveEligibleCount) {
+            $requiredWinners = $draw->drawPrizes->sum('quantity');
 
-                /*
-                 * After snapshot we use the frozen
-                 * entry count.
-                 *
-                 * Before snapshot we use the
-                 * current live eligible count.
-                 */
-                $eligibleEntriesCount =
-                    $draw->snapshot_at
-                        ? (int) $draw->entries_count
-                        : $liveEligibleCount;
+            $eligibleEntriesCount = $draw->snapshot_at
+                ? (int) $draw->entries_count
+                : $liveEligibleCount;
 
-                $canPrepare =
-                    in_array(
-                        $draw->status,
-                        [
-                            DrawStatus::DRAFT,
-                            DrawStatus::SCHEDULED,
-                        ],
-                        true
-                    ) &&
-                    !$draw->snapshot_at &&
-                    $requiredWinners > 0 &&
-                    $eligibleEntriesCount >=
-                        $requiredWinners;
+            $canPrepare = in_array(
+                $draw->status,
+                [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
+                true
+            )
+                && !$draw->snapshot_at
+                && $requiredWinners > 0
+                && $eligibleEntriesCount >= $requiredWinners;
 
-                return [
-                    ...$draw->toArray(),
-
-                    'eligible_entries_count' =>
-                        $eligibleEntriesCount,
-
-                    'required_winners' =>
-                        $requiredWinners,
-
-                    'can_prepare' =>
-                        $canPrepare,
-                ];
-            }
-        );
+            return [
+                ...$draw->toArray(),
+                'eligible_entries_count' => $eligibleEntriesCount,
+                'required_winners' => $requiredWinners,
+                'can_prepare' => $canPrepare,
+            ];
+        });
 
         return response()->json([
             'data' => $data,
         ]);
     }
 
-    public function show(
-        Draw $draw
-    ): JsonResponse {
+    public function show(Draw $draw): JsonResponse
+    {
         $draw->load([
             'drawPrizes.prize',
             'entries',
@@ -109,60 +68,33 @@ class DrawController extends Controller
             'winners.contactAttempts',
         ]);
 
-        $requiredWinners =
-            $draw
-                ->drawPrizes
-                ->sum(
-                    'quantity'
-                );
+        $requiredWinners = $draw->drawPrizes->sum('quantity');
 
-        /*
-         * Before preparation this is the
-         * current live eligible count.
-         *
-         * After preparation this is the
-         * immutable snapshot count.
-         */
-        $eligibleEntriesCount =
-            $draw->snapshot_at
-                ? $draw->entries->count()
-                : $this
-                    ->eligibleReceiptsQuery()
-                    ->count();
+        $eligibleEntriesCount = $draw->snapshot_at
+            ? $draw->entries->count()
+            : $this->eligibleReceiptsQuery()->count();
 
-        $canPrepare =
-            in_array(
-                $draw->status,
-                [
-                    DrawStatus::DRAFT,
-                    DrawStatus::SCHEDULED,
-                ],
-                true
-            ) &&
-            !$draw->snapshot_at &&
-            $requiredWinners > 0 &&
-            $eligibleEntriesCount >=
-                $requiredWinners;
+        $canPrepare = in_array(
+            $draw->status,
+            [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
+            true
+        )
+            && !$draw->snapshot_at
+            && $requiredWinners > 0
+            && $eligibleEntriesCount >= $requiredWinners;
 
         return response()->json([
             'data' => [
                 ...$draw->toArray(),
-
-                'eligible_entries_count' =>
-                    $eligibleEntriesCount,
-
-                'required_winners' =>
-                    $requiredWinners,
-
-                'can_prepare' =>
-                    $canPrepare,
+                'eligible_entries_count' => $eligibleEntriesCount,
+                'required_winners' => $requiredWinners,
+                'can_prepare' => $canPrepare,
             ],
         ]);
     }
 
-    public function store(
-        Request $request
-    ): JsonResponse {
+    public function store(Request $request): JsonResponse
+    {
         $data = $request->validate([
             'week_number' => [
                 'required',
@@ -171,7 +103,6 @@ class DrawController extends Controller
                 'max:5',
                 'unique:draws,week_number',
             ],
-
             'draw_date' => [
                 'required',
                 'date',
@@ -179,50 +110,33 @@ class DrawController extends Controller
         ]);
 
         $draw = Draw::create([
-            'week_number' =>
-                $data['week_number'],
-
-            'draw_date' =>
-                $data['draw_date'],
-
-            'status' =>
-                DrawStatus::DRAFT,
-
-            'created_by' =>
-                $request->user()->id,
+            'week_number' => $data['week_number'],
+            'draw_date' => $data['draw_date'],
+            'status' => DrawStatus::DRAFT,
+            'created_by' => $request->user()->id,
         ]);
 
         return response()->json([
-            'message' =>
-                'Draw created successfully.',
-
-            'data' =>
-                $draw,
+            'message' => 'Draw created successfully.',
+            'data' => $draw,
         ], 201);
     }
 
-    public function update(
-        Request $request,
-        Draw $draw
-    ): JsonResponse {
+    public function update(Request $request, Draw $draw): JsonResponse
+    {
         if (!in_array(
             $draw->status,
-            [
-                DrawStatus::DRAFT,
-                DrawStatus::SCHEDULED,
-            ],
+            [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
             true
         )) {
             return response()->json([
-                'message' =>
-                    'This draw can no longer be modified.',
+                'message' => 'This draw can no longer be modified.',
             ], 422);
         }
 
         if ($draw->snapshot_at) {
             return response()->json([
-                'message' =>
-                    'Prepared draws can no longer be modified.',
+                'message' => 'Prepared draws can no longer be modified.',
             ], 422);
         }
 
@@ -232,7 +146,6 @@ class DrawController extends Controller
                 'required',
                 'date',
             ],
-
             'status' => [
                 'sometimes',
                 'required',
@@ -240,41 +153,29 @@ class DrawController extends Controller
             ],
         ]);
 
-        $draw->update(
-            $data
-        );
+        $draw->update($data);
 
         return response()->json([
-            'message' =>
-                'Draw updated successfully.',
-
-            'data' =>
-                $draw->fresh(),
+            'message' => 'Draw updated successfully.',
+            'data' => $draw->fresh(),
         ]);
     }
 
-    public function addPrize(
-        Request $request,
-        Draw $draw
-    ): JsonResponse {
+    public function addPrize(Request $request, Draw $draw): JsonResponse
+    {
         if (!in_array(
             $draw->status,
-            [
-                DrawStatus::DRAFT,
-                DrawStatus::SCHEDULED,
-            ],
+            [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
             true
         )) {
             return response()->json([
-                'message' =>
-                    'This draw can no longer be modified.',
+                'message' => 'This draw can no longer be modified.',
             ], 422);
         }
 
         if ($draw->snapshot_at) {
             return response()->json([
-                'message' =>
-                    'Prize allocation is locked after preparation.',
+                'message' => 'Prize allocation is locked after preparation.',
             ], 422);
         }
 
@@ -284,7 +185,6 @@ class DrawController extends Controller
                 'integer',
                 'exists:prizes,id',
             ],
-
             'quantity' => [
                 'required',
                 'integer',
@@ -292,75 +192,33 @@ class DrawController extends Controller
             ],
         ]);
 
-        /*
-         * Lock prize allocation while checking
-         * global inventory.
-         */
-        $drawPrize = DB::transaction(
-            function () use (
-                $draw,
-                $data
-            ) {
-                $prize =
-                    Prize::query()
-                        ->whereKey(
-                            $data[
-                                'prize_id'
-                            ]
-                        )
-                        ->lockForUpdate()
-                        ->firstOrFail();
+        $drawPrize = DB::transaction(function () use ($draw, $data) {
+            $prize = Prize::query()
+                ->whereKey($data['prize_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-                $alreadyAllocated =
-                    DrawPrize::query()
-                        ->where(
-                            'prize_id',
-                            $prize->id
-                        )
-                        ->sum(
-                            'quantity'
-                        );
+            $alreadyAllocated = DrawPrize::query()
+                ->where('prize_id', $prize->id)
+                ->sum('quantity');
 
-                $newTotal =
-                    $alreadyAllocated +
-                    $data['quantity'];
-
-                if (
-                    $newTotal >
-                    $prize->total_quantity
-                ) {
-                    abort(
-                        422,
-                        'Prize allocation exceeds the total available quantity.'
-                    );
-                }
-
-                $drawPrize =
-                    new DrawPrize();
-
-                $drawPrize->draw_id =
-                    $draw->id;
-
-                $drawPrize->prize_id =
-                    $prize->id;
-
-                $drawPrize->quantity =
-                    $data['quantity'];
-
-                $drawPrize->save();
-
-                return $drawPrize;
+            if ($alreadyAllocated + $data['quantity'] > $prize->total_quantity) {
+                abort(
+                    422,
+                    'Prize allocation exceeds the total available quantity.'
+                );
             }
-        );
+
+            return DrawPrize::create([
+                'draw_id' => $draw->id,
+                'prize_id' => $prize->id,
+                'quantity' => $data['quantity'],
+            ]);
+        });
 
         return response()->json([
-            'message' =>
-                'Prize added to draw successfully.',
-
-            'data' =>
-                $drawPrize->load(
-                    'prize'
-                ),
+            'message' => 'Prize added to draw successfully.',
+            'data' => $drawPrize->load('prize'),
         ], 201);
     }
 
@@ -368,42 +226,32 @@ class DrawController extends Controller
         Draw $draw,
         DrawPrize $drawPrize
     ): JsonResponse {
-        if (
-            $drawPrize->draw_id !==
-            $draw->id
-        ) {
+        if ($drawPrize->draw_id !== $draw->id) {
             return response()->json([
-                'message' =>
-                    'Prize does not belong to this draw.',
+                'message' => 'Prize does not belong to this draw.',
             ], 404);
         }
 
         if (!in_array(
             $draw->status,
-            [
-                DrawStatus::DRAFT,
-                DrawStatus::SCHEDULED,
-            ],
+            [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
             true
         )) {
             return response()->json([
-                'message' =>
-                    'This draw can no longer be modified.',
+                'message' => 'This draw can no longer be modified.',
             ], 422);
         }
 
         if ($draw->snapshot_at) {
             return response()->json([
-                'message' =>
-                    'Prize allocation is locked after preparation.',
+                'message' => 'Prize allocation is locked after preparation.',
             ], 422);
         }
 
         $drawPrize->delete();
 
         return response()->json([
-            'message' =>
-                'Prize removed from draw successfully.',
+            'message' => 'Prize removed from draw successfully.',
         ]);
     }
 
@@ -411,222 +259,106 @@ class DrawController extends Controller
         Request $request,
         Draw $draw
     ): JsonResponse {
-        $result =
-            DB::transaction(
-                function () use (
-                    $request,
-                    $draw
-                ) {
-                    /*
-                     * Lock the draw to prevent
-                     * duplicate preparation.
-                     */
-                    $draw = Draw::query()
-                        ->whereKey(
-                            $draw->id
-                        )
-                        ->lockForUpdate()
-                        ->firstOrFail();
+        $result = DB::transaction(function () use ($request, $draw) {
+            $draw = Draw::query()
+                ->whereKey($draw->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-                    if (!in_array(
-                        $draw->status,
-                        [
-                            DrawStatus::DRAFT,
-                            DrawStatus::SCHEDULED,
-                        ],
-                        true
-                    )) {
-                        abort(
-                            422,
-                            'Only draft or scheduled draws can be prepared.'
-                        );
-                    }
+            if (!in_array(
+                $draw->status,
+                [DrawStatus::DRAFT, DrawStatus::SCHEDULED],
+                true
+            )) {
+                abort(
+                    422,
+                    'Only draft or scheduled draws can be prepared.'
+                );
+            }
 
-                    if (
-                        $draw->snapshot_at !==
-                        null
-                    ) {
-                        abort(
-                            422,
-                            'This draw has already been prepared.'
-                        );
-                    }
+            if ($draw->snapshot_at !== null) {
+                abort(
+                    422,
+                    'This draw has already been prepared.'
+                );
+            }
 
-                    /*
-                     * Determine required number
-                     * of winners.
-                     */
-                    $requiredWinnerCount =
-                        $draw
-                            ->drawPrizes()
-                            ->sum(
-                                'quantity'
-                            );
+            $requiredWinnerCount = $draw->drawPrizes()
+                ->sum('quantity');
 
-                    if (
-                        $requiredWinnerCount <
-                        1
-                    ) {
-                        abort(
-                            422,
-                            'At least one prize must be configured.'
-                        );
-                    }
+            if ($requiredWinnerCount < 1) {
+                abort(
+                    422,
+                    'At least one prize must be configured.'
+                );
+            }
 
-                    /*
-                     * Get eligible receipts using
-                     * the exact same logic used by
-                     * the preview count.
-                     */
-                    $eligibleReceipts =
-                        $this
-                            ->eligibleReceiptsQuery()
-                            ->orderBy('id')
-                            ->get([
-                                'id',
-                            ]);
+            $eligibleReceipts = $this->eligibleReceiptsQuery()
+                ->orderBy('id')
+                ->get(['id']);
 
-                    if (
-                        $eligibleReceipts
-                            ->count() <
-                        $requiredWinnerCount
-                    ) {
-                        abort(
-                            422,
-                            sprintf(
-                                'Not enough eligible receipts. %d winners are required, but only %d eligible receipts are available.',
-                                $requiredWinnerCount,
-                                $eligibleReceipts
-                                    ->count()
-                            )
-                        );
-                    }
+            if ($eligibleReceipts->count() < $requiredWinnerCount) {
+                abort(
+                    422,
+                    sprintf(
+                        'Not enough eligible receipts. %d winners are required, but only %d eligible receipts are available.',
+                        $requiredWinnerCount,
+                        $eligibleReceipts->count()
+                    )
+                );
+            }
 
-                    $previousStatus =
-                        $draw->status;
+            $previousStatus = $draw->status;
+            $now = now();
 
-                    $now =
-                        now();
+            $entries = [];
 
-                    $entries = [];
+            foreach ($eligibleReceipts as $index => $receipt) {
+                $entries[] = [
+                    'draw_id' => $draw->id,
+                    'receipt_id' => $receipt->id,
+                    'entry_number' => $index + 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
 
-                    foreach (
-                        $eligibleReceipts
-                        as $index =>
-                        $receipt
-                    ) {
-                        $entries[] = [
-                            'draw_id' =>
-                                $draw->id,
+            DrawEntry::insert($entries);
 
-                            'receipt_id' =>
-                                $receipt->id,
+            $draw->update([
+                'status' => DrawStatus::RUNNING,
+                'started_at' => $now,
+                'snapshot_at' => $now,
+            ]);
 
-                            'entry_number' =>
-                                $index + 1,
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'draw.snapshot_created',
+                'auditable_type' => Draw::class,
+                'auditable_id' => $draw->id,
+                'old_values' => [
+                    'status' => $previousStatus->value,
+                ],
+                'new_values' => [
+                    'status' => DrawStatus::RUNNING->value,
+                    'entries_count' => count($entries),
+                    'required_winners' => $requiredWinnerCount,
+                ],
+                'description' => 'Draw participant snapshot created.',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-                            'created_at' =>
-                                $now,
-
-                            'updated_at' =>
-                                $now,
-                        ];
-                    }
-
-                    DrawEntry::insert(
-                        $entries
-                    );
-
-                    $draw->update([
-                        'status' =>
-                            DrawStatus::RUNNING,
-
-                        'started_at' =>
-                            $now,
-
-                        'snapshot_at' =>
-                            $now,
-                    ]);
-
-                    AuditLog::create([
-                        'user_id' =>
-                            $request
-                                ->user()
-                                ->id,
-
-                        'action' =>
-                            'draw.snapshot_created',
-
-                        'auditable_type' =>
-                            Draw::class,
-
-                        'auditable_id' =>
-                            $draw->id,
-
-                        'old_values' => [
-                            'status' =>
-                                $previousStatus
-                                    ->value,
-                        ],
-
-                        'new_values' => [
-                            'status' =>
-                                DrawStatus::RUNNING
-                                    ->value,
-
-                            'entries_count' =>
-                                count(
-                                    $entries
-                                ),
-
-                            'required_winners' =>
-                                $requiredWinnerCount,
-                        ],
-
-                        'description' =>
-                            'Draw participant snapshot created.',
-
-                        'ip_address' =>
-                            $request->ip(),
-
-                        'user_agent' =>
-                            $request
-                                ->userAgent(),
-                    ]);
-
-                    return [
-                        'draw' =>
-                            $draw->fresh(),
-
-                        'entries_count' =>
-                            count(
-                                $entries
-                            ),
-
-                        'required_winners' =>
-                            $requiredWinnerCount,
-                    ];
-                }
-            );
+            return [
+                'draw' => $draw->fresh(),
+                'entries_count' => count($entries),
+                'required_winners' => $requiredWinnerCount,
+            ];
+        });
 
         return response()->json([
-            'message' =>
-                'Draw prepared successfully.',
-
-            'data' => [
-                'draw' =>
-                    $result['draw'],
-
-                'entries_count' =>
-                    $result[
-                        'entries_count'
-                    ],
-
-                'required_winners' =>
-                    $result[
-                        'required_winners'
-                    ],
-            ],
+            'message' => 'Draw prepared successfully.',
+            'data' => $result,
         ]);
     }
 
@@ -635,120 +367,62 @@ class DrawController extends Controller
         DrawService $drawService
     ): JsonResponse {
         try {
-            $draw =
-                $drawService->execute(
-                    $draw
-                );
+            $draw = $drawService->execute($draw);
 
             return response()->json([
-                'message' =>
-                    'Draw executed successfully.',
-
-                'data' =>
-                    $draw,
+                'message' => 'Draw executed successfully.',
+                'data' => $draw,
             ]);
         } catch (Throwable $e) {
             return response()->json([
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
 
     public function prizes(): JsonResponse
     {
-        $prizes =
-            Prize::query()
-                ->orderBy('id')
-                ->get()
-                ->map(
-                    function (
-                        Prize $prize
-                    ) {
-                        $allocatedQuantity =
-                            DrawPrize::query()
-                                ->where(
-                                    'prize_id',
-                                    $prize->id
-                                )
-                                ->sum(
-                                    'quantity'
-                                );
+        $prizes = Prize::query()
+            ->orderBy('id')
+            ->get()
+            ->map(function (Prize $prize) {
+                $allocatedQuantity = DrawPrize::query()
+                    ->where('prize_id', $prize->id)
+                    ->sum('quantity');
 
-                        return [
-                            'id' =>
-                                $prize->id,
-
-                            'name' =>
-                                $prize->name,
-
-                            'type' =>
-                                $prize->type,
-
-                            'value' =>
-                                $prize->value,
-
-                            'currency' =>
-                                $prize->currency,
-
-                            'total_quantity' =>
-                                $prize
-                                    ->total_quantity,
-
-                            'allocated_quantity' =>
-                                $allocatedQuantity,
-
-                            'available_quantity' =>
-                                max(
-                                    0,
-                                    $prize
-                                        ->total_quantity -
-                                    $allocatedQuantity
-                                ),
-                        ];
-                    }
-                );
+                return [
+                    'id' => $prize->id,
+                    'name' => $prize->name,
+                    'type' => $prize->type,
+                    'value' => $prize->value,
+                    'currency' => $prize->currency,
+                    'total_quantity' => $prize->total_quantity,
+                    'allocated_quantity' => $allocatedQuantity,
+                    'available_quantity' => max(
+                        0,
+                        $prize->total_quantity - $allocatedQuantity
+                    ),
+                ];
+            });
 
         return response()->json([
-            'data' =>
-                $prizes,
+            'data' => $prizes,
         ]);
     }
 
     /*
-     * Shared eligibility rule.
-     *
      * One approved receipt = one entry.
      *
-     * Receipts belonging to winners currently
-     * selected, contacting or confirmed are
-     * excluded from future draws.
+     * Once a receipt has ever been selected as a winner,
+     * it can never participate in another draw.
      *
-     * Cancelled winners remain available only
-     * according to the business rule implemented
-     * by their receipt status / winner history.
+     * Other approved receipts belonging to the same
+     * participant remain eligible.
      */
     private function eligibleReceiptsQuery(): Builder
     {
         return Receipt::query()
-            ->where(
-                'status',
-                ReceiptStatus::APPROVED
-            )
-            ->whereDoesntHave(
-                'drawWinners',
-                function (
-                    Builder $query
-                ) {
-                    $query->whereIn(
-                        'status',
-                        [
-                            DrawWinnerStatus::SELECTED->value,
-                            DrawWinnerStatus::CONTACTING->value,
-                            DrawWinnerStatus::CONFIRMED->value,
-                        ]
-                    );
-                }
-            );
+            ->where('status', ReceiptStatus::APPROVED)
+            ->whereDoesntHave('drawWinners');
     }
 }
