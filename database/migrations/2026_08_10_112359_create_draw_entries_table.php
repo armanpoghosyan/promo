@@ -19,13 +19,9 @@ return new class extends Migration
                 ->constrained()
                 ->restrictOnDelete();
 
-            /*
-             * Position assigned to the receipt
-             * in this particular draw snapshot.
-             */
             $table->unsignedInteger('entry_number');
 
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             $table->unique([
                 'draw_id',

@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\ReceiptStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Database\Eloquent\Model;
-use App\Enums\ReceiptStatus;
 
 class Receipt extends Model
 {
@@ -25,7 +25,6 @@ class Receipt extends Model
         'verified_at',
         'verified_by',
         'rejection_reason',
-        'notes',
     ];
 
     protected $casts = [
@@ -48,7 +47,7 @@ class Receipt extends Model
 
     public function auditLogs(): MorphMany
     {
-        return $this->morphMany(AuditLog::class,'auditable');
+        return $this->morphMany(AuditLog::class, 'auditable');
     }
 
     public function drawEntries(): HasMany
@@ -58,13 +57,12 @@ class Receipt extends Model
 
     public function notes(): HasMany
     {
-        return $this->hasMany(ReceiptNote::class)->latest('created_at');
+        return $this->hasMany(ReceiptNote::class)
+            ->latest('created_at');
     }
 
     public function drawWinners(): HasMany
     {
-        return $this->hasMany(
-            DrawWinner::class
-        );
+        return $this->hasMany(DrawWinner::class);
     }
 }
