@@ -204,7 +204,7 @@ export default function Landing() {
 
                 Object.entries(validationErrors).forEach(([field, messages,]) => {
                     if (Array.isArray(messages) && typeof messages[0] === 'string') {
-                        backendErrors[field as keyof FormErrors] = messages[0];
+                        backendErrors[field as keyof FormErrors] = tr(messages[0]);
                     }
                 });
 
@@ -214,7 +214,7 @@ export default function Landing() {
                 }
             }
 
-            setError(err.response?.data?.message ?? tr('Unable to submit participation. Please try again.'));
+            setError(tr(err.response?.data?.message) ?? tr('Unable to submit participation. Please try again.'));
         } finally {
             setSubmitting(false);
         }
