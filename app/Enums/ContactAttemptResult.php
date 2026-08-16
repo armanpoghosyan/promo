@@ -8,7 +8,5 @@ enum ContactAttemptResult: string
     case BUSY = 'busy';
     case WRONG_NUMBER = 'wrong_number';
     case CONTACTED = 'contacted';
-    case CONFIRMED = 'confirmed';
-    case DECLINED = 'declined';
     case OTHER = 'other';
 }
