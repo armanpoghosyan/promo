@@ -1,16 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\ParticipantReceiptController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\AdminReceiptController;
-use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\Admin\AdminParticipantController;
+use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DrawController;
-use App\Http\Controllers\Api\Admin\WinnerController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
-use App\Http\Controllers\Api\Admin\DashboardController;
-use App\Http\Controllers\Api\Admin\AdminParticipantController;
+use App\Http\Controllers\Api\Admin\WinnerController;
+use App\Http\Controllers\Api\AdminReceiptController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ParticipantReceiptController;
+use Illuminate\Support\Facades\Route;
 
 Route::post(
     '/participants/receipts',
@@ -22,24 +21,18 @@ Route::post(
     [AuthController::class, 'login']
 );
 
-Route::middleware('auth:sanctum')->group(function () {
-
-    Route::post(
-        '/admin/logout',
-        [AuthController::class, 'logout']
-    );
-
-    Route::get(
-        '/admin/me',
-        [AuthController::class, 'me']
-    );
-
-});
-
-
-//Route::middleware('auth:sanctum')
 Route::prefix('admin')
+    ->middleware('auth:sanctum')
     ->group(function () {
+        Route::post(
+            '/logout',
+            [AuthController::class, 'logout']
+        );
+
+        Route::get(
+            '/me',
+            [AuthController::class, 'me']
+        );
 
         Route::get(
             '/receipts',
@@ -126,24 +119,23 @@ Route::prefix('admin')
             [WinnerController::class, 'show']
         );
 
-
-         Route::post(
-            'winners/{winner}/confirm',
+        Route::post(
+            '/winners/{winner}/confirm',
             [WinnerController::class, 'confirm']
         );
 
         Route::post(
-            'winners/{winner}/contact-attempts',
+            '/winners/{winner}/contact-attempts',
             [WinnerController::class, 'addContactAttempt']
         );
 
         Route::post(
-            'winners/{winner}/cancel',
+            '/winners/{winner}/cancel',
             [WinnerController::class, 'cancel']
         );
 
         Route::post(
-            'winners/{winner}/replace',
+            '/winners/{winner}/replace',
             [WinnerController::class, 'replace']
         );
 

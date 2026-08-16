@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Receipt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class AdminReceiptController extends Controller
@@ -28,27 +29,23 @@ class AdminReceiptController extends Controller
             $query->where(
                 'receipt_number',
                 'like',
-                '%' . $request->string('receipt_number') . '%'
+                '%' . $request->string('receipt_number')->toString() . '%'
             );
         }
 
         if ($request->filled('phone')) {
-            $query->whereHas('participant', function ($q) use ($request) {
-                $q->where(
-                    'phone',
-                    'like',
-                    '%' . $request->string('phone') . '%'
-                );
+            $phone = $request->string('phone')->toString();
+
+            $query->whereHas('participant', function ($query) use ($phone) {
+                $query->where('phone', 'like', '%' . $phone . '%');
             });
         }
 
         if ($request->filled('email')) {
-            $query->whereHas('participant', function ($q) use ($request) {
-                $q->where(
-                    'email',
-                    'like',
-                    '%' . $request->string('email') . '%'
-                );
+            $email = $request->string('email')->toString();
+
+            $query->whereHas('participant', function ($query) use ($email) {
+                $query->where('email', 'like', '%' . $email . '%');
             });
         }
 
@@ -56,18 +53,18 @@ class AdminReceiptController extends Controller
             $query->where('is_suspicious', true);
         }
 
-        $receipts = $query
-            ->latest()
-            ->paginate(
-                $request->integer('per_page', 20)
-            );
+        $perPage = min(
+            max($request->integer('per_page', 20), 1),
+            100
+        );
 
-        return response()->json($receipts);
+        return response()->json(
+            $query->latest()->paginate($perPage)
+        );
     }
 
-    public function show(
-        Receipt $receipt
-    ): JsonResponse {
+    public function show(Receipt $receipt): JsonResponse
+    {
         $receipt->load([
             'participant',
             'notes.user',
@@ -88,33 +85,48 @@ class AdminReceiptController extends Controller
             ], 422);
         }
 
-        $oldStatus = $receipt->status->value;
+        $receipt = DB::transaction(function () use ($request, $receipt) {
+            $receipt = Receipt::query()
+                ->whereKey($receipt->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $receipt->update([
-            'status' => ReceiptStatus::APPROVED,
-            'verified_at' => now(),
-            //'verified_by' => $request->user()->id,
-            'verified_by' => 1, //TODO fix auth
-        ]);
+            if ($receipt->status !== ReceiptStatus::SUBMITTED) {
+                abort(422, 'Only submitted receipts can be approved.');
+            }
 
-        AuditLog::create([
-            //'user_id' => $request->user()->id,
-            'user_id' => 1, //TODO fix auth
-            'action' => 'receipt.approved',
-            'auditable_type' => Receipt::class,
-            'auditable_id' => $receipt->id,
-            'old_values' => [
-                'status' => $oldStatus,
-            ],
-            'new_values' => [
-                'status' => ReceiptStatus::APPROVED->value,
-            ],
-            'description' => 'Receipt approved by organizer.',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+            $oldStatus = $receipt->status->value;
+            $verifiedAt = now();
 
-         $receipt->load([
+            $receipt->update([
+                'status' => ReceiptStatus::APPROVED,
+                'verified_at' => $verifiedAt,
+                'verified_by' => $request->user()->id,
+                'rejection_reason' => null,
+            ]);
+
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'receipt.approved',
+                'auditable_type' => Receipt::class,
+                'auditable_id' => $receipt->id,
+                'old_values' => [
+                    'status' => $oldStatus,
+                ],
+                'new_values' => [
+                    'status' => ReceiptStatus::APPROVED->value,
+                    'verified_at' => $verifiedAt->toISOString(),
+                    'verified_by' => $request->user()->id,
+                ],
+                'description' => 'Receipt approved by organizer.',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return $receipt;
+        });
+
+        $receipt->load([
             'participant',
             'notes.user',
         ]);
@@ -137,36 +149,57 @@ class AdminReceiptController extends Controller
             ],
         ]);
 
-        if ($receipt->status === ReceiptStatus::WINNER) {
+        if ($receipt->status !== ReceiptStatus::SUBMITTED) {
             return response()->json([
-                'message' => 'A winning receipt cannot be rejected directly.',
+                'message' => 'Only submitted receipts can be rejected.',
             ], 422);
         }
 
-        $receipt->update([
-            'status' => ReceiptStatus::REJECTED,
-            'rejection_reason' => $data['reason'],
-        ]);
+        $receipt = DB::transaction(function () use (
+            $request,
+            $receipt,
+            $data
+        ) {
+            $receipt = Receipt::query()
+                ->whereKey($receipt->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
+            if ($receipt->status !== ReceiptStatus::SUBMITTED) {
+                abort(422, 'Only submitted receipts can be rejected.');
+            }
 
-        $oldStatus = $receipt->status->value;
-        AuditLog::create([
-            //'user_id' => $request->user()->id,
-            'user_id' => 1, //TODO fix auth
-            'action' => 'receipt.rejected',
-            'auditable_type' => Receipt::class,
-            'auditable_id' => $receipt->id,
-            'old_values' => [
-                'status' => $oldStatus,
-            ],
-            'new_values' => [
-                'status' => ReceiptStatus::REJECTED->value,
+            $oldStatus = $receipt->status->value;
+            $verifiedAt = now();
+
+            $receipt->update([
+                'status' => ReceiptStatus::REJECTED,
+                'verified_at' => $verifiedAt,
+                'verified_by' => $request->user()->id,
                 'rejection_reason' => $data['reason'],
-            ],
-            'description' => 'Receipt rejected by organizer.',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+            ]);
+
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'receipt.rejected',
+                'auditable_type' => Receipt::class,
+                'auditable_id' => $receipt->id,
+                'old_values' => [
+                    'status' => $oldStatus,
+                ],
+                'new_values' => [
+                    'status' => ReceiptStatus::REJECTED->value,
+                    'verified_at' => $verifiedAt->toISOString(),
+                    'verified_by' => $request->user()->id,
+                    'rejection_reason' => $data['reason'],
+                ],
+                'description' => 'Receipt rejected by organizer.',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return $receipt;
+        });
 
         $receipt->load([
             'participant',
@@ -191,27 +224,33 @@ class AdminReceiptController extends Controller
             ],
         ]);
 
-        $note = $receipt->notes()->create([
-            //'user_id' => $request->user()->id,
-            'user_id' => 1, //TODO fix auth
-            'note' => $data['note'],
-        ]);
+        $note = DB::transaction(function () use (
+            $request,
+            $receipt,
+            $data
+        ) {
+            $note = $receipt->notes()->create([
+                'user_id' => $request->user()->id,
+                'note' => $data['note'],
+            ]);
 
-        $note->load(['user']);
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'receipt.note_added',
+                'auditable_type' => Receipt::class,
+                'auditable_id' => $receipt->id,
+                'new_values' => [
+                    'note_id' => $note->id,
+                ],
+                'description' => 'Organizer added a receipt note.',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-        AuditLog::create([
-            //'user_id' => $request->user()->id,
-            'user_id' => 1, //TODO fix auth
-            'action' => 'receipt.note_added',
-            'auditable_type' => Receipt::class,
-            'auditable_id' => $receipt->id,
-            'new_values' => [
-                'note_id' => $note->id,
-            ],
-            'description' => 'Organizer added a receipt note.',
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+            return $note;
+        });
+
+        $note->load('user');
 
         return response()->json([
             'message' => 'Note added successfully.',
@@ -219,14 +258,11 @@ class AdminReceiptController extends Controller
         ], 201);
     }
 
-    public function image(
-        Receipt $receipt
-    ) {
+    public function image(Receipt $receipt)
+    {
         if (
             !$receipt->receipt_image ||
-            !Storage::disk('private')->exists(
-                $receipt->receipt_image
-            )
+            !Storage::disk('private')->exists($receipt->receipt_image)
         ) {
             return response()->json([
                 'message' => 'Receipt image not found.',
