@@ -1,8 +1,25 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import {
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
+
+import {
+    Link,
+    useParams,
+} from 'react-router-dom';
 
 import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
+
+import type {
+    ApiError,
+} from '../../types/api';
+
+import {
+    formatDateTime,
+    toDateTimeLocal,
+} from '../../utils/date';
 
 type Prize = {
     id: number;
@@ -30,19 +47,20 @@ type DrawEntry = {
     updated_at: string;
 };
 
+type WinnerParticipant = {
+    id: number;
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email: string;
+};
+
 type WinnerReceipt = {
     id: number;
     participant_id: number;
     receipt_number: string;
     status: string;
-};
-
-type ContactAttempt = {
-    id: number;
-    created_by: number | null;
-    attempted_at: string;
-    result: string;
-    notes: string | null;
+    participant?: WinnerParticipant;
 };
 
 type DrawWinner = {
@@ -52,13 +70,15 @@ type DrawWinner = {
     receipt_id: number;
     entry_number: number;
     status: string;
+
     selected_at: string;
     confirmed_at: string | null;
     cancelled_at: string | null;
+
     cancellation_reason: string | null;
     replaced_winner_id: number | null;
+
     receipt: WinnerReceipt;
-    contact_attempts: ContactAttempt[];
 };
 
 type Draw = {
@@ -66,21 +86,32 @@ type Draw = {
     week_number: number;
     draw_date: string | null;
     status: string;
+
     started_at: string | null;
     completed_at: string | null;
     snapshot_at: string | null;
+
     random_provider: string | null;
     random_request_id: string | null;
+
     random_request: {
         entries: number[];
         entry_count: number;
     } | null;
+
     random_response: {
         values: number[];
     } | null;
+
     randomized_at: string | null;
+
     created_at: string;
     updated_at: string;
+
+    eligible_entries_count: number;
+    required_winners: number;
+    can_prepare: boolean;
+
     draw_prizes: DrawPrize[];
     entries: DrawEntry[];
     winners: DrawWinner[];
@@ -96,965 +127,1240 @@ type AvailablePrize = {
     type: string;
     value: number | null;
     currency: string | null;
+
     total_quantity: number;
     allocated_quantity: number | string;
     available_quantity: number;
 };
 
-type ContactAttemptResult =
-    | 'no_answer'
-    | 'busy'
-    | 'wrong_number'
-    | 'contacted'
-    | 'confirmed'
-    | 'declined'
-    | 'other';
+function getApiMessage(
+    error: unknown,
+    fallback: string
+): string {
+    const apiError =
+        error as ApiError;
 
-type ApiError = {
-    response?: {
-        data?: {
-            message?: string;
-        };
-    };
-};
+    return (
+        apiError.response?.data?.message ??
+        fallback
+    );
+}
 
 export default function DrawDetails() {
     const { id } = useParams();
 
-    const [draw, setDraw] = useState<Draw | null>(null);
+    const [draw, setDraw] =
+        useState<Draw | null>(null);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [
+        availablePrizes,
+        setAvailablePrizes,
+    ] = useState<AvailablePrize[]>([]);
 
-    const [actionLoading, setActionLoading] = useState(false);
-    const [actionMessage, setActionMessage] = useState<string | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
+    const [loading, setLoading] =
+        useState(true);
 
-    const [selectedPrizeId, setSelectedPrizeId] =
-        useState<number | ''>('');
-    const [prizeQuantity, setPrizeQuantity] = useState(1);
-    const [prizeActionLoading, setPrizeActionLoading] = useState(false);
-    const [prizeActionError, setPrizeActionError] =
-        useState<string | null>(null);
-    const [prizeActionMessage, setPrizeActionMessage] =
+    const [error, setError] =
         useState<string | null>(null);
 
-    const [availablePrizes, setAvailablePrizes] =
-        useState<AvailablePrize[]>([]);
+    const [
+        actionLoading,
+        setActionLoading,
+    ] = useState(false);
 
-    const [executeLoading, setExecuteLoading] = useState(false);
-    const [executeError, setExecuteError] = useState<string | null>(null);
-    const [executeMessage, setExecuteMessage] =
-        useState<string | null>(null);
+    const [
+        actionError,
+        setActionError,
+    ] = useState<string | null>(
+        null
+    );
 
-    const [contactWinnerId, setContactWinnerId] =
-        useState<number | null>(null);
-    const [contactResult, setContactResult] = useState('');
-    const [contactNotes, setContactNotes] = useState('');
+    const [
+        actionSuccess,
+        setActionSuccess,
+    ] = useState<string | null>(
+        null
+    );
 
     /*
-     * This is a winner ID while an action is running.
-     * null means no winner action is currently running.
+     * Settings
      */
-    const [winnerActionLoading, setWinnerActionLoading] =
-        useState<number | null>(null);
 
-    const [winnerActionError, setWinnerActionError] =
-        useState<string | null>(null);
+    const [
+        editingSettings,
+        setEditingSettings,
+    ] = useState(false);
 
-    const [winnerActionMessage, setWinnerActionMessage] =
-        useState<string | null>(null);
+    const [
+        drawDate,
+        setDrawDate,
+    ] = useState('');
+
+    const [
+        drawStatus,
+        setDrawStatus,
+    ] = useState<
+        'draft' | 'scheduled'
+    >('draft');
+
+    /*
+     * Prize form
+     */
+
+    const [
+        showPrizeForm,
+        setShowPrizeForm,
+    ] = useState(false);
+
+    const [
+        selectedPrizeId,
+        setSelectedPrizeId,
+    ] = useState<number | ''>('');
+
+    const [
+        prizeQuantity,
+        setPrizeQuantity,
+    ] = useState(1);
+
+    /*
+     * Audit
+     */
+
+    const [
+        auditOpen,
+        setAuditOpen,
+    ] = useState(false);
+
+    /*
+     * Permissions / lifecycle
+     */
 
     const isEditableDraw =
         draw !== null &&
-        ['draft', 'scheduled'].includes(draw.status);
+        (
+            draw.status === 'draft' ||
+            draw.status === 'scheduled'
+        ) &&
+        !draw.snapshot_at;
 
-    const loadAvailablePrizes = async () => {
-        try {
-            const response = await api.get('/admin/prizes');
+    const canPrepare =
+        draw !== null &&
+        draw.can_prepare;
 
-            setAvailablePrizes(
-                (response.data.data ?? []).map(
-                    (prize: AvailablePrize) => ({
-                        ...prize,
-                        allocated_quantity: Number(
-                            prize.allocated_quantity
-                        ),
-                        available_quantity: Number(
-                            prize.available_quantity
-                        ),
-                    })
-                )
-            );
-        } catch (err) {
-            console.error('Unable to load prizes:', err);
-        }
-    };
+    const canExecute =
+        draw !== null &&
+        draw.status === 'running' &&
+        Boolean(draw.snapshot_at) &&
+        !draw.randomized_at;
 
-    const loadDraw = async () => {
-        if (!id) {
-            return;
-        }
+    /*
+     * Load data
+     */
 
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response =
-                await api.get<DrawResponse>(
-                    `/admin/draws/${id}`
+    const loadDraw =
+        async () => {
+            if (!id) {
+                setError(
+                    'Draw ID is missing.'
                 );
 
-            setDraw(response.data.data);
-        } catch (err) {
-            console.error(err);
+                setLoading(false);
 
-            setError(
-                'Unable to load draw.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
+                return;
+            }
 
-    const createSnapshot = async () => {
-        if (!draw) {
-            return;
-        }
+            try {
+                const response =
+                    await api.get<DrawResponse>(
+                        `/admin/draws/${id}`
+                    );
 
-        setActionLoading(true);
-        setActionMessage(null);
-        setActionError(null);
+                const loadedDraw =
+                    response.data.data;
 
-        try {
-            const response = await api.post(
-                `/admin/draws/${draw.id}/snapshot`
-            );
+                setDraw(
+                    loadedDraw
+                );
 
-            setActionMessage(
-                response.data.message ??
-                'Snapshot created successfully.'
-            );
+                setDrawDate(
+                    toDateTimeLocal(
+                        loadedDraw.draw_date
+                    )
+                );
 
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setActionError(
-                apiError.response?.data?.message ??
-                'Unable to create snapshot.'
-            );
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const addPrize = async () => {
-        if (!draw || selectedPrizeId === '') {
-            return;
-        }
-
-        const prize = availablePrizes.find(
-            (item) => item.id === selectedPrizeId
-        );
-
-        if (!prize) {
-            return;
-        }
-
-        if (prizeQuantity < 1) {
-            setPrizeActionError(
-                'Quantity must be at least 1.'
-            );
-            return;
-        }
-
-        if (
-            prizeQuantity >
-            prize.available_quantity
-        ) {
-            setPrizeActionError(
-                `Only ${prize.available_quantity} ${prize.name} prize(s) are available.`
-            );
-            return;
-        }
-
-        setPrizeActionLoading(true);
-        setPrizeActionError(null);
-        setPrizeActionMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/draws/${draw.id}/prizes`,
-                {
-                    prize_id: selectedPrizeId,
-                    quantity: prizeQuantity,
+                if (
+                    loadedDraw.status ===
+                    'draft' ||
+                    loadedDraw.status ===
+                    'scheduled'
+                ) {
+                    setDrawStatus(
+                        loadedDraw.status
+                    );
                 }
-            );
+            } catch (err) {
+                console.error(err);
 
-            setPrizeActionMessage(
-                response.data.message ??
-                'Prize added successfully.'
-            );
+                setError(
+                    'Unable to load draw.'
+                );
+            }
+        };
 
-            setSelectedPrizeId('');
-            setPrizeQuantity(1);
+    const loadAvailablePrizes =
+        async () => {
+            try {
+                const response =
+                    await api.get(
+                        '/admin/prizes'
+                    );
 
+                const prizes =
+                    (
+                        response.data
+                            .data ?? []
+                    ).map(
+                        (
+                            prize:
+                            AvailablePrize
+                        ) => ({
+                            ...prize,
+
+                            allocated_quantity:
+                                Number(
+                                    prize
+                                        .allocated_quantity
+                                ),
+
+                            available_quantity:
+                                Number(
+                                    prize
+                                        .available_quantity
+                                ),
+                        })
+                    );
+
+                setAvailablePrizes(
+                    prizes
+                );
+            } catch (err) {
+                console.error(
+                    'Unable to load prizes:',
+                    err
+                );
+            }
+        };
+
+    const reloadAll =
+        async () => {
             await Promise.all([
                 loadDraw(),
                 loadAvailablePrizes(),
             ]);
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setPrizeActionError(
-                apiError.response?.data?.message ??
-                'Unable to add prize.'
-            );
-        } finally {
-            setPrizeActionLoading(false);
-        }
-    };
-
-    const removePrize = async (
-        drawPrizeId: number
-    ) => {
-        if (!draw || !isEditableDraw) {
-            return;
-        }
-
-        const confirmed = window.confirm(
-            'Remove this prize from the draw?'
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setPrizeActionLoading(true);
-        setPrizeActionError(null);
-        setPrizeActionMessage(null);
-
-        try {
-            const response = await api.delete(
-                `/admin/draws/${draw.id}/prizes/${drawPrizeId}`
-            );
-
-            setPrizeActionMessage(
-                response.data.message ??
-                'Prize removed successfully.'
-            );
-
-            await Promise.all([
-                loadDraw(),
-                loadAvailablePrizes(),
-            ]);
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setPrizeActionError(
-                apiError.response?.data?.message ??
-                'Unable to remove prize.'
-            );
-        } finally {
-            setPrizeActionLoading(false);
-        }
-    };
-
-    const executeDraw = async () => {
-        if (!draw) {
-            return;
-        }
-
-        const confirmed = window.confirm(
-            'Are you sure you want to execute this draw? This action cannot be undone.'
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setExecuteLoading(true);
-        setExecuteError(null);
-        setExecuteMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/draws/${draw.id}/execute`
-            );
-
-            setExecuteMessage(
-                response.data.message ??
-                'Draw executed successfully.'
-            );
-
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setExecuteError(
-                apiError.response?.data?.message ??
-                'Unable to execute draw.'
-            );
-        } finally {
-            setExecuteLoading(false);
-        }
-    };
-
-    const openContactAttempt = (
-        winnerId: number
-    ) => {
-        setContactWinnerId(winnerId);
-        setContactResult('');
-        setContactNotes('');
-        setWinnerActionError(null);
-        setWinnerActionMessage(null);
-    };
-
-    const closeContactAttempt = () => {
-        if (winnerActionLoading !== null) {
-            return;
-        }
-
-        setContactWinnerId(null);
-        setContactResult('');
-        setContactNotes('');
-    };
-
-    const addContactAttempt = async () => {
-        if (
-            !draw ||
-            contactWinnerId === null
-        ) {
-            return;
-        }
-
-        if (!contactResult.trim()) {
-            setWinnerActionError(
-                'Please select the contact result.'
-            );
-            return;
-        }
-
-        setWinnerActionLoading(
-            contactWinnerId
-        );
-        setWinnerActionError(null);
-        setWinnerActionMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/winners/${contactWinnerId}/contact-attempts`,
-                {
-                    result: contactResult.trim(),
-                    notes:
-                        contactNotes.trim() ||
-                        null,
-                }
-            );
-
-            setWinnerActionMessage(
-                response.data.message ??
-                'Contact attempt recorded.'
-            );
-
-            setContactWinnerId(null);
-            setContactResult('');
-            setContactNotes('');
-
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setWinnerActionError(
-                apiError.response?.data?.message ??
-                'Unable to record contact attempt.'
-            );
-        } finally {
-            setWinnerActionLoading(null);
-        }
-    };
-
-    const confirmWinner = async (
-        winnerId: number
-    ) => {
-        const confirmed = window.confirm(
-            'Confirm this winner?'
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setWinnerActionLoading(winnerId);
-        setWinnerActionError(null);
-        setWinnerActionMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/winners/${winnerId}/confirm`
-            );
-
-            setWinnerActionMessage(
-                response.data.message ??
-                'Winner confirmed successfully.'
-            );
-
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setWinnerActionError(
-                apiError.response?.data?.message ??
-                'Unable to confirm winner.'
-            );
-        } finally {
-            setWinnerActionLoading(null);
-        }
-    };
-
-    const cancelWinner = async (
-        winnerId: number
-    ) => {
-        const reason = window.prompt(
-            'Cancellation reason:'
-        );
-
-        if (!reason?.trim()) {
-            return;
-        }
-
-        setWinnerActionLoading(winnerId);
-        setWinnerActionError(null);
-        setWinnerActionMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/winners/${winnerId}/cancel`,
-                {
-                    reason: reason.trim(),
-                }
-            );
-
-            setWinnerActionMessage(
-                response.data.message ??
-                'Winner cancelled successfully.'
-            );
-
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setWinnerActionError(
-                apiError.response?.data?.message ??
-                'Unable to cancel winner.'
-            );
-        } finally {
-            setWinnerActionLoading(null);
-        }
-    };
-
-    const replaceWinner = async (
-        winnerId: number
-    ) => {
-        const confirmed = window.confirm(
-            'Select a replacement winner for this cancelled winner?'
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setWinnerActionLoading(winnerId);
-        setWinnerActionError(null);
-        setWinnerActionMessage(null);
-
-        try {
-            const response = await api.post(
-                `/admin/winners/${winnerId}/replace`
-            );
-
-            setWinnerActionMessage(
-                response.data.message ??
-                'Replacement winner selected successfully.'
-            );
-
-            await loadDraw();
-        } catch (err) {
-            console.error(err);
-
-            const apiError = err as ApiError;
-
-            setWinnerActionError(
-                apiError.response?.data?.message ??
-                'Unable to select replacement winner.'
-            );
-        } finally {
-            setWinnerActionLoading(null);
-        }
-    };
-
-    const contactAttemptResults: Array<{
-        value: ContactAttemptResult;
-        label: string;
-    }> = [
-        {
-            value: 'no_answer',
-            label: 'No answer',
-        },
-        {
-            value: 'busy',
-            label: 'Busy',
-        },
-        {
-            value: 'wrong_number',
-            label: 'Wrong number',
-        },
-        {
-            value: 'contacted',
-            label: 'Contacted',
-        },
-        {
-            value: 'confirmed',
-            label: 'Confirmed',
-        },
-        {
-            value: 'declined',
-            label: 'Declined',
-        },
-        {
-            value: 'other',
-            label: 'Other',
-        },
-    ];
+        };
 
     useEffect(() => {
-        loadDraw();
-        loadAvailablePrizes();
+        const load =
+            async () => {
+                setLoading(true);
+                setError(null);
+
+                await reloadAll();
+
+                setLoading(false);
+            };
+
+        load();
     }, [id]);
+
+    /*
+     * Draw settings
+     */
+
+    const saveSettings =
+        async () => {
+            if (
+                !draw ||
+                !isEditableDraw ||
+                !drawDate
+            ) {
+                return;
+            }
+
+            setActionLoading(true);
+            setActionError(null);
+            setActionSuccess(null);
+
+            try {
+                const response =
+                    await api.put(
+                        `/admin/draws/${draw.id}`,
+                        {
+                            draw_date:
+                            drawDate,
+
+                            status:
+                            drawStatus,
+                        }
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Draw updated successfully.'
+                );
+
+                setEditingSettings(
+                    false
+                );
+
+                await loadDraw();
+            } catch (err) {
+                console.error(err);
+
+                setActionError(
+                    getApiMessage(
+                        err,
+                        'Unable to update draw.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    /*
+     * Prize management
+     */
+
+    const addPrize =
+        async () => {
+            if (
+                !draw ||
+                !isEditableDraw ||
+                selectedPrizeId === ''
+            ) {
+                return;
+            }
+
+            const prize =
+                availablePrizes.find(
+                    (item) =>
+                        item.id ===
+                        selectedPrizeId
+                );
+
+            if (!prize) {
+                return;
+            }
+
+            if (
+                !Number.isInteger(
+                    prizeQuantity
+                ) ||
+                prizeQuantity < 1
+            ) {
+                setActionError(
+                    'Quantity must be at least 1.'
+                );
+
+                return;
+            }
+
+            if (
+                prizeQuantity >
+                prize.available_quantity
+            ) {
+                setActionError(
+                    `Only ${prize.available_quantity} ${prize.name} prize(s) are available.`
+                );
+
+                return;
+            }
+
+            setActionLoading(true);
+            setActionError(null);
+            setActionSuccess(null);
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/draws/${draw.id}/prizes`,
+                        {
+                            prize_id:
+                            selectedPrizeId,
+
+                            quantity:
+                            prizeQuantity,
+                        }
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Prize added successfully.'
+                );
+
+                setSelectedPrizeId(
+                    ''
+                );
+
+                setPrizeQuantity(
+                    1
+                );
+
+                setShowPrizeForm(
+                    false
+                );
+
+                await reloadAll();
+            } catch (err) {
+                console.error(err);
+
+                setActionError(
+                    getApiMessage(
+                        err,
+                        'Unable to add prize.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const removePrize =
+        async (
+            drawPrizeId: number
+        ) => {
+            if (
+                !draw ||
+                !isEditableDraw
+            ) {
+                return;
+            }
+
+            if (
+                !window.confirm(
+                    'Remove this prize allocation from the draw?'
+                )
+            ) {
+                return;
+            }
+
+            setActionLoading(true);
+            setActionError(null);
+            setActionSuccess(null);
+
+            try {
+                const response =
+                    await api.delete(
+                        `/admin/draws/${draw.id}/prizes/${drawPrizeId}`
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Prize removed successfully.'
+                );
+
+                await reloadAll();
+            } catch (err) {
+                console.error(err);
+
+                setActionError(
+                    getApiMessage(
+                        err,
+                        'Unable to remove prize.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    /*
+     * Prepare
+     */
+
+    const prepareDraw =
+        async () => {
+            if (
+                !draw ||
+                !canPrepare
+            ) {
+                return;
+            }
+
+            const confirmed =
+                window.confirm(
+                    `Prepare Week ${draw.week_number} draw?\n\n` +
+                    'The current eligible receipts will be frozen for this draw.\n\n' +
+                    'Draw settings and prize allocation cannot be changed afterward.'
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setActionLoading(true);
+            setActionError(null);
+            setActionSuccess(null);
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/draws/${draw.id}/snapshot`
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Draw prepared successfully.'
+                );
+
+                setEditingSettings(
+                    false
+                );
+
+                setShowPrizeForm(
+                    false
+                );
+
+                await loadDraw();
+            } catch (err) {
+                console.error(err);
+
+                setActionError(
+                    getApiMessage(
+                        err,
+                        'Unable to prepare draw.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    /*
+     * Execute
+     */
+
+    const executeDraw =
+        async () => {
+            if (
+                !draw ||
+                !canExecute
+            ) {
+                return;
+            }
+
+            const confirmed =
+                window.confirm(
+                    `Execute Week ${draw.week_number} draw now?\n\n` +
+                    `${draw.entries.length} frozen entries will participate.\n\n` +
+                    'Winner selection cannot be undone.'
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setActionLoading(true);
+            setActionError(null);
+            setActionSuccess(null);
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/draws/${draw.id}/execute`
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Draw executed successfully.'
+                );
+
+                await loadDraw();
+            } catch (err) {
+                console.error(err);
+
+                setActionError(
+                    getApiMessage(
+                        err,
+                        'Unable to execute draw.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    /*
+     * Winner statistics
+     */
+
+    const winnerStats =
+        useMemo(() => {
+            if (!draw) {
+                return {
+                    total: 0,
+                    needsAction: 0,
+                    confirmed: 0,
+                    cancelled: 0,
+                };
+            }
+
+            return {
+                total:
+                draw.winners.length,
+
+                needsAction:
+                draw.winners.filter(
+                    (winner) =>
+                        winner.status ===
+                        'selected' ||
+                        winner.status ===
+                        'contacting'
+                ).length,
+
+                confirmed:
+                draw.winners.filter(
+                    (winner) =>
+                        winner.status ===
+                        'confirmed'
+                ).length,
+
+                cancelled:
+                draw.winners.filter(
+                    (winner) =>
+                        winner.status ===
+                        'cancelled'
+                ).length,
+            };
+        }, [draw]);
+
+    /*
+     * Loading / errors
+     */
 
     if (loading) {
         return (
-            <div className="flex min-h-48 items-center justify-center text-sm text-gray-500">
+            <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
                 Loading draw...
             </div>
         );
     }
 
-    if (error) {
+    if (
+        error ||
+        !draw
+    ) {
         return (
             <div className="space-y-4">
+
                 <Link
                     to="/admin/draws"
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                    ← Back to draws
+                    ← Back to Draws
                 </Link>
 
-                <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                    {error}
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {error ??
+                        'Draw not found.'}
                 </div>
+
             </div>
         );
     }
 
-    if (!draw) {
-        return null;
-    }
+    /*
+     * Derived values
+     */
 
     const totalPrizeQuantity =
         draw.draw_prizes.reduce(
-            (total, item) =>
-                total + item.quantity,
+            (
+                total,
+                item
+            ) =>
+                total +
+                item.quantity,
             0
         );
 
-    const confirmedWinners =
-        draw.winners.filter(
-            (winner) =>
-                winner.status === 'confirmed'
-        ).length;
+    const selectedPrize =
+        selectedPrizeId !== ''
+            ? availablePrizes.find(
+                (prize) =>
+                    prize.id ===
+                    selectedPrizeId
+            )
+            : null;
 
-    const cancelledWinners =
-        draw.winners.filter(
-            (winner) =>
-                winner.status === 'cancelled'
-        ).length;
+    const configureComplete =
+        draw.draw_prizes.length >
+        0;
 
-    const selectedWinners =
-        draw.winners.filter(
-            (winner) =>
-                winner.status === 'selected' ||
-                winner.status === 'contacting'
-        ).length;
+    const prepareComplete =
+        Boolean(
+            draw.snapshot_at
+        );
+
+    const executionComplete =
+        draw.status ===
+        'completed' ||
+        Boolean(
+            draw.randomized_at
+        );
+
+    const reserveCount =
+        executionComplete &&
+        draw.random_response
+            ? Math.max(
+                0,
+                draw.random_response
+                    .values.length -
+                winnerStats.total
+            )
+            : 0;
 
     return (
         <div className="space-y-6">
 
             {/* Header */}
 
-            <div className="flex items-start justify-between">
+            <div>
 
-                <div>
+                <Link
+                    to="/admin/draws"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                    ← Back to Draws
+                </Link>
 
-                    <Link
-                        to="/admin/draws"
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                    >
-                        ← Back to draws
-                    </Link>
-
-                    <div className="mt-3 flex items-center gap-3">
-
-                        <h2 className="text-2xl font-bold text-gray-900">
-                            Week {draw.week_number}
-                        </h2>
-
-                        <StatusBadge
-                            status={draw.status}
-                        />
-
-                    </div>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Draw #{draw.id}
-                    </p>
-
-                </div>
-
-            </div>
-
-            {/* Draw Actions */}
-
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
                     <div>
-                        <h3 className="font-semibold text-gray-900">
-                            Draw Actions
-                        </h3>
+
+                        <div className="flex flex-wrap items-center gap-3">
+
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                Week{' '}
+                                {draw.week_number}{' '}
+                                Draw
+                            </h2>
+
+                            <StatusBadge
+                                status={
+                                    draw.status
+                                }
+                            />
+
+                        </div>
 
                         <p className="mt-1 text-sm text-gray-500">
-                            Prepare and execute this draw.
+                            {formatDateTime(
+                                draw.draw_date
+                            )}
+
+                            {' · '}
+
+                            Draw #{draw.id}
                         </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-
-                        {!draw.snapshot_at && (
-                            <button
-                                type="button"
-                                onClick={createSnapshot}
-                                disabled={
-                                    actionLoading
-                                }
-                                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {actionLoading
-                                    ? 'Creating...'
-                                    : 'Create Snapshot'}
-                            </button>
-                        )}
-
-                        {draw.snapshot_at && (
-                            <div className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
-                                Snapshot created
-                            </div>
-                        )}
-
-                        {draw.status === 'running' && (
-                            <button
-                                type="button"
-                                onClick={executeDraw}
-                                disabled={
-                                    executeLoading
-                                }
-                                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {executeLoading
-                                    ? 'Executing...'
-                                    : 'Execute Draw'}
-                            </button>
-                        )}
 
                     </div>
+
+                    {isEditableDraw && (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setEditingSettings(
+                                    (current) =>
+                                        !current
+                                )
+                            }
+                            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            {editingSettings
+                                ? 'Close Settings'
+                                : 'Edit Draw'}
+                        </button>
+                    )}
 
                 </div>
 
-                {actionMessage && (
-                    <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                        {actionMessage}
-                    </div>
-                )}
-
-                {actionError && (
-                    <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                        {actionError}
-                    </div>
-                )}
-
-                {executeMessage && (
-                    <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                        {executeMessage}
-                    </div>
-                )}
-
-                {executeError && (
-                    <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                        {executeError}
-                    </div>
-                )}
-
             </div>
+
+            {/* Feedback */}
+
+            {actionSuccess && (
+                <Alert
+                    type="success"
+                    onClose={() =>
+                        setActionSuccess(
+                            null
+                        )
+                    }
+                >
+                    {actionSuccess}
+                </Alert>
+            )}
+
+            {actionError && (
+                <Alert
+                    type="error"
+                    onClose={() =>
+                        setActionError(
+                            null
+                        )
+                    }
+                >
+                    {actionError}
+                </Alert>
+            )}
+
+            {/* Settings */}
+
+            {editingSettings &&
+                isEditableDraw && (
+
+                    <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                        <SectionHeader
+                            title="Draw Settings"
+                            description="Change the draw date or planning status before the participant snapshot is created."
+                        />
+
+                        <div className="grid gap-4 p-5 md:grid-cols-[280px_200px_auto] md:items-end">
+
+                            <div>
+
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Draw Date
+                                </label>
+
+                                <input
+                                    type="datetime-local"
+                                    value={
+                                        drawDate
+                                    }
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        setDrawDate(
+                                            event
+                                                .target
+                                                .value
+                                        )
+                                    }
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                />
+
+                            </div>
+
+                            <div>
+
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Status
+                                </label>
+
+                                <select
+                                    value={
+                                        drawStatus
+                                    }
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        setDrawStatus(
+                                            event.target
+                                                .value as
+                                                | 'draft'
+                                                | 'scheduled'
+                                        )
+                                    }
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                                >
+                                    <option value="draft">
+                                        Draft
+                                    </option>
+
+                                    <option value="scheduled">
+                                        Scheduled
+                                    </option>
+                                </select>
+
+                            </div>
+
+                            <div className="flex gap-2">
+
+                                <button
+                                    type="button"
+                                    onClick={
+                                        saveSettings
+                                    }
+                                    disabled={
+                                        actionLoading ||
+                                        !drawDate
+                                    }
+                                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                                >
+                                    Save
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setEditingSettings(
+                                            false
+                                        )
+                                    }
+                                    disabled={
+                                        actionLoading
+                                    }
+                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+                )}
+
+            {/* Workflow */}
+
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+
+                <h3 className="font-semibold text-gray-900">
+                    Draw Progress
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-500">
+                    Configure prizes, freeze eligible receipts, execute the draw, then manage selected winners.
+                </p>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-4">
+
+                    <WorkflowStep
+                        number={1}
+                        title="Configure"
+                        complete={
+                            configureComplete
+                        }
+                        active={
+                            !configureComplete
+                        }
+                    >
+                        {configureComplete
+                            ? `${totalPrizeQuantity} winner${totalPrizeQuantity === 1 ? '' : 's'} configured`
+                            : 'Configure prize allocation'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={2}
+                        title="Prepare"
+                        complete={
+                            prepareComplete
+                        }
+                        active={
+                            configureComplete &&
+                            !prepareComplete
+                        }
+                    >
+                        {prepareComplete
+                            ? `${draw.entries.length} entries frozen`
+                            : 'Freeze eligible receipts'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={3}
+                        title="Execute"
+                        complete={
+                            executionComplete
+                        }
+                        active={
+                            prepareComplete &&
+                            !executionComplete
+                        }
+                    >
+                        {executionComplete
+                            ? `${winnerStats.total} winners selected`
+                            : 'Run winner selection'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={4}
+                        title="Winners"
+                        complete={false}
+                        active={
+                            executionComplete
+                        }
+                    >
+                        {executionComplete
+                            ? `${winnerStats.needsAction} need action`
+                            : 'Available after execution'}
+                    </WorkflowStep>
+
+                </div>
+
+            </section>
 
             {/* Summary */}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="text-sm text-gray-500">
-                        Eligible entries
-                    </div>
+                <SummaryCard
+                    label={
+                        prepareComplete
+                            ? 'Frozen Entries'
+                            : 'Eligible Entries'
+                    }
+                    value={
+                        prepareComplete
+                            ? draw.entries.length
+                            : draw.eligible_entries_count
+                    }
+                />
 
-                    <div className="mt-2 text-2xl font-bold text-gray-900">
-                        {draw.entries.length}
-                    </div>
-                </div>
+                <SummaryCard
+                    label="Prize Quantity"
+                    value={
+                        totalPrizeQuantity
+                    }
+                />
 
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="text-sm text-gray-500">
-                        Prize quantity
-                    </div>
+                <SummaryCard
+                    label="Selected Winners"
+                    value={
+                        winnerStats.total
+                    }
+                />
 
-                    <div className="mt-2 text-2xl font-bold text-gray-900">
-                        {totalPrizeQuantity}
-                    </div>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="text-sm text-gray-500">
-                        Selected / contacting
-                    </div>
-
-                    <div className="mt-2 text-2xl font-bold text-blue-700">
-                        {selectedWinners}
-                    </div>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="text-sm text-gray-500">
-                        Confirmed / cancelled
-                    </div>
-
-                    <div className="mt-2 text-2xl font-bold text-gray-900">
-                        {confirmedWinners}
-                        <span className="mx-2 text-gray-300">
-                            /
-                        </span>
-                        <span className="text-red-700">
-                            {cancelledWinners}
-                        </span>
-                    </div>
-                </div>
+                <SummaryCard
+                    label="Confirmed Winners"
+                    value={
+                        winnerStats.confirmed
+                    }
+                    valueClassName="text-green-700"
+                />
 
             </div>
 
-            {/* Draw Information */}
+            {/* Next action */}
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            {!executionComplete && (
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
 
-                <div className="border-b border-gray-200 px-5 py-4">
-                    <h3 className="font-semibold text-gray-900">
-                        Draw Information
-                    </h3>
-                </div>
+                    <SectionHeader
+                        title="Next Action"
+                    />
 
-                <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-3">
+                    <div className="p-5">
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Status
-                        </div>
+                        {!configureComplete && (
 
-                        <div className="mt-1">
-                            <StatusBadge
-                                status={draw.status}
-                            />
-                        </div>
-                    </div>
+                            <div>
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Snapshot
-                        </div>
+                                <h4 className="font-medium text-gray-900">
+                                    Configure prizes
+                                </h4>
 
-                        <div className="mt-1 text-sm text-gray-700">
-                            {draw.snapshot_at
-                                ? new Date(
-                                    draw.snapshot_at
-                                ).toLocaleString()
-                                : 'Not created'}
-                        </div>
-                    </div>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Add at least one prize allocation before preparing the draw.
+                                </p>
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Randomization
-                        </div>
+                                {isEditableDraw && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowPrizeForm(
+                                                true
+                                            )
+                                        }
+                                        className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                                    >
+                                        Add Prize
+                                    </button>
+                                )}
 
-                        <div className="mt-1 text-sm text-gray-700">
-                            {draw.randomized_at
-                                ? `${draw.random_provider ?? 'Unknown'} — ${new Date(
-                                    draw.randomized_at
-                                ).toLocaleString()}`
-                                : 'Not randomized'}
-                        </div>
-                    </div>
-
-                </div>
-
-            </div>
-
-            {/* Prizes */}
-
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="border-b border-gray-200 px-5 py-4">
-
-                    <div className="flex items-center justify-between">
-
-                        <div>
-                            <h3 className="font-semibold text-gray-900">
-                                Prizes
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                Configure prizes for this draw.
-                            </p>
-                        </div>
-
-                        {!isEditableDraw && (
-                            <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
-                                Editing disabled
-                            </span>
+                            </div>
                         )}
 
-                    </div>
-
-                </div>
-
-                {prizeActionMessage && (
-                    <div className="m-5 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                        {prizeActionMessage}
-                    </div>
-                )}
-
-                {prizeActionError && (
-                    <div className="m-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                        {prizeActionError}
-                    </div>
-                )}
-
-                <div className="divide-y divide-gray-100">
-
-                    {draw.draw_prizes.map(
-                        (drawPrize) => (
-
-                            <div
-                                key={drawPrize.id}
-                                className="flex items-center justify-between px-5 py-4"
-                            >
+                        {configureComplete &&
+                            !prepareComplete && (
 
                                 <div>
 
-                                    <div className="font-medium text-gray-900">
-                                        {drawPrize.prize.name}
+                                    <h4 className="font-medium text-gray-900">
+                                        Prepare Draw
+                                    </h4>
+
+                                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
+                                        Preparing creates the participant snapshot. All currently eligible receipts will be frozen for this draw. Receipts approved afterward will not be added.
+                                    </p>
+
+                                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                                        After preparation, the draw date and prize allocation are locked.
                                     </div>
 
-                                    <div className="mt-1 text-xs text-gray-500">
-                                        Type:{' '}
-                                        {drawPrize.prize.type}
-                                    </div>
-
-                                </div>
-
-                                <div className="flex items-center gap-4">
-
-                                    <div className="text-right">
-
-                                        <div className="font-semibold text-gray-900">
-                                            ×{' '}
-                                            {
-                                                drawPrize.quantity
-                                            }
-                                        </div>
-
-                                        {drawPrize.prize.value !==
-                                            null && (
-                                                <div className="text-xs text-gray-500">
-                                                    {
-                                                        drawPrize.prize
-                                                            .value
-                                                    }{' '}
-                                                    {
-                                                        drawPrize.prize
-                                                            .currency
-                                                    }
-                                                </div>
-                                            )}
-
-                                    </div>
-
-                                    {isEditableDraw && (
+                                    {canPrepare && (
                                         <button
                                             type="button"
-                                            onClick={() =>
-                                                removePrize(
-                                                    drawPrize.id
-                                                )
+                                            onClick={
+                                                prepareDraw
                                             }
                                             disabled={
-                                                prizeActionLoading
+                                                actionLoading
                                             }
-                                            className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                            className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
                                         >
-                                            Remove
+                                            {actionLoading
+                                                ? 'Preparing...'
+                                                : 'Prepare Draw'}
                                         </button>
                                     )}
 
                                 </div>
+                            )}
 
-                            </div>
+                        {prepareComplete &&
+                            !executionComplete && (
 
-                        )
+                                <div>
+
+                                    <h4 className="font-medium text-gray-900">
+                                        Ready to Execute
+                                    </h4>
+
+                                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
+                                        {draw.entries.length}{' '}
+                                        frozen entries will participate and{' '}
+                                        {totalPrizeQuantity}{' '}
+                                        winner
+                                        {totalPrizeQuantity === 1
+                                            ? ''
+                                            : 's'}{' '}
+                                        will be selected.
+                                    </p>
+
+                                    {draw.eligible_entries_count <
+                                        draw.required_winners && (
+
+                                            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+
+                                                <div className="font-medium">
+                                                    Not enough eligible receipts
+                                                </div>
+
+                                                <p className="mt-1">
+                                                    At least{' '}
+                                                    {draw.required_winners}{' '}
+                                                    eligible receipts are required,
+                                                    but only{' '}
+                                                    {draw.eligible_entries_count}{' '}
+                                                    are currently available.
+                                                </p>
+
+                                            </div>
+                                        )}
+
+                                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                                        Executing the draw is irreversible. The complete randomized order will be stored for winner selection and future replacements.
+                                    </div>
+
+                                    {canExecute && (
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                executeDraw
+                                            }
+                                            disabled={
+                                                actionLoading
+                                            }
+                                            className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                        >
+                                            {actionLoading
+                                                ? 'Executing...'
+                                                : 'Execute Draw'}
+                                        </button>
+                                    )}
+
+                                </div>
+                            )}
+
+                    </div>
+
+                </section>
+            )}
+
+            {/* Prize allocation */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                        <h3 className="font-semibold text-gray-900">
+                            Prize Allocation
+                        </h3>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                            Configure the prizes that will be awarded in this draw.
+                        </p>
+
+                    </div>
+
+                    {isEditableDraw ? (
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowPrizeForm(
+                                    (current) =>
+                                        !current
+                                )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            {showPrizeForm
+                                ? 'Close'
+                                : 'Add Prize'}
+                        </button>
+
+                    ) : (
+
+                        <span className="self-start rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
+                            Allocation locked
+                        </span>
                     )}
 
-                    {isEditableDraw && (
-                        <div className="border-t border-gray-200 p-5">
+                </div>
 
-                            <h4 className="mb-4 text-sm font-semibold text-gray-900">
-                                Add Prize
-                            </h4>
+                {showPrizeForm &&
+                    isEditableDraw && (
 
-                            <div className="flex flex-wrap items-end gap-3">
+                        <div className="border-b border-gray-200 bg-gray-50 p-5">
 
-                                <div className="min-w-64">
-                                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+
+                                <div className="flex-1">
+
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">
                                         Prize
                                     </label>
 
@@ -1062,21 +1368,22 @@ export default function DrawDetails() {
                                         value={
                                             selectedPrizeId
                                         }
-                                        onChange={(e) =>
+                                        onChange={(
+                                            event
+                                        ) =>
                                             setSelectedPrizeId(
-                                                e.target.value
+                                                event
+                                                    .target
+                                                    .value
                                                     ? Number(
-                                                        e
+                                                        event
                                                             .target
                                                             .value
                                                     )
                                                     : ''
                                             )
                                         }
-                                        disabled={
-                                            prizeActionLoading
-                                        }
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                     >
                                         <option value="">
                                             Select prize
@@ -1092,25 +1399,24 @@ export default function DrawDetails() {
                                                         prize.id
                                                     }
                                                     disabled={
-                                                        prize.available_quantity ===
+                                                        prize.available_quantity <=
                                                         0
                                                     }
                                                 >
-                                                    {
-                                                        prize.name
-                                                    }{' '}
-                                                    — available:{' '}
-                                                    {
-                                                        prize.available_quantity
-                                                    }
+                                                    {prize.name}
+                                                    {' — '}
+                                                    available:{' '}
+                                                    {prize.available_quantity}
                                                 </option>
                                             )
                                         )}
                                     </select>
+
                                 </div>
 
-                                <div className="w-32">
-                                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                                <div className="w-full lg:w-32">
+
+                                    <label className="mb-1 block text-sm font-medium text-gray-700">
                                         Quantity
                                     </label>
 
@@ -1120,613 +1426,777 @@ export default function DrawDetails() {
                                         value={
                                             prizeQuantity
                                         }
-                                        onChange={(e) =>
+                                        onChange={(
+                                            event
+                                        ) =>
                                             setPrizeQuantity(
                                                 Number(
-                                                    e
+                                                    event
                                                         .target
                                                         .value
                                                 )
                                             )
                                         }
-                                        disabled={
-                                            prizeActionLoading
-                                        }
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                     />
+
                                 </div>
 
-                                <button
-                                    type="button"
-                                    onClick={addPrize}
-                                    disabled={
-                                        prizeActionLoading ||
-                                        selectedPrizeId ===
-                                        ''
-                                    }
-                                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {prizeActionLoading
-                                        ? 'Saving...'
-                                        : 'Add Prize'}
-                                </button>
+                                <div className="flex gap-2">
+
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            addPrize
+                                        }
+                                        disabled={
+                                            actionLoading ||
+                                            selectedPrizeId ===
+                                            ''
+                                        }
+                                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                                    >
+                                        Add
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowPrizeForm(
+                                                false
+                                            );
+
+                                            setSelectedPrizeId(
+                                                ''
+                                            );
+
+                                            setPrizeQuantity(
+                                                1
+                                            );
+                                        }}
+                                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+
+                                </div>
 
                             </div>
 
-                            {selectedPrizeId !== '' && (
+                            {selectedPrize && (
                                 <div className="mt-3 text-xs text-gray-500">
+                                    Total:{' '}
+                                    <strong>
+                                        {selectedPrize.total_quantity}
+                                    </strong>
 
-                                    {(() => {
-                                        const prize =
-                                            availablePrizes.find(
-                                                (item) =>
-                                                    item.id ===
-                                                    selectedPrizeId
-                                            );
+                                    {' · '}
 
-                                        if (!prize) {
-                                            return null;
-                                        }
+                                    Allocated:{' '}
+                                    <strong>
+                                        {selectedPrize.allocated_quantity}
+                                    </strong>
 
-                                        return (
-                                            <>
-                                                Total available:{' '}
-                                                <span className="font-medium text-gray-700">
-                                                    {
-                                                        prize.total_quantity
-                                                    }
-                                                </span>
+                                    {' · '}
 
-                                                {' · '}
-
-                                                Already allocated:{' '}
-                                                <span className="font-medium text-gray-700">
-                                                    {
-                                                        prize.allocated_quantity
-                                                    }
-                                                </span>
-
-                                                {' · '}
-
-                                                Remaining:{' '}
-                                                <span className="font-medium text-gray-700">
-                                                    {
-                                                        prize.available_quantity
-                                                    }
-                                                </span>
-                                            </>
-                                        );
-                                    })()}
-
+                                    Available:{' '}
+                                    <strong>
+                                        {selectedPrize.available_quantity}
+                                    </strong>
                                 </div>
                             )}
 
                         </div>
                     )}
 
-                    {draw.draw_prizes.length ===
-                        0 && (
-                            <div className="p-5 text-sm text-gray-400">
-                                No prizes configured.
-                            </div>
-                        )}
+                {draw.draw_prizes.length ===
+                0 ? (
 
-                </div>
-
-            </div>
-
-            {/* Winners */}
-
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="border-b border-gray-200 px-5 py-4">
-
-                    <h3 className="font-semibold text-gray-900">
-                        Winners
-                    </h3>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Manage selected winners,
-                        contact attempts,
-                        confirmation and
-                        replacements.
-                    </p>
-
-                </div>
-
-                {winnerActionMessage && (
-                    <div className="m-5 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                        {winnerActionMessage}
+                    <div className="p-6 text-sm text-gray-400">
+                        No prizes configured.
                     </div>
-                )}
 
-                {winnerActionError && (
-                    <div className="m-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                        {winnerActionError}
-                    </div>
-                )}
-
-                {draw.winners.length === 0 ? (
-                    <div className="p-5 text-sm text-gray-400">
-                        No winners yet.
-                    </div>
                 ) : (
+
                     <div className="divide-y divide-gray-100">
 
-                        {draw.winners.map(
-                            (winner) => {
+                        {draw.draw_prizes.map(
+                            (drawPrize) => (
 
-                                const drawPrize =
-                                    draw.draw_prizes.find(
-                                        (item) =>
-                                            item.id ===
-                                            winner.draw_prize_id
-                                    );
+                                <div
+                                    key={
+                                        drawPrize.id
+                                    }
+                                    className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                >
 
-                                const isWinnerLoading =
-                                    winnerActionLoading ===
-                                    winner.id;
+                                    <div>
 
-                                return (
-                                    <div
-                                        key={
-                                            winner.id
-                                        }
-                                        className="p-5"
-                                    >
-
-                                        <div className="flex flex-wrap items-start justify-between gap-4">
-
-                                            <div>
-
-                                                <div className="font-semibold text-gray-900">
-                                                    {
-                                                        drawPrize
-                                                            ?.prize
-                                                            .name
-                                                    }
-                                                </div>
-
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    Entry #
-                                                    {
-                                                        winner.entry_number
-                                                    }
-
-                                                    {' · '}
-
-                                                    Receipt{' '}
-                                                    {
-                                                        winner
-                                                            .receipt
-                                                            ?.receipt_number
-                                                    }
-                                                </div>
-
-                                                <div className="mt-1 text-xs text-gray-400">
-                                                    Winner ID #
-                                                    {
-                                                        winner.id
-                                                    }
-                                                </div>
-
-                                            </div>
-
-                                            <StatusBadge
-                                                status={
-                                                    winner.status
-                                                }
-                                            />
-
+                                        <div className="font-medium text-gray-900">
+                                            {drawPrize.prize.name}
                                         </div>
 
-                                        {winner.replaced_winner_id !==
+                                        {drawPrize.prize.value !==
                                             null && (
-                                                <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                                                    Replacement for
-                                                    winner #
-                                                    {
-                                                        winner.replaced_winner_id
-                                                    }
-                                                </div>
-                                            )}
-
-                                        {winner.status ===
-                                            'cancelled' &&
-                                            winner.cancellation_reason && (
-                                                <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                                                <span className="font-medium">
-                                                    Cancellation reason:
-                                                </span>{' '}
-                                                    {
-                                                        winner.cancellation_reason
-                                                    }
-                                                </div>
-                                            )}
-
-                                        <div className="mt-4 flex flex-wrap gap-2">
-
-                                            {(winner.status ===
-                                                'selected' ||
-                                                winner.status ===
-                                                'contacting') && (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            openContactAttempt(
-                                                                winner.id
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            winnerActionLoading !==
-                                                            null
-                                                        }
-                                                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        Add Contact Attempt
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            confirmWinner(
-                                                                winner.id
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            winnerActionLoading !==
-                                                            null
-                                                        }
-                                                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {isWinnerLoading
-                                                            ? 'Processing...'
-                                                            : 'Confirm Winner'}
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            cancelWinner(
-                                                                winner.id
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            winnerActionLoading !==
-                                                            null
-                                                        }
-                                                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </>
-                                            )}
-
-                                            {winner.status ===
-                                                'cancelled' && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            replaceWinner(
-                                                                winner.id
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            winnerActionLoading !==
-                                                            null
-                                                        }
-                                                        className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {isWinnerLoading
-                                                            ? 'Selecting...'
-                                                            : 'Select Replacement'}
-                                                    </button>
-                                                )}
-
-                                        </div>
-
-                                        {/* Contact Attempts */}
-
-                                        {winner.contact_attempts &&
-                                            winner
-                                                .contact_attempts
-                                                .length > 0 && (
-                                                <div className="mt-4">
-
-                                                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                        Contact Attempts
-                                                    </div>
-
-                                                    <div className="space-y-2">
-
-                                                        {winner.contact_attempts.map(
-                                                            (
-                                                                attempt
-                                                            ) => (
-                                                                <div
-                                                                    key={
-                                                                        attempt.id
-                                                                    }
-                                                                    className="rounded-lg bg-gray-50 p-3"
-                                                                >
-
-                                                                    <div className="flex flex-wrap items-center justify-between gap-2">
-
-                                                                        <span className="text-sm font-medium text-gray-800">
-                                                                            {
-                                                                                contactAttemptResults.find(
-                                                                                    (
-                                                                                        item
-                                                                                    ) =>
-                                                                                        item.value ===
-                                                                                        attempt.result
-                                                                                )
-                                                                                    ?.label ??
-                                                                                attempt.result
-                                                                            }
-                                                                        </span>
-
-                                                                        <span className="text-xs text-gray-400">
-                                                                            {new Date(
-                                                                                attempt.attempted_at
-                                                                            ).toLocaleString()}
-                                                                        </span>
-
-                                                                    </div>
-
-                                                                    {attempt.notes && (
-                                                                        <div className="mt-1 text-sm text-gray-600">
-                                                                            {
-                                                                                attempt.notes
-                                                                            }
-                                                                        </div>
-                                                                    )}
-
-                                                                </div>
-                                                            )
-                                                        )}
-
-                                                    </div>
-
-                                                </div>
-                                            )}
-
-                                        {/* Contact Attempt Form */}
-
-                                        {contactWinnerId ===
-                                            winner.id && (
-                                                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-
-                                                    <div className="mb-3 font-medium text-gray-900">
-                                                        Contact Attempt
-                                                    </div>
-
-                                                    <div>
-
-                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                                                            Result
-                                                        </label>
-
-                                                        <select
-                                                            value={
-                                                                contactResult
-                                                            }
-                                                            onChange={(
-                                                                e
-                                                            ) =>
-                                                                setContactResult(
-                                                                    e
-                                                                        .target
-                                                                        .value
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                winnerActionLoading !==
-                                                                null
-                                                            }
-                                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-                                                        >
-                                                            <option value="">
-                                                                Select result
-                                                            </option>
-
-                                                            {contactAttemptResults.map(
-                                                                (
-                                                                    item
-                                                                ) => (
-                                                                    <option
-                                                                        key={
-                                                                            item.value
-                                                                        }
-                                                                        value={
-                                                                            item.value
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            item.label
-                                                                        }
-                                                                    </option>
-                                                                )
-                                                            )}
-
-                                                        </select>
-
-                                                    </div>
-
-                                                    <div className="mt-3">
-
-                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
-                                                            Notes
-                                                        </label>
-
-                                                        <textarea
-                                                            value={
-                                                                contactNotes
-                                                            }
-                                                            onChange={(
-                                                                e
-                                                            ) =>
-                                                                setContactNotes(
-                                                                    e
-                                                                        .target
-                                                                        .value
-                                                                )
-                                                            }
-                                                            maxLength={
-                                                                5000
-                                                            }
-                                                            rows={
-                                                                3
-                                                            }
-                                                            placeholder="Optional notes..."
-                                                            disabled={
-                                                                winnerActionLoading !==
-                                                                null
-                                                            }
-                                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-                                                        />
-
-                                                        <div className="mt-1 text-right text-xs text-gray-400">
-                                                            {
-                                                                contactNotes.length
-                                                            }
-                                                            /5000
-                                                        </div>
-
-                                                    </div>
-
-                                                    <div className="mt-3 flex gap-2">
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={
-                                                                addContactAttempt
-                                                            }
-                                                            disabled={
-                                                                winnerActionLoading !==
-                                                                null ||
-                                                                !contactResult
-                                                            }
-                                                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                                                        >
-                                                            {winnerActionLoading ===
-                                                            winner.id
-                                                                ? 'Saving...'
-                                                                : 'Save Attempt'}
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={
-                                                                closeContactAttempt
-                                                            }
-                                                            disabled={
-                                                                winnerActionLoading !==
-                                                                null
-                                                            }
-                                                            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50"
-                                                        >
-                                                            Cancel
-                                                        </button>
-
-                                                    </div>
-
+                                                <div className="mt-1 text-xs text-gray-500">
+                                                    {drawPrize.prize.value.toLocaleString()}
+                                                    {' '}
+                                                    {drawPrize.prize.currency ??
+                                                        ''}
                                                 </div>
                                             )}
 
                                     </div>
-                                );
-                            }
+
+                                    <div className="flex items-center gap-5">
+
+                                        <div className="text-right">
+
+                                            <div className="text-lg font-semibold text-gray-900">
+                                                ×{' '}
+                                                {drawPrize.quantity}
+                                            </div>
+
+                                            <div className="text-xs text-gray-400">
+                                                winner
+                                                {drawPrize.quantity ===
+                                                1
+                                                    ? ''
+                                                    : 's'}
+                                            </div>
+
+                                        </div>
+
+                                        {isEditableDraw && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    removePrize(
+                                                        drawPrize.id
+                                                    )
+                                                }
+                                                disabled={
+                                                    actionLoading
+                                                }
+                                                className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+
+                                    </div>
+
+                                </div>
+                            )
                         )}
+
+                        <div className="flex items-center justify-between bg-gray-50 px-5 py-4">
+
+                            <span className="text-sm font-medium text-gray-700">
+                                Total winners
+                            </span>
+
+                            <span className="text-lg font-bold text-gray-900">
+                                {totalPrizeQuantity}
+                            </span>
+
+                        </div>
 
                     </div>
                 )}
 
-            </div>
+            </section>
 
-            {/* Randomization */}
+            {/* Snapshot */}
 
-            {draw.random_response && (
-                <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            {prepareComplete && (
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
 
-                    <div className="border-b border-gray-200 px-5 py-4">
-                        <h3 className="font-semibold text-gray-900">
-                            Randomization
-                        </h3>
-                    </div>
+                    <SectionHeader
+                        title="Participant Snapshot"
+                        description="The eligible receipt list for this draw is frozen and cannot change."
+                    />
 
-                    <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+                    <div className="grid gap-5 p-5 sm:grid-cols-3">
 
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Provider
-                            </div>
+                        <InfoItem
+                            label="Frozen Entries"
+                            value={
+                                draw.entries.length
+                            }
+                        />
 
-                            <div className="mt-1 text-sm text-gray-900">
-                                {draw.random_provider ??
-                                    '-'}
-                            </div>
-                        </div>
+                        <InfoItem
+                            label="Prepared At"
+                            value={
+                                formatDateTime(
+                                    draw.snapshot_at
+                                )
+                            }
+                        />
 
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Entry count
-                            </div>
-
-                            <div className="mt-1 text-sm text-gray-900">
-                                {
-                                    draw.random_request
-                                        ?.entry_count
-                                }
-                            </div>
-                        </div>
-
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Randomized at
-                            </div>
-
-                            <div className="mt-1 text-sm text-gray-900">
-                                {draw.randomized_at
-                                    ? new Date(
-                                        draw.randomized_at
-                                    ).toLocaleString()
-                                    : '-'}
-                            </div>
-                        </div>
-
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Request ID
-                            </div>
-
-                            <div className="mt-1 text-sm text-gray-900">
-                                {
-                                    draw.random_request_id ??
-                                    '-'
-                                }
-                            </div>
-                        </div>
-
-                        <div className="md:col-span-2">
-
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                Randomized order
-                            </div>
-
-                            <div className="mt-2 rounded-lg bg-gray-50 p-4 font-mono text-sm text-gray-700">
-                                {draw.random_response.values.join(
-                                    ', '
-                                )}
-                            </div>
-
-                        </div>
+                        <InfoItem
+                            label="Required Winners"
+                            value={
+                                totalPrizeQuantity
+                            }
+                        />
 
                     </div>
+
+                </section>
+            )}
+
+            {/* Winners */}
+
+            {executionComplete && (
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                    <div className="flex flex-col gap-4 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+
+                            <h3 className="font-semibold text-gray-900">
+                                Draw Results
+                            </h3>
+
+                            <p className="mt-1 text-sm text-gray-500">
+                                Winner follow-up is handled in the Winners workspace.
+                            </p>
+
+                        </div>
+
+                        <Link
+                            to={`/admin/winners?draw_id=${draw.id}`}
+                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                        >
+                            Manage Winners
+                        </Link>
+
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-px bg-gray-200 md:grid-cols-5">
+
+                        <ResultStat
+                            label="Selected"
+                            value={
+                                winnerStats.total
+                            }
+                        />
+
+                        <ResultStat
+                            label="Needs Action"
+                            value={
+                                winnerStats.needsAction
+                            }
+                            valueClassName="text-blue-700"
+                        />
+
+                        <ResultStat
+                            label="Confirmed"
+                            value={
+                                winnerStats.confirmed
+                            }
+                            valueClassName="text-green-700"
+                        />
+
+                        <ResultStat
+                            label="Cancelled"
+                            value={
+                                winnerStats.cancelled
+                            }
+                            valueClassName="text-red-700"
+                        />
+
+                        <ResultStat
+                            label="Reserve Entries"
+                            value={
+                                reserveCount
+                            }
+                        />
+
+                    </div>
+
+                    {draw.winners.length >
+                        0 && (
+
+                            <div className="overflow-x-auto">
+
+                                <table className="min-w-full text-left text-sm">
+
+                                    <thead className="bg-gray-50">
+
+                                    <tr>
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            Winner
+                                        </th>
+
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            Prize
+                                        </th>
+
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            Entry
+                                        </th>
+
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            Status
+                                        </th>
+
+                                        <th className="px-5 py-3" />
+                                    </tr>
+
+                                    </thead>
+
+                                    <tbody className="divide-y divide-gray-100">
+
+                                    {draw.winners
+                                        .slice(
+                                            0,
+                                            5
+                                        )
+                                        .map(
+                                            (
+                                                winner
+                                            ) => {
+                                                const drawPrize =
+                                                    draw.draw_prizes.find(
+                                                        (
+                                                            item
+                                                        ) =>
+                                                            item.id ===
+                                                            winner.draw_prize_id
+                                                    );
+
+                                                const participant =
+                                                    winner
+                                                        .receipt
+                                                        ?.participant;
+
+                                                return (
+                                                    <tr
+                                                        key={
+                                                            winner.id
+                                                        }
+                                                    >
+
+                                                        <td className="px-5 py-4">
+
+                                                            <div className="font-medium text-gray-900">
+                                                                {participant
+                                                                    ? `${participant.first_name} ${participant.last_name}`
+                                                                    : `Winner #${winner.id}`}
+                                                            </div>
+
+                                                            <div className="mt-1 text-xs text-gray-500">
+                                                                Receipt{' '}
+                                                                {winner.receipt?.receipt_number ??
+                                                                    '-'}
+                                                            </div>
+
+                                                        </td>
+
+                                                        <td className="px-5 py-4 text-gray-700">
+                                                            {drawPrize?.prize.name ??
+                                                                '-'}
+                                                        </td>
+
+                                                        <td className="px-5 py-4 text-gray-700">
+                                                            #{winner.entry_number}
+                                                        </td>
+
+                                                        <td className="px-5 py-4">
+
+                                                            <StatusBadge
+                                                                status={
+                                                                    winner.status
+                                                                }
+                                                            />
+
+                                                        </td>
+
+                                                        <td className="px-5 py-4 text-right">
+
+                                                            <Link
+                                                                to={`/admin/winners/${winner.id}`}
+                                                                state={{
+                                                                    from:
+                                                                        `/admin/winners?draw_id=${draw.id}`,
+                                                                }}
+                                                                className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                                            >
+                                                                View
+                                                            </Link>
+
+                                                        </td>
+
+                                                    </tr>
+                                                );
+                                            }
+                                        )}
+
+                                    </tbody>
+
+                                </table>
+
+                                {draw.winners.length >
+                                    5 && (
+                                        <div className="border-t border-gray-200 px-5 py-4 text-center">
+
+                                            <Link
+                                                to={`/admin/winners?draw_id=${draw.id}`}
+                                                className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                            >
+                                                View all{' '}
+                                                {draw.winners.length}{' '}
+                                                winners →
+                                            </Link>
+
+                                        </div>
+                                    )}
+
+                            </div>
+                        )}
+
+                </section>
+            )}
+
+            {/* Draw information */}
+
+            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                <SectionHeader
+                    title="Draw Information"
+                />
+
+                <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+
+                    <InfoItem
+                        label="Draw Date"
+                        value={
+                            formatDateTime(
+                                draw.draw_date
+                            )
+                        }
+                    />
+
+                    <InfoItem
+                        label="Prepared"
+                        value={
+                            formatDateTime(
+                                draw.snapshot_at
+                            )
+                        }
+                    />
+
+                    <InfoItem
+                        label="Executed"
+                        value={
+                            formatDateTime(
+                                draw.randomized_at
+                            )
+                        }
+                    />
+
+                    <InfoItem
+                        label="Completed"
+                        value={
+                            formatDateTime(
+                                draw.completed_at
+                            )
+                        }
+                    />
 
                 </div>
+
+            </section>
+
+            {/* Audit */}
+
+            {draw.random_response && (
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setAuditOpen(
+                                (current) =>
+                                    !current
+                            )
+                        }
+                        className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-gray-50"
+                    >
+
+                        <div>
+
+                            <h3 className="font-semibold text-gray-900">
+                                Draw Audit Information
+                            </h3>
+
+                            <p className="mt-1 text-sm text-gray-500">
+                                Original randomization data used for initial and replacement winners.
+                            </p>
+
+                        </div>
+
+                        <span className="text-sm font-medium text-gray-500">
+                            {auditOpen
+                                ? 'Hide'
+                                : 'Show details'}
+                        </span>
+
+                    </button>
+
+                    {auditOpen && (
+
+                        <div className="border-t border-gray-200">
+
+                            <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+
+                                <InfoItem
+                                    label="Provider"
+                                    value={
+                                        draw.random_provider ??
+                                        '-'
+                                    }
+                                />
+
+                                <InfoItem
+                                    label="Entry Count"
+                                    value={
+                                        draw.random_request
+                                            ?.entry_count ??
+                                        '-'
+                                    }
+                                />
+
+                                <InfoItem
+                                    label="Randomized At"
+                                    value={
+                                        formatDateTime(
+                                            draw.randomized_at
+                                        )
+                                    }
+                                />
+
+                                <InfoItem
+                                    label="Request ID"
+                                    value={
+                                        draw.random_request_id ??
+                                        '-'
+                                    }
+                                />
+
+                            </div>
+
+                            <div className="border-t border-gray-100 p-5">
+
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                    Randomized Order
+                                </div>
+
+                                <div className="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-4 font-mono text-xs leading-6 text-gray-700">
+                                    {draw.random_response
+                                        .values.join(
+                                            ', '
+                                        )}
+                                </div>
+
+                            </div>
+
+                        </div>
+                    )}
+
+                </section>
             )}
+
+        </div>
+    );
+}
+
+function SectionHeader({
+                           title,
+                           description,
+                       }: {
+    title: string;
+    description?: string;
+}) {
+    return (
+        <div className="border-b border-gray-200 px-5 py-4">
+
+            <h3 className="font-semibold text-gray-900">
+                {title}
+            </h3>
+
+            {description && (
+                <p className="mt-1 text-sm text-gray-500">
+                    {description}
+                </p>
+            )}
+
+        </div>
+    );
+}
+
+function SummaryCard({
+                         label,
+                         value,
+                         valueClassName = 'text-gray-900',
+                     }: {
+    label: string;
+    value: string | number;
+    valueClassName?: string;
+}) {
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+
+            <div className="text-sm text-gray-500">
+                {label}
+            </div>
+
+            <div
+                className={`mt-2 text-2xl font-bold ${valueClassName}`}
+            >
+                {value}
+            </div>
+
+        </div>
+    );
+}
+
+function ResultStat({
+                        label,
+                        value,
+                        valueClassName = 'text-gray-900',
+                    }: {
+    label: string;
+    value: number;
+    valueClassName?: string;
+}) {
+    return (
+        <div className="bg-white p-5">
+
+            <div className="text-sm text-gray-500">
+                {label}
+            </div>
+
+            <div
+                className={`mt-1 text-2xl font-bold ${valueClassName}`}
+            >
+                {value}
+            </div>
+
+        </div>
+    );
+}
+
+function InfoItem({
+                      label,
+                      value,
+                  }: {
+    label: string;
+    value: string | number;
+}) {
+    return (
+        <div>
+
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                {label}
+            </div>
+
+            <div className="mt-1 break-all text-sm text-gray-700">
+                {value}
+            </div>
+
+        </div>
+    );
+}
+
+function WorkflowStep({
+                          number,
+                          title,
+                          complete,
+                          active,
+                          children,
+                      }: {
+    number: number;
+    title: string;
+    complete: boolean;
+    active: boolean;
+    children: React.ReactNode;
+}) {
+    let className =
+        'rounded-xl border border-gray-200 bg-gray-50 p-4';
+
+    if (complete) {
+        className =
+            'rounded-xl border border-green-200 bg-green-50 p-4';
+    } else if (active) {
+        className =
+            'rounded-xl border border-blue-200 bg-blue-50 p-4';
+    }
+
+    return (
+        <div className={className}>
+
+            <div className="flex items-center justify-between">
+
+                <span className="text-xs font-medium text-gray-500">
+                    STEP {number}
+                </span>
+
+                {complete && (
+                    <span className="text-xs font-semibold text-green-700">
+                        ✓ Done
+                    </span>
+                )}
+
+            </div>
+
+            <div className="mt-1 font-semibold text-gray-900">
+                {title}
+            </div>
+
+            <div className="mt-2 text-sm text-gray-600">
+                {children}
+            </div>
+
+        </div>
+    );
+}
+
+function Alert({
+                   type,
+                   children,
+                   onClose,
+               }: {
+    type: 'success' | 'error';
+    children: React.ReactNode;
+    onClose: () => void;
+}) {
+    const className =
+        type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-700'
+            : 'border-red-200 bg-red-50 text-red-700';
+
+    return (
+        <div
+            className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm ${className}`}
+        >
+
+            <span>
+                {children}
+            </span>
+
+            <button
+                type="button"
+                onClick={
+                    onClose
+                }
+                className="ml-4 font-medium"
+            >
+                ×
+            </button>
 
         </div>
     );

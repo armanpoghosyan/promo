@@ -3,6 +3,8 @@ import '../css/app.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { LanguageProvider } from './i18n/LanguageContext';
+import { AuthProvider } from './auth/AuthContext';
 
 import App from './App';
 
@@ -15,7 +17,11 @@ if (!rootElement) {
 ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
         <BrowserRouter>
-            <App />
+            <LanguageProvider>
+                <AuthProvider>
+                    <App />
+                </AuthProvider>
+            </LanguageProvider>
         </BrowserRouter>
     </React.StrictMode>
 );

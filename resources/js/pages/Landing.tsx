@@ -47,15 +47,33 @@ const initialForm: FormState = {
     personal_data_consent: false,
 };
 
+const faqItems = [
+    {
+        question: 'How can I participate?',
+        answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+    },{
+        question: 'How are winners selected?',
+        answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.',
+    },{
+        question: 'When will the draws take place?',
+        answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.',
+    },
+];
+
+const privacyPolicyText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.`;
+const officialRulesText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`;
+
 export default function Landing() {
     const {language, setLanguage, tr} = useLanguage();
 
     const [form, setForm] = useState<FormState>(initialForm);
     const [receiptImage, setReceiptImage] = useState<File | null>(null);
     const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
-    const [submitting, setSubmitting,] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
     const [success, setSuccess] = useState<string | null>(null);
+
     const [modal, setModal] = useState<ModalType>(null);
 
     const updateField = (field: keyof FormState, value: string | boolean) => {
@@ -67,14 +85,13 @@ export default function Landing() {
 
     const clearFieldError = (field: keyof FormErrors) => {
         setFieldErrors((current) => ({
-            ...current,
-            [field]: undefined,
+                ...current,
+                [field]: undefined,
         }));
     };
 
     const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0] ?? null;
-
         setReceiptImage(file);
         if (file) {
             clearFieldError('receipt_image');
@@ -85,41 +102,41 @@ export default function Landing() {
         const errors: FormErrors = {};
 
         if (!form.first_name.trim()) {
-            errors.first_name = t.public.validation.required;
+            errors.first_name = tr('This field is required.');
         }
 
         if (!form.last_name.trim()) {
-            errors.last_name = t.public.validation.required;
+            errors.last_name = tr('This field is required.');
         }
 
         if (!form.phone.trim()) {
-            errors.phone = t.public.validation.required;
+            errors.phone = tr('This field is required.');
         }
 
         if (!form.email.trim()) {
-            errors.email = t.public.validation.required;
+            errors.email = tr('This field is required.');
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-            errors.email = t.public.validation.invalidEmail;
+            errors.email = tr('Please enter a valid email address.');
         }
 
         if (!form.receipt_number.trim()) {
-            errors.receipt_number = t.public.validation.required;
+            errors.receipt_number = tr('This field is required.');
         }
 
         if (!receiptImage) {
-            errors.receipt_image = t.public.validation.receiptImageRequired;
+            errors.receipt_image = tr('Please upload the receipt image.');
         }
 
         if (!form.privacy_policy_accepted) {
-            errors.privacy_policy_accepted = t.public.validation.acceptRequired;
+            errors.privacy_policy_accepted = tr('You must accept this condition.');
         }
 
         if (!form.official_rules_accepted) {
-            errors.official_rules_accepted = t.public.validation.acceptRequired;
+            errors.official_rules_accepted = tr('You must accept this condition.');
         }
 
         if (!form.personal_data_consent) {
-            errors.personal_data_consent = t.public.validation.acceptRequired;
+            errors.personal_data_consent = tr('You must accept this condition.');
         }
 
         setFieldErrors(errors);
@@ -152,7 +169,7 @@ export default function Landing() {
         data.append('first_name', form.first_name.trim());
         data.append('last_name', form.last_name.trim());
         data.append('phone', form.phone.trim());
-        data.append('email',form.email.trim());
+        data.append('email', form.email.trim());
         data.append('receipt_number', form.receipt_number.trim());
         data.append('receipt_image', receiptImage);
         data.append('privacy_policy_accepted', '1');
@@ -171,33 +188,25 @@ export default function Landing() {
                 '/participants/receipts',
                 data,
                 {
-                    headers: {
-                        'Content-Type':
-                        undefined,
-                    },
-                }
-            );
+                    headers: {'Content-Type': undefined}
+                });
 
-            setSuccess(
-                response.data?.message ??
-                t.public.participation.success
-            );
+            setSuccess(tr(response.data?.message) ?? tr('Participation submitted successfully.'));
 
             resetForm();
         } catch (err: any) {
             console.error(err);
+
             const validationErrors = err.response?.data?.errors;
 
             if (validationErrors && typeof validationErrors === 'object') {
                 const backendErrors: FormErrors = {};
 
-                Object.entries(validationErrors).forEach(
-                    ([field, messages]) => {
-                        if (Array.isArray(messages) && typeof messages[0] === 'string') {
-                            backendErrors[field as keyof FormErrors] = messages[0];
-                        }
+                Object.entries(validationErrors).forEach(([field, messages,]) => {
+                    if (Array.isArray(messages) && typeof messages[0] === 'string') {
+                        backendErrors[field as keyof FormErrors] = messages[0];
                     }
-                );
+                });
 
                 if (Object.keys(backendErrors).length > 0) {
                     setFieldErrors(backendErrors);
@@ -205,10 +214,7 @@ export default function Landing() {
                 }
             }
 
-            setError(
-                err.response?.data?.message ??
-                t.public.participation.errors.generic
-            );
+            setError(err.response?.data?.message ?? tr('Unable to submit participation. Please try again.'));
         } finally {
             setSubmitting(false);
         }
@@ -228,53 +234,41 @@ export default function Landing() {
                         <div>
 
                             <h1 className="text-2xl font-bold text-gray-900">
-                                {t.public.participation.title}
+                                {tr('Participation Form')}
                             </h1>
 
                             <p className="mt-2 text-sm leading-6 text-gray-500">
-                                {t.public.participation.description}
+                                {tr('Fill in the form below to participate in the promotion.')}
                             </p>
 
                         </div>
 
-                        {/* Language Toggle */}
+                        {/* Language */}
 
                         <button
                             type="button"
                             onClick={() => setLanguage(language === 'hy' ? 'en' : 'hy')}
-                            aria-label="Change language"
+                            aria-label={tr('Change language')}
                             className="flex shrink-0 items-center gap-2"
                         >
-                            <span className={['text-xs font-semibold transition-colors',
-                                language === 'hy'
-                                    ? 'text-gray-900'
-                                    : 'text-gray-400',
-                                ].join(' ')}
-                            >
+
+                            <span className={`text-xs font-semibold transition-colors ${language === 'hy' ? 'text-gray-900' : 'text-gray-400'}`}>
                                 ՀԱՅ
                             </span>
 
                             <span
-                                className="relative inline-flex h-6 w-11 shrink-0 rounded-full bg-gray-900 transition-colors"
+                                className="relative inline-flex h-6 w-11 shrink-0 rounded-full bg-gray-900"
                                 aria-hidden="true"
                             >
-                                <span className={['pointer-events-none absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                                    language === 'en'
-                                        ? 'translate-x-[22px]'
-                                        : 'translate-x-0.5',
-                                    ].join(' ')}
-                                />
+
+                                <span className={`pointer-events-none absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${language === 'en' ? 'translate-x-[22px]' : 'translate-x-0.5'}`}/>
+
                             </span>
 
-                            <span
-                                className={['text-xs font-semibold transition-colors',
-                                language === 'en'
-                                    ? 'text-gray-900'
-                                    : 'text-gray-400',
-                            ].join(' ')}
-                            >
+                            <span className={`text-xs font-semibold transition-colors ${language === 'en' ? 'text-gray-900' : 'text-gray-400'}`}>
                                 EN
                             </span>
+
                         </button>
 
                     </div>
@@ -295,7 +289,7 @@ export default function Landing() {
                         </div>
                     )}
 
-                    {/* API error */}
+                    {/* API Error */}
 
                     {error && (
                         <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -312,9 +306,11 @@ export default function Landing() {
                     )}
 
                     <form onSubmit={handleSubmit} noValidate className="mt-7">
+
                         <div className="grid gap-5 sm:grid-cols-2">
+
                             <Field
-                                label={t.public.participation.firstName}
+                                label={tr('First name')}
                                 value={form.first_name}
                                 error={fieldErrors.first_name}
                                 onChange={(value) => {
@@ -323,8 +319,9 @@ export default function Landing() {
                                 }}
                                 autoComplete="given-name"
                             />
+
                             <Field
-                                label={t.public.participation.lastName}
+                                label={tr('Last name')}
                                 value={form.last_name}
                                 error={fieldErrors.last_name}
                                 onChange={(value) => {
@@ -333,8 +330,10 @@ export default function Landing() {
                                 }}
                                 autoComplete="family-name"
                             />
+
                             <Field
-                                label={t.public.participation.phone} value={form.phone}
+                                label={tr('Phone number')}
+                                value={form.phone}
                                 type="tel"
                                 error={fieldErrors.phone}
                                 onChange={(value) => {
@@ -343,8 +342,9 @@ export default function Landing() {
                                 }}
                                 autoComplete="tel"
                             />
+
                             <Field
-                                label={t.public.participation.email}
+                                label={tr('Email')}
                                 value={form.email}
                                 type="email"
                                 error={fieldErrors.email}
@@ -354,10 +354,13 @@ export default function Landing() {
                                 }}
                                 autoComplete="email"
                             />
+
                         </div>
+
                         <div className="mt-5">
+
                             <Field
-                                label={t.public.participation.receiptNumber}
+                                label={tr('Receipt number')}
                                 value={form.receipt_number}
                                 error={fieldErrors.receipt_number}
                                 onChange={(value) => {
@@ -365,39 +368,54 @@ export default function Landing() {
                                     clearFieldError('receipt_number');
                                 }}
                             />
+
                         </div>
 
                         {/* Receipt Image */}
 
                         <div className="mt-5">
+
                             <label className="block text-sm font-medium text-gray-700">
-                                {t.public.participation.receiptImage}
-                                <span className="ml-1 text-red-500">*</span>
+
+                                {tr('Receipt image')}
+
+                                <span className="ml-1 text-red-500">
+                                    *
+                                </span>
+
                             </label>
-                            <label className={['mt-2 block cursor-pointer rounded-lg border border-dashed p-5 text-center transition',
-                                fieldErrors
-                                    .receipt_image
-                                    ? 'border-red-300 bg-red-50'
-                                    : 'border-gray-300 bg-gray-50 hover:bg-gray-100',
-                            ].join(
-                                ' '
-                            )}>
+
+                            <label
+                                className={`mt-2 block cursor-pointer rounded-lg border border-dashed p-5 text-center transition ${
+                                    fieldErrors.receipt_image
+                                        ? 'border-red-300 bg-red-50'
+                                        : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                                }`}
+                            >
+
                                 <div className="text-sm font-medium text-gray-700">
-                                    {receiptImage ? receiptImage.name : t.public.participation.chooseImage}
+                                    {receiptImage
+                                        ? receiptImage.name
+                                        : tr('Choose image')}
                                 </div>
+
                                 <div className="mt-1 text-xs text-gray-400">
-                                    {t.public.participation.imageHelp}
+                                    {tr('JPG, PNG or WEBP image.')}
                                 </div>
+
                                 <input
                                     type="file"
                                     accept="image/jpeg,image/png,image/webp"
                                     onChange={handleImageChange}
                                     className="sr-only"
                                 />
+
                             </label>
 
                             {fieldErrors.receipt_image && (
-                                <InlineError>{fieldErrors.receipt_image}</InlineError>
+                                <InlineError>
+                                    {fieldErrors.receipt_image}
+                                </InlineError>
                             )}
 
                         </div>
@@ -405,17 +423,13 @@ export default function Landing() {
                         {/* CAPTCHA */}
 
                         <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
-                            <div className="text-sm font-medium text-gray-700">
-                                CAPTCHA
-                            </div>
-                            <div className="mt-1 text-xs text-gray-500">
-                                {t.public.participation.captchaPlaceholder}
-                            </div>
+                            <div className="text-sm font-medium text-gray-700">CAPTCHA</div>
                         </div>
 
                         {/* Consents */}
 
                         <div className="mt-6 space-y-4">
+
                             <Consent
                                 checked={form.privacy_policy_accepted}
                                 error={fieldErrors.privacy_policy_accepted}
@@ -425,14 +439,16 @@ export default function Landing() {
                                 }}
                             >
                                 <span>
-                                    {t.public.participation.privacyPrefix}{' '}
+
+                                    {tr('I have read and agree to the')}{' '}
                                     <button
                                         type="button"
                                         onClick={() => setModal('privacy')}
                                         className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
                                     >
-                                        {t.public.footer.privacy}
+                                        {tr('Privacy Policy')}
                                     </button>
+
                                 </span>
                             </Consent>
 
@@ -445,14 +461,16 @@ export default function Landing() {
                                 }}
                             >
                                 <span>
-                                    {t.public.participation.rulesPrefix}{' '}
+
+                                    {tr('I have read and agree to the')}{' '}
                                     <button
                                         type="button"
                                         onClick={() => setModal('rules')}
                                         className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
                                     >
-                                        {t.public.footer.rules}
+                                        {tr('Official Rules')}
                                     </button>
+
                                 </span>
                             </Consent>
 
@@ -464,7 +482,7 @@ export default function Landing() {
                                     clearFieldError('personal_data_consent');
                                 }}
                             >
-                                {t.public.participation.acceptPersonalData}
+                                {tr('I consent to the processing of my personal data.')}
                             </Consent>
 
                         </div>
@@ -476,9 +494,7 @@ export default function Landing() {
                             disabled={submitting}
                             className="mt-7 w-full rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            {submitting ?
-                                t.public.participation.submitting :
-                                t.public.participation.submit}
+                            {submitting ? tr('Submitting...') : tr('Submit participation')}
                         </button>
 
                     </form>
@@ -488,21 +504,28 @@ export default function Landing() {
                 {/* FAQ */}
 
                 <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+
                     <h2 className="text-xl font-semibold text-gray-900">
-                        {t.public.faq.title}
+                        {tr('FAQ')}
                     </h2>
 
                     <div className="mt-4 divide-y divide-gray-200">
-                        {t.public.faq.items.map((item, index) => (
-                            <details key={index} className="group py-4">
+
+                        {faqItems.map((item, index) => (
+                            <details
+                                key={index}
+                                className="group py-4"
+                            >
                                 <summary className="cursor-pointer list-none font-medium text-gray-800">
                                     <div className="flex items-center justify-between gap-4">
-                                        <span>{item.question}</span>
+                                        <span>
+                                            {tr(item.question)}
+                                        </span>
                                         <span className="text-xl text-gray-400 transition group-open:rotate-45">+</span>
                                     </div>
                                 </summary>
                                 <p className="mt-3 text-sm leading-6 text-gray-500">
-                                    {item.answer}
+                                    {tr(item.answer)}
                                 </p>
                             </details>
                         ))}
@@ -517,25 +540,21 @@ export default function Landing() {
 
             {modal && (
                 <LegalModal
-                    title={modal === 'privacy' ?
-                        t.public.footer.privacy :
-                        t.public.footer.rules
-                    }
-                    content={modal === 'privacy' ?
-                        t.public.legal.privacy :
-                        t.public.legal.rules
-                    }
-                    closeLabel={t.public.legal.close}
+                    title={modal === 'privacy' ? tr('Privacy Policy') : tr('Official Rules')}
+                    content={modal === 'privacy' ? tr(privacyPolicyText) : tr(officialRulesText)}
+                    closeLabel={tr('Close')}
                     onClose={() => setModal(null)}
                 />
             )}
+
         </div>
     );
 }
 
-function Field({label, value, onChange, type = 'text', autoComplete, error,}: { label: string; value: string; onChange: (value: string) => void; type?: string; autoComplete?: string; error?: string; }) {
+function Field({label, value, onChange, type = 'text', autoComplete, error}: { label: string; value: string; onChange: (value: string) => void; type?: string; autoComplete?: string; error?: string;}) {
     return (
         <div>
+
             <label className="block text-sm font-medium text-gray-700">
                 {label}
                 <span className="ml-1 text-red-500">*</span>
@@ -546,11 +565,11 @@ function Field({label, value, onChange, type = 'text', autoComplete, error,}: { 
                 value={value}
                 autoComplete={autoComplete}
                 onChange={(event) => onChange(event.target.value)}
-                className={['mt-2 w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition',
+                className={`mt-2 w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 outline-none transition ${
                     error
                         ? 'border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-1 focus:ring-red-500'
-                        : 'border-gray-300 focus:border-gray-500 focus:ring-1 focus:ring-gray-500',
-                ].join(' ')}
+                        : 'border-gray-300 bg-white focus:border-gray-500 focus:ring-1 focus:ring-gray-500'
+                }`}
             />
 
             {error && (
@@ -576,7 +595,7 @@ function InlineError({children,}: { children: ReactNode; }) {
     );
 }
 
-function Consent({checked, onChange, children, error,}: { checked: boolean; onChange: (checked: boolean) => void; children: ReactNode; error?: string; }) {
+function Consent({checked, onChange, children, error}: { checked: boolean; onChange: (checked: boolean) => void; children: ReactNode; error?: string}) {
     return (
         <div>
             <label
@@ -609,10 +628,16 @@ function Consent({checked, onChange, children, error,}: { checked: boolean; onCh
     );
 }
 
-function LegalModal({title, content, closeLabel, onClose,}: { title: string; content: string; closeLabel: string; onClose: () => void; }) {
+function LegalModal({title, content, closeLabel, onClose}: { title: string; content: string; closeLabel: string; onClose: () => void; }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-            <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={onClose}
+        >
+            <div
+                className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+            >
                 <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h3 className="font-semibold text-gray-900">
                         {title}

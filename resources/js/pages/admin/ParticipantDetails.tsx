@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Link,
+    useLocation,
     useParams,
-    useSearchParams,
 } from 'react-router-dom';
 
 import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
+import { formatDateTime } from '../../utils/date';
 
 type Receipt = {
     id: number;
@@ -26,11 +27,19 @@ type Participant = {
     last_name: string;
     phone: string;
     email: string;
-    privacy_policy_accepted_at: string | null;
-    official_rules_accepted_at: string | null;
-    personal_data_consent_at: string | null;
+
+    privacy_policy_accepted_at:
+        string | null;
+
+    official_rules_accepted_at:
+        string | null;
+
+    personal_data_consent_at:
+        string | null;
+
     created_at: string;
     updated_at: string;
+
     receipts: Receipt[];
 };
 
@@ -38,11 +47,31 @@ type ParticipantResponse = {
     data: Participant;
 };
 
+
+function ConsentStatus({
+                           value,
+                       }: {
+    value: string | null;
+}) {
+    if (value) {
+        return (
+            <span className="inline-flex rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                Accepted
+            </span>
+        );
+    }
+
+    return (
+        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+            Not accepted
+        </span>
+    );
+}
+
 export default function ParticipantDetails() {
     const { id } = useParams();
 
-    const [searchParams] =
-        useSearchParams();
+    const location = useLocation();
 
     const [participant, setParticipant] =
         useState<Participant | null>(null);
@@ -53,48 +82,20 @@ export default function ParticipantDetails() {
     const [error, setError] =
         useState<string | null>(null);
 
-    /*
-     * Preserve the Participants list state.
-     *
-     * Example:
-     *
-     * /admin/participants/9?search=john&page=2
-     *
-     * Back will return to:
-     *
-     * /admin/participants?search=john&page=2
-     */
-
-    const backSearch =
-        searchParams.get('search') ?? '';
-
-    const backPage =
-        searchParams.get('page') ?? '';
-
-    const backParams =
-        new URLSearchParams();
-
-    if (backSearch.trim()) {
-        backParams.set(
-            'search',
-            backSearch
-        );
-    }
-
-    if (backPage) {
-        backParams.set(
-            'page',
-            backPage
-        );
-    }
-
     const backUrl =
-        backParams.toString()
-            ? `/admin/participants?${backParams.toString()}`
+        typeof location.state?.from ===
+        'string'
+            ? location.state.from
             : '/admin/participants';
 
     const loadParticipant = async () => {
         if (!id) {
+            setError(
+                'Participant ID is missing.'
+            );
+
+            setLoading(false);
+
             return;
         }
 
@@ -125,15 +126,52 @@ export default function ParticipantDetails() {
         loadParticipant();
     }, [id]);
 
+    const receiptStats =
+        useMemo(() => {
+            if (!participant) {
+                return {
+                    total: 0,
+                    approved: 0,
+                    rejected: 0,
+                    suspicious: 0,
+                };
+            }
+
+            return {
+                total:
+                participant.receipts.length,
+
+                approved:
+                participant.receipts.filter(
+                    (receipt) =>
+                        receipt.status ===
+                        'approved'
+                ).length,
+
+                rejected:
+                participant.receipts.filter(
+                    (receipt) =>
+                        receipt.status ===
+                        'rejected'
+                ).length,
+
+                suspicious:
+                participant.receipts.filter(
+                    (receipt) =>
+                        receipt.is_suspicious
+                ).length,
+            };
+        }, [participant]);
+
     if (loading) {
         return (
-            <div className="flex min-h-48 items-center justify-center text-sm text-gray-500">
+            <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
                 Loading participant...
             </div>
         );
     }
 
-    if (error) {
+    if (error || !participant) {
         return (
             <div className="space-y-4">
 
@@ -141,19 +179,16 @@ export default function ParticipantDetails() {
                     to={backUrl}
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                    ← Back to participants
+                    ← Back to Participants
                 </Link>
 
-                <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                    {error}
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {error ??
+                        'Participant not found.'}
                 </div>
 
             </div>
         );
-    }
-
-    if (!participant) {
-        return null;
     }
 
     return (
@@ -167,10 +202,10 @@ export default function ParticipantDetails() {
                     to={backUrl}
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                    ← Back to participants
+                    ← Back to Participants
                 </Link>
 
-                <div className="mt-3 flex items-center gap-3">
+                <div className="mt-4 flex flex-wrap items-center gap-3">
 
                     <h2 className="text-2xl font-bold text-gray-900">
                         {participant.first_name}{' '}
@@ -178,365 +213,424 @@ export default function ParticipantDetails() {
                     </h2>
 
                     <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                        #{participant.id}
+                        ID #{participant.id}
                     </span>
 
                 </div>
 
                 <p className="mt-1 text-sm text-gray-500">
-                    Participant details and submitted receipts.
+                    Participant profile and
+                    participation history.
                 </p>
 
             </div>
 
-            {/* Participant Information */}
+            {/* Profile + stats */}
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="grid gap-6 lg:grid-cols-3">
 
-                <div className="border-b border-gray-200 px-5 py-4">
-                    <h3 className="font-semibold text-gray-900">
-                        Participant Information
-                    </h3>
-                </div>
+                {/* Profile */}
 
-                <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 lg:grid-cols-3">
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm lg:col-span-2">
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            First Name
-                        </div>
+                    <div className="border-b border-gray-200 px-5 py-4">
 
-                        <div className="mt-1 text-sm text-gray-900">
-                            {participant.first_name}
-                        </div>
+                        <h3 className="font-semibold text-gray-900">
+                            Participant Information
+                        </h3>
+
                     </div>
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Last Name
+                    <dl className="grid gap-5 p-5 sm:grid-cols-2">
+
+                        <div>
+
+                            <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                Name
+                            </dt>
+
+                            <dd className="mt-1 text-sm font-medium text-gray-900">
+                                {participant.first_name}{' '}
+                                {participant.last_name}
+                            </dd>
+
                         </div>
 
-                        <div className="mt-1 text-sm text-gray-900">
-                            {participant.last_name}
+                        <div>
+
+                            <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                Phone
+                            </dt>
+
+                            <dd className="mt-1 text-sm text-gray-700">
+                                {participant.phone}
+                            </dd>
+
                         </div>
+
+                        <div>
+
+                            <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                Email
+                            </dt>
+
+                            <dd className="mt-1 break-all text-sm text-gray-700">
+                                {participant.email}
+                            </dd>
+
+                        </div>
+
+                        <div>
+
+                            <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                First Submission
+                            </dt>
+
+                            <dd className="mt-1 text-sm text-gray-700">
+                                {formatDateTime(
+                                    participant.created_at
+                                )}
+                            </dd>
+
+                        </div>
+
+                    </dl>
+
+                </section>
+
+                {/* Summary */}
+
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                    <div className="border-b border-gray-200 px-5 py-4">
+
+                        <h3 className="font-semibold text-gray-900">
+                            Participation Summary
+                        </h3>
+
                     </div>
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Phone
+                    <div className="grid grid-cols-2 gap-3 p-5">
+
+                        <div className="rounded-lg bg-gray-50 p-4">
+
+                            <div className="text-xs text-gray-500">
+                                Receipts
+                            </div>
+
+                            <div className="mt-1 text-2xl font-bold text-gray-900">
+                                {
+                                    receiptStats.total
+                                }
+                            </div>
+
                         </div>
 
-                        <div className="mt-1 text-sm text-gray-900">
-                            {participant.phone}
+                        <div className="rounded-lg bg-green-50 p-4">
+
+                            <div className="text-xs text-green-700">
+                                Approved
+                            </div>
+
+                            <div className="mt-1 text-2xl font-bold text-green-800">
+                                {
+                                    receiptStats.approved
+                                }
+                            </div>
+
                         </div>
+
+                        <div className="rounded-lg bg-red-50 p-4">
+
+                            <div className="text-xs text-red-700">
+                                Rejected
+                            </div>
+
+                            <div className="mt-1 text-2xl font-bold text-red-800">
+                                {
+                                    receiptStats.rejected
+                                }
+                            </div>
+
+                        </div>
+
+                        <div className="rounded-lg bg-amber-50 p-4">
+
+                            <div className="text-xs text-amber-700">
+                                Suspicious
+                            </div>
+
+                            <div className="mt-1 text-2xl font-bold text-amber-800">
+                                {
+                                    receiptStats.suspicious
+                                }
+                            </div>
+
+                        </div>
+
                     </div>
 
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Email
-                        </div>
-
-                        <div className="mt-1 text-sm text-gray-900">
-                            {participant.email}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Registered
-                        </div>
-
-                        <div className="mt-1 text-sm text-gray-900">
-                            {new Date(
-                                participant.created_at
-                            ).toLocaleString()}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Receipts
-                        </div>
-
-                        <div className="mt-1 text-sm font-semibold text-gray-900">
-                            {participant.receipts.length}
-                        </div>
-                    </div>
-
-                </div>
+                </section>
 
             </div>
 
             {/* Consents */}
 
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
                 <div className="border-b border-gray-200 px-5 py-4">
+
                     <h3 className="font-semibold text-gray-900">
                         Consents
                     </h3>
-                </div>
-
-                <div className="divide-y divide-gray-100">
-
-                    <div className="flex items-center justify-between px-5 py-4">
-
-                        <div>
-                            <div className="text-sm font-medium text-gray-900">
-                                Privacy Policy
-                            </div>
-
-                            <div className="text-xs text-gray-500">
-                                {participant.privacy_policy_accepted_at
-                                    ? new Date(
-                                        participant.privacy_policy_accepted_at
-                                    ).toLocaleString()
-                                    : 'Not accepted'}
-                            </div>
-                        </div>
-
-                        <span
-                            className={
-                                participant.privacy_policy_accepted_at
-                                    ? 'rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700'
-                                    : 'rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500'
-                            }
-                        >
-                            {participant.privacy_policy_accepted_at
-                                ? 'Accepted'
-                                : 'Not accepted'}
-                        </span>
-
-                    </div>
-
-                    <div className="flex items-center justify-between px-5 py-4">
-
-                        <div>
-                            <div className="text-sm font-medium text-gray-900">
-                                Official Rules
-                            </div>
-
-                            <div className="text-xs text-gray-500">
-                                {participant.official_rules_accepted_at
-                                    ? new Date(
-                                        participant.official_rules_accepted_at
-                                    ).toLocaleString()
-                                    : 'Not accepted'}
-                            </div>
-                        </div>
-
-                        <span
-                            className={
-                                participant.official_rules_accepted_at
-                                    ? 'rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700'
-                                    : 'rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500'
-                            }
-                        >
-                            {participant.official_rules_accepted_at
-                                ? 'Accepted'
-                                : 'Not accepted'}
-                        </span>
-
-                    </div>
-
-                    <div className="flex items-center justify-between px-5 py-4">
-
-                        <div>
-                            <div className="text-sm font-medium text-gray-900">
-                                Personal Data Consent
-                            </div>
-
-                            <div className="text-xs text-gray-500">
-                                {participant.personal_data_consent_at
-                                    ? new Date(
-                                        participant.personal_data_consent_at
-                                    ).toLocaleString()
-                                    : 'Not accepted'}
-                            </div>
-                        </div>
-
-                        <span
-                            className={
-                                participant.personal_data_consent_at
-                                    ? 'rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700'
-                                    : 'rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500'
-                            }
-                        >
-                            {participant.personal_data_consent_at
-                                ? 'Accepted'
-                                : 'Not accepted'}
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            {/* Receipts */}
-
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="border-b border-gray-200 px-5 py-4">
-
-                    <h3 className="font-semibold text-gray-900">
-                        Receipts
-                    </h3>
 
                     <p className="mt-1 text-sm text-gray-500">
-                        Receipts submitted by this participant.
+                        Consent records submitted with participation.
                     </p>
 
                 </div>
 
-                {participant.receipts.length === 0 ? (
+                <div className="divide-y divide-gray-100">
 
-                    <div className="p-5 text-sm text-gray-400">
+                    <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+
+                            <div className="text-sm font-medium text-gray-900">
+                                Privacy Policy
+                            </div>
+
+                            <div className="mt-1 text-xs text-gray-500">
+                                {participant.privacy_policy_accepted_at
+                                    ? formatDateTime(
+                                        participant.privacy_policy_accepted_at
+                                    )
+                                    : 'No acceptance recorded'}
+                            </div>
+
+                        </div>
+
+                        <ConsentStatus
+                            value={
+                                participant.privacy_policy_accepted_at
+                            }
+                        />
+
+                    </div>
+
+                    <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+
+                            <div className="text-sm font-medium text-gray-900">
+                                Official Rules
+                            </div>
+
+                            <div className="mt-1 text-xs text-gray-500">
+                                {participant.official_rules_accepted_at
+                                    ? formatDateTime(
+                                        participant.official_rules_accepted_at
+                                    )
+                                    : 'No acceptance recorded'}
+                            </div>
+
+                        </div>
+
+                        <ConsentStatus
+                            value={
+                                participant.official_rules_accepted_at
+                            }
+                        />
+
+                    </div>
+
+                    <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+
+                            <div className="text-sm font-medium text-gray-900">
+                                Personal Data Consent
+                            </div>
+
+                            <div className="mt-1 text-xs text-gray-500">
+                                {participant.personal_data_consent_at
+                                    ? formatDateTime(
+                                        participant.personal_data_consent_at
+                                    )
+                                    : 'No acceptance recorded'}
+                            </div>
+
+                        </div>
+
+                        <ConsentStatus
+                            value={
+                                participant.personal_data_consent_at
+                            }
+                        />
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            {/* Receipt history */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+                <div className="border-b border-gray-200 px-5 py-4">
+
+                    <h3 className="font-semibold text-gray-900">
+                        Receipt History
+                    </h3>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                        All receipts submitted by this participant.
+                    </p>
+
+                </div>
+
+                {participant.receipts.length ===
+                0 ? (
+
+                    <div className="p-6 text-sm text-gray-400">
                         No receipts submitted.
                     </div>
 
                 ) : (
 
-                    <div className="divide-y divide-gray-100">
+                    <div className="overflow-x-auto">
 
-                        {participant.receipts.map(
-                            (receipt) => (
+                        <table className="min-w-full text-left text-sm">
 
-                                <div
-                                    key={receipt.id}
-                                    className="p-5"
-                                >
+                            <thead className="bg-gray-50">
 
-                                    <div className="flex flex-wrap items-start justify-between gap-4">
+                            <tr>
 
-                                        <div>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    Receipt
+                                </th>
 
-                                            <Link
-                                                to={`/admin/receipts/${receipt.id}`}
-                                                className="font-medium text-blue-600 hover:text-blue-800"
-                                            >
-                                                Receipt #{receipt.receipt_number}
-                                            </Link>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    Status
+                                </th>
 
-                                            <div className="mt-1 text-xs text-gray-500">
-                                                ID #{receipt.id}
-                                            </div>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    Flags
+                                </th>
 
-                                        </div>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    Submitted
+                                </th>
 
-                                        <StatusBadge
-                                            status={
-                                                receipt.status
-                                            }
-                                        />
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    Verified
+                                </th>
 
-                                    </div>
+                                <th className="px-5 py-3" />
 
-                                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                            </tr>
 
-                                        <div>
-                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Submitted
-                                            </div>
+                            </thead>
 
-                                            <div className="mt-1 text-sm text-gray-700">
-                                                {receipt.submitted_at
-                                                    ? new Date(
-                                                        receipt.submitted_at
-                                                    ).toLocaleString()
-                                                    : '-'}
-                                            </div>
-                                        </div>
+                            <tbody className="divide-y divide-gray-100">
 
-                                        <div>
-                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Verified
-                                            </div>
+                            {participant.receipts.map(
+                                (receipt) => (
 
-                                            <div className="mt-1 text-sm text-gray-700">
-                                                {receipt.verified_at
-                                                    ? new Date(
-                                                        receipt.verified_at
-                                                    ).toLocaleString()
-                                                    : '-'}
-                                            </div>
-                                        </div>
+                                    <tr
+                                        key={
+                                            receipt.id
+                                        }
+                                        className="hover:bg-gray-50"
+                                    >
 
-                                        <div>
-                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Suspicious
-                                            </div>
+                                        <td className="px-5 py-4">
 
-                                            <div className="mt-1">
-
-                                                {receipt.is_suspicious ? (
-
-                                                    <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
-                                                        Yes
-                                                    </span>
-
-                                                ) : (
-
-                                                    <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
-                                                        No
-                                                    </span>
-
-                                                )}
-
-                                            </div>
-                                        </div>
-
-                                    </div>
-
-                                    {receipt.is_suspicious &&
-                                        receipt.suspicious_reasons &&
-                                        receipt.suspicious_reasons.length >
-                                        0 && (
-
-                                            <div className="mt-4 rounded-lg bg-red-50 p-3">
-
-                                                <div className="text-xs font-medium text-red-700">
-                                                    Suspicious reasons
-                                                </div>
-
-                                                <div className="mt-1 text-sm text-red-600">
-                                                    {receipt.suspicious_reasons.join(
-                                                        ', '
-                                                    )}
-                                                </div>
-
-                                            </div>
-
-                                        )}
-
-                                    {receipt.rejection_reason && (
-
-                                        <div className="mt-4 rounded-lg bg-red-50 p-3">
-
-                                            <div className="text-xs font-medium text-red-700">
-                                                Rejection reason
-                                            </div>
-
-                                            <div className="mt-1 text-sm text-red-600">
+                                            <div className="font-medium text-gray-900">
                                                 {
-                                                    receipt.rejection_reason
+                                                    receipt.receipt_number
                                                 }
                                             </div>
 
-                                        </div>
+                                            <div className="mt-1 text-xs text-gray-400">
+                                                ID #
+                                                {
+                                                    receipt.id
+                                                }
+                                            </div>
 
-                                    )}
+                                        </td>
 
-                                </div>
+                                        <td className="px-5 py-4">
 
-                            )
-                        )}
+                                            <StatusBadge
+                                                status={
+                                                    receipt.status
+                                                }
+                                            />
+
+                                        </td>
+
+                                        <td className="px-5 py-4">
+
+                                            {receipt.is_suspicious ? (
+
+                                                <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
+                                                    Suspicious
+                                                </span>
+
+                                            ) : (
+
+                                                <span className="text-xs text-gray-400">
+                                                    —
+                                                </span>
+
+                                            )}
+
+                                        </td>
+
+                                        <td className="whitespace-nowrap px-5 py-4 text-gray-500">
+                                            {formatDateTime(
+                                                receipt.submitted_at
+                                            )}
+                                        </td>
+
+                                        <td className="whitespace-nowrap px-5 py-4 text-gray-500">
+                                            {formatDateTime(
+                                                receipt.verified_at
+                                            )}
+                                        </td>
+
+                                        <td className="px-5 py-4 text-right">
+
+                                            <Link
+                                                to={`/admin/receipts/${receipt.id}`}
+                                                state={{
+                                                    from:
+                                                        `${location.pathname}${location.search}`,
+                                                }}
+                                                className="inline-flex rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                            >
+                                                View receipt
+                                            </Link>
+
+                                        </td>
+
+                                    </tr>
+
+                                )
+                            )}
+
+                            </tbody>
+
+                        </table>
 
                     </div>
 
                 )}
 
-            </div>
+            </section>
 
         </div>
     );

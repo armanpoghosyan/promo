@@ -1,0 +1,18 @@
+export interface PaginatedResponse<T> {
+    current_page: number;
+    data: T[];
+    last_page: number;
+    per_page: number;
+    total: number;
+    from?: number | null;
+    to?: number | null;
+}
+
+export type ApiError = {
+    response?: {
+        data?: {
+            message?: string;
+            errors?: Record<string, string[]>;
+        };
+    };
+};

@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminReceiptController;
 use App\Http\Controllers\Api\AdminDashboardController;
-use App\Http\Controllers\Api\AdminDrawController;
-use App\Http\Controllers\Api\AdminWinnerController;
+use App\Http\Controllers\Api\Admin\DrawController;
+use App\Http\Controllers\Api\Admin\WinnerController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
 use App\Http\Controllers\Api\Admin\DashboardController;
@@ -72,79 +72,79 @@ Route::prefix('admin')
         );
 
         Route::get(
-            '/dashboard',
-            [AdminDashboardController::class, 'index']
-        );
-
-        Route::get(
             '/draws',
-            [AdminDrawController::class, 'index']
+            [DrawController::class, 'index']
         );
 
         Route::post(
             '/draws',
-            [AdminDrawController::class, 'store']
+            [DrawController::class, 'store']
+        );
+
+        Route::get(
+            '/prizes',
+            [DrawController::class, 'prizes']
         );
 
         Route::get(
             '/draws/{draw}',
-            [AdminDrawController::class, 'show']
+            [DrawController::class, 'show']
         );
 
         Route::put(
             '/draws/{draw}',
-            [AdminDrawController::class, 'update']
+            [DrawController::class, 'update']
         );
 
         Route::post(
             '/draws/{draw}/prizes',
-            [AdminDrawController::class, 'addPrize']
+            [DrawController::class, 'addPrize']
         );
 
         Route::delete(
             '/draws/{draw}/prizes/{drawPrize}',
-            [AdminDrawController::class, 'removePrize']
+            [DrawController::class, 'removePrize']
         );
 
         Route::post(
             '/draws/{draw}/snapshot',
-            [AdminDrawController::class, 'createSnapshot']
+            [DrawController::class, 'createSnapshot']
         );
 
         Route::post(
             '/draws/{draw}/execute',
-            [AdminDrawController::class, 'execute']
+            [DrawController::class, 'execute']
         );
 
         Route::get(
             '/winners',
-            [AdminWinnerController::class, 'index']
+            [WinnerController::class, 'index']
         );
 
         Route::get(
             '/winners/{winner}',
-            [AdminWinnerController::class, 'show']
+            [WinnerController::class, 'show']
         );
 
 
          Route::post(
             'winners/{winner}/confirm',
-            [AdminWinnerController::class, 'confirm']
+            [WinnerController::class, 'confirm']
         );
 
         Route::post(
             'winners/{winner}/contact-attempts',
-            [AdminWinnerController::class, 'addContactAttempt']
+            [WinnerController::class, 'addContactAttempt']
         );
 
         Route::post(
             'winners/{winner}/cancel',
-            [AdminWinnerController::class, 'cancel']
+            [WinnerController::class, 'cancel']
         );
 
         Route::post(
             'winners/{winner}/replace',
-            [AdminWinnerController::class, 'replace']
+            [WinnerController::class, 'replace']
         );
 
         Route::get(
@@ -165,11 +165,6 @@ Route::prefix('admin')
         Route::get(
             '/reports/export/draws',
             [ReportExportController::class, 'draws']
-        );
-
-        Route::get(
-            '/prizes',
-            [AdminDrawController::class, 'prizes']
         );
 
         Route::get(
