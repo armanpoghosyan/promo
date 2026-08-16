@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('draw_winners', function (Blueprint $table) {
@@ -28,18 +25,19 @@ return new class extends Migration
 
             $table->unsignedInteger('entry_number');
 
-            $table->string('status', 30);
+            $table->string('status', 30)
+                ->default('selected');
 
             $table->timestamp('selected_at');
+            $table->timestamp('confirmed_at')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
 
-            $table->timestamp('confirmed_at')
-                ->nullable();
+            $table->text('cancellation_reason')->nullable();
 
-            $table->timestamp('cancelled_at')
-                ->nullable();
-
-            $table->text('cancellation_reason')
-                ->nullable();
+            $table->foreignId('replaced_winner_id')
+                ->nullable()
+                ->constrained('draw_winners')
+                ->nullOnDelete();
 
             $table->timestamps();
 
@@ -49,12 +47,15 @@ return new class extends Migration
             ]);
 
             $table->index('receipt_id');
+            $table->index('entry_number');
+
+            $table->unique([
+                'draw_id',
+                'entry_number',
+            ]);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('draw_winners');

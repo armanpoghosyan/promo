@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('winner_contact_attempts', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('winner_id')
-                ->constrained()
+            $table->foreignId('draw_winner_id')
+                ->constrained('draw_winners')
                 ->cascadeOnDelete();
 
             $table->foreignId('created_by')
