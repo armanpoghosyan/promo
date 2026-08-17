@@ -3,10 +3,10 @@
 use App\Http\Controllers\Api\Admin\AdminParticipantController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DrawController;
+use App\Http\Controllers\Api\Admin\ReceiptController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
 use App\Http\Controllers\Api\Admin\WinnerController;
-use App\Http\Controllers\Api\AdminReceiptController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ParticipantReceiptController;
 use Illuminate\Support\Facades\Route;
@@ -36,32 +36,32 @@ Route::prefix('admin')
 
         Route::get(
             '/receipts',
-            [AdminReceiptController::class, 'index']
+            [ReceiptController::class, 'index']
         );
 
         Route::get(
             '/receipts/{receipt}',
-            [AdminReceiptController::class, 'show']
+            [ReceiptController::class, 'show']
         );
 
         Route::post(
             '/receipts/{receipt}/approve',
-            [AdminReceiptController::class, 'approve']
+            [ReceiptController::class, 'approve']
         );
 
         Route::post(
             '/receipts/{receipt}/reject',
-            [AdminReceiptController::class, 'reject']
+            [ReceiptController::class, 'reject']
         );
 
         Route::post(
             '/receipts/{receipt}/notes',
-            [AdminReceiptController::class, 'addNote']
+            [ReceiptController::class, 'addNote']
         );
 
         Route::get(
             '/receipts/{receipt}/image',
-            [AdminReceiptController::class, 'image']
+            [ReceiptController::class, 'image']
         );
 
         Route::get(

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\ReceiptStatus;
 use App\Http\Controllers\Controller;
@@ -11,12 +11,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
-class AdminReceiptController extends Controller
+class ReceiptController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Receipt::query()
-            ->with('participant');
+        $query = Receipt::query()->with('participant');
 
         if ($request->filled('status')) {
             $query->where(
