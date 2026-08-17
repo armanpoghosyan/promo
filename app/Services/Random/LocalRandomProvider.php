@@ -4,12 +4,22 @@ namespace App\Services\Random;
 
 class LocalRandomProvider implements RandomProvider
 {
-    public function shuffle(array $values): array
+    public function shuffle(array $values): RandomResult
     {
-        $values = array_values($values);
+        $input = array_values($values);
+        $shuffled = $input;
 
-        shuffle($values);
+        shuffle($shuffled);
 
-        return $values;
+        return new RandomResult(
+            values: $shuffled,
+            provider: 'local',
+            request: [
+                'entries' => $input,
+            ],
+            response: [
+                'values' => $shuffled,
+            ]
+        );
     }
 }

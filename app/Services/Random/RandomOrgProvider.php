@@ -3,14 +3,26 @@
 namespace App\Services\Random;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class RandomOrgProvider implements RandomProvider
 {
-    public function shuffle(array $values): array
+    public function shuffle(array $values): RandomResult
     {
+        $values = array_values($values);
+
         if (empty($values)) {
-            return [];
+            return new RandomResult(
+                values: [],
+                provider: 'random.org',
+                request: [
+                    'entries' => [],
+                ],
+                response: [
+                    'values' => [],
+                ]
+            );
         }
 
         $apiKey = config('services.random_org.api_key');
@@ -22,22 +34,28 @@ class RandomOrgProvider implements RandomProvider
         }
 
         $count = count($values);
+        $requestId = (string) Str::uuid();
+
+        $request = [
+            'jsonrpc' => '2.0',
+            'method' => 'generateIntegers',
+            'params' => [
+                'n' => $count,
+                'min' => 0,
+                'max' => $count - 1,
+                'replacement' => false,
+            ],
+            'id' => $requestId,
+        ];
+
+        $apiRequest = $request;
+
+        $apiRequest['params']['apiKey'] = $apiKey;
 
         $response = Http::timeout(30)
             ->post(
                 'https://api.random.org/json-rpc/4/invoke',
-                [
-                    'jsonrpc' => '2.0',
-                    'method' => 'generateIntegers',
-                    'params' => [
-                        'apiKey' => $apiKey,
-                        'n' => $count,
-                        'min' => 0,
-                        'max' => $count - 1,
-                        'replacement' => false,
-                    ],
-                    'id' => now()->timestamp,
-                ]
+                $apiRequest
             );
 
         if (!$response->successful()) {
@@ -83,6 +101,18 @@ class RandomOrgProvider implements RandomProvider
             $shuffled[] = $values[$index];
         }
 
-        return $shuffled;
+        return new RandomResult(
+            values: $shuffled,
+            provider: 'random.org',
+            requestId: $requestId,
+            request: [
+                ...$request,
+                'entries' => $values,
+            ],
+            response: [
+                'provider_response' => $body,
+                'values' => $shuffled,
+            ]
+        );
     }
 }

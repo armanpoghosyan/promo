@@ -6,7 +6,6 @@ interface RandomProvider
 {
     /**
      * @param array<int, int> $values
-     * @return array<int, int>
      */
-    public function shuffle(array $values): array;
+    public function shuffle(array $values): RandomResult;
 }
