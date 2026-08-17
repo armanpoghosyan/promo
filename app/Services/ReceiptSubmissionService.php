@@ -7,6 +7,8 @@ use App\Models\AuditLog;
 use App\Models\Receipt;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ReceiptSubmissionService
 {
@@ -19,60 +21,75 @@ class ReceiptSubmissionService
     public function submit(
         array $participantData,
         string $receiptNumber,
-        UploadedFile $receiptImage
+        UploadedFile $receiptImage,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
     ): Receipt {
-        return DB::transaction(function () use (
-            $participantData,
-            $receiptNumber,
-            $receiptImage
-        ) {
-            $phoneNormalized = $this->participantIdentity
-                ->normalizePhone($participantData['phone']);
+        $path = null;
 
-            $emailNormalized = $this->participantIdentity
-                ->normalizeEmail($participantData['email']);
+        try {
+            return DB::transaction(function () use (
+                $participantData,
+                $receiptNumber,
+                $receiptImage,
+                $ipAddress,
+                $userAgent,
+                &$path
+            ) {
+                $phoneNormalized = $this->participantIdentity
+                    ->normalizePhone($participantData['phone']);
 
-            $participant = $this->participantIdentity
-                ->resolve($participantData);
+                $emailNormalized = $this->participantIdentity
+                    ->normalizeEmail($participantData['email']);
 
-            $duplicateCheck = $this->duplicateDetector->check(
-                receiptNumber: $receiptNumber,
-                participant: $participant,
-                phoneNormalized: $phoneNormalized,
-                emailNormalized: $emailNormalized,
-                image: $receiptImage
-            );
+                $participant = $this->participantIdentity
+                    ->resolve($participantData);
 
-            $path = $receiptImage->store('receipts', 'private');
+                $duplicateCheck = $this->duplicateDetector->check(
+                    receiptNumber: $receiptNumber,
+                    participant: $participant,
+                    phoneNormalized: $phoneNormalized,
+                    emailNormalized: $emailNormalized,
+                    image: $receiptImage
+                );
 
-            $receipt = Receipt::create([
-                'participant_id' => $participant->id,
-                'receipt_number' => trim($receiptNumber),
-                'receipt_image' => $path,
-                'image_hash' => $duplicateCheck['image_hash'],
-                'status' => ReceiptStatus::SUBMITTED,
-                'is_suspicious' => $duplicateCheck['is_suspicious'],
-                'suspicious_reasons' => $duplicateCheck['reasons'],
-                'submitted_at' => now(),
-            ]);
+                $path = $receiptImage->store('receipts', 'private');
 
-            AuditLog::create([
-                'user_id' => null,
-                'action' => 'receipt.submitted',
-                'auditable_type' => Receipt::class,
-                'auditable_id' => $receipt->id,
-                'old_values' => null,
-                'new_values' => [
+                $receipt = Receipt::create([
                     'participant_id' => $participant->id,
-                    'status' => ReceiptStatus::SUBMITTED->value,
-                    'is_suspicious' => $receipt->is_suspicious,
-                ],
-                'description' => 'Participant submitted a receipt.',
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-            ]);
+                    'receipt_number' => trim($receiptNumber),
+                    'receipt_image' => $path,
+                    'image_hash' => $duplicateCheck['image_hash'],
+                    'status' => ReceiptStatus::SUBMITTED,
+                    'is_suspicious' => $duplicateCheck['is_suspicious'],
+                    'suspicious_reasons' => $duplicateCheck['reasons'],
+                    'submitted_at' => now(),
+                ]);
 
-            return $receipt;
-        });
+                AuditLog::create([
+                    'user_id' => null,
+                    'action' => 'receipt.submitted',
+                    'auditable_type' => Receipt::class,
+                    'auditable_id' => $receipt->id,
+                    'old_values' => null,
+                    'new_values' => [
+                        'participant_id' => $participant->id,
+                        'status' => ReceiptStatus::SUBMITTED->value,
+                        'is_suspicious' => $receipt->is_suspicious,
+                    ],
+                    'description' => 'Participant submitted a receipt.',
+                    'ip_address' => $ipAddress,
+                    'user_agent' => $userAgent,
+                ]);
+
+                return $receipt;
+            });
+        } catch (Throwable $e) {
+            if ($path) {
+                Storage::disk('private')->delete($path);
+            }
+
+            throw $e;
+        }
     }
 }
