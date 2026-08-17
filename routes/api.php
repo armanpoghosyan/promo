@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\AdminParticipantController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DrawController;
+use App\Http\Controllers\Api\Admin\ParticipantController;
 use App\Http\Controllers\Api\Admin\ReceiptController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
@@ -166,11 +166,11 @@ Route::prefix('admin')
 
         Route::get(
             '/participants',
-            [AdminParticipantController::class, 'index']
+            [ParticipantController::class, 'index']
         );
 
         Route::get(
             '/participants/{participant}',
-            [AdminParticipantController::class, 'show']
+            [ParticipantController::class, 'show']
         );
     });
