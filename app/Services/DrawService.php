@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DrawStatus;
 use App\Enums\DrawWinnerStatus;
+use App\Models\AuditLog;
 use App\Models\Draw;
 use App\Models\DrawEntry;
 use App\Models\DrawWinner;
@@ -13,13 +14,22 @@ use RuntimeException;
 
 class DrawService
 {
-    public function __construct(private RandomProvider $randomProvider) {
-
+    public function __construct(private RandomProvider $randomProvider)
+    {
     }
 
-    public function execute(Draw $draw): Draw
-    {
-        return DB::transaction(function () use ($draw) {
+    public function execute(
+        Draw $draw,
+        int $userId,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): Draw {
+        return DB::transaction(function () use (
+            $draw,
+            $userId,
+            $ipAddress,
+            $userAgent
+        ) {
             $draw = Draw::query()
                 ->with('drawPrizes')
                 ->whereKey($draw->id)
@@ -38,22 +48,22 @@ class DrawService
                 ->values()
                 ->all();
 
-            /*
-             * Randomize the complete frozen participant list once.
-             *
-             * The same order is later used for replacement winners.
-             */
-            $randomResult = $this->randomProvider
-                ->shuffle($entryNumbers);
-
+            $randomResult = $this->randomProvider->shuffle($entryNumbers);
             $randomizedEntryNumbers = $randomResult->values;
 
             if (count($randomizedEntryNumbers) !== count($entryNumbers)) {
-                throw new RuntimeException('Random provider returned an invalid number of entries.');
+                throw new RuntimeException(
+                    'Random provider returned an invalid number of entries.'
+                );
             }
 
-            if (array_diff($entryNumbers, $randomizedEntryNumbers) || array_diff($randomizedEntryNumbers, $entryNumbers)) {
-                throw new RuntimeException('Random provider returned invalid entries.');
+            if (
+                array_diff($entryNumbers, $randomizedEntryNumbers)
+                || array_diff($randomizedEntryNumbers, $entryNumbers)
+            ) {
+                throw new RuntimeException(
+                    'Random provider returned invalid entries.'
+                );
             }
 
             $randomizedAt = now();
@@ -71,11 +81,12 @@ class DrawService
             foreach ($draw->drawPrizes as $drawPrize) {
                 for ($i = 0; $i < $drawPrize->quantity; $i++) {
                     if (!isset($randomizedEntryNumbers[$randomIndex])) {
-                        throw new RuntimeException('Not enough randomized entries for all prizes.');
+                        throw new RuntimeException(
+                            'Not enough randomized entries for all prizes.'
+                        );
                     }
 
                     $entryNumber = $randomizedEntryNumbers[$randomIndex];
-
                     $randomIndex++;
 
                     $entry = $entries->firstWhere(
@@ -84,8 +95,10 @@ class DrawService
                     );
 
                     if (!$entry) {
-                        throw new RuntimeException("Draw entry {$entryNumber} was not found.");
-                    };
+                        throw new RuntimeException(
+                            "Draw entry {$entryNumber} was not found."
+                        );
+                    }
 
                     DrawWinner::create([
                         'draw_id' => $draw->id,
@@ -98,9 +111,33 @@ class DrawService
                 }
             }
 
+            $completedAt = now();
+
             $draw->update([
                 'status' => DrawStatus::COMPLETED,
-                'completed_at' => now(),
+                'completed_at' => $completedAt,
+            ]);
+
+            AuditLog::create([
+                'user_id' => $userId,
+                'action' => 'draw.executed',
+                'auditable_type' => Draw::class,
+                'auditable_id' => $draw->id,
+                'old_values' => [
+                    'status' => DrawStatus::RUNNING->value,
+                ],
+                'new_values' => [
+                    'status' => DrawStatus::COMPLETED->value,
+                    'random_provider' => $randomResult->provider,
+                    'random_request_id' => $randomResult->requestId,
+                    'entries_count' => count($entryNumbers),
+                    'winners_count' => $randomIndex,
+                    'randomized_at' => $randomizedAt->toISOString(),
+                    'completed_at' => $completedAt->toISOString(),
+                ],
+                'description' => 'Draw executed and winners selected.',
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
             ]);
 
             return $draw->fresh([
@@ -111,7 +148,8 @@ class DrawService
         });
     }
 
-    public function selectReplacementWinner(DrawWinner $cancelledWinner): DrawWinner {
+    public function selectReplacementWinner(DrawWinner $cancelledWinner): DrawWinner
+    {
         return DB::transaction(function () use ($cancelledWinner) {
             $cancelledWinner = DrawWinner::query()
                 ->whereKey($cancelledWinner->id)
@@ -124,18 +162,19 @@ class DrawService
             ]);
 
             if ($cancelledWinner->status !== DrawWinnerStatus::CANCELLED) {
-                throw new RuntimeException('Only a cancelled winner can be replaced.');
+                throw new RuntimeException(
+                    'Only a cancelled winner can be replaced.'
+                );
             }
 
             $existingReplacement = DrawWinner::query()
-                ->where(
-                    'replaced_winner_id',
-                    $cancelledWinner->id
-                )
+                ->where('replaced_winner_id', $cancelledWinner->id)
                 ->first();
 
             if ($existingReplacement) {
-                throw new RuntimeException('This winner has already been replaced.');
+                throw new RuntimeException(
+                    'This winner has already been replaced.'
+                );
             }
 
             $draw = Draw::query()
@@ -144,7 +183,9 @@ class DrawService
                 ->firstOrFail();
 
             if ($draw->status !== DrawStatus::COMPLETED) {
-                throw new RuntimeException('Replacement winners can only be selected for a completed draw.');
+                throw new RuntimeException(
+                    'Replacement winners can only be selected for a completed draw.'
+                );
             }
 
             $randomResponse = $draw->random_response;
@@ -154,19 +195,22 @@ class DrawService
             }
 
             if (!is_array($randomResponse)) {
-                throw new RuntimeException('The original randomization result is missing.');
+                throw new RuntimeException(
+                    'The original randomization result is missing.'
+                );
             }
 
             $randomizedEntryNumbers = $randomResponse['values'] ?? null;
 
-            if (!is_array($randomizedEntryNumbers) || empty($randomizedEntryNumbers)) {
-                throw new RuntimeException('The original randomized entry order is missing.');
+            if (
+                !is_array($randomizedEntryNumbers)
+                || empty($randomizedEntryNumbers)
+            ) {
+                throw new RuntimeException(
+                    'The original randomized entry order is missing.'
+                );
             }
 
-            /*
-             * Every entry ever selected as a winner stays excluded,
-             * including cancelled winners and previous replacements.
-             */
             $alreadySelectedEntryNumbers = DrawWinner::query()
                 ->where('draw_id', $draw->id)
                 ->whereNotNull('entry_number')
@@ -174,7 +218,10 @@ class DrawService
                 ->map(fn ($value) => (int) $value)
                 ->all();
 
-            $alreadySelectedLookup = array_fill_keys($alreadySelectedEntryNumbers, true);
+            $alreadySelectedLookup = array_fill_keys(
+                $alreadySelectedEntryNumbers,
+                true
+            );
 
             $replacementEntryNumber = null;
 
@@ -186,21 +233,24 @@ class DrawService
                 }
 
                 $replacementEntryNumber = $entryNumber;
-
                 break;
             }
 
             if ($replacementEntryNumber === null) {
-                throw new RuntimeException('There are no reserve entries available for a replacement winner.');
+                throw new RuntimeException(
+                    'There are no reserve entries available for a replacement winner.'
+                );
             }
 
             $entry = DrawEntry::query()
                 ->where('draw_id', $draw->id)
-                ->where('entry_number',$replacementEntryNumber)
+                ->where('entry_number', $replacementEntryNumber)
                 ->first();
 
             if (!$entry) {
-                throw new RuntimeException("Replacement entry {$replacementEntryNumber} was not found.");
+                throw new RuntimeException(
+                    "Replacement entry {$replacementEntryNumber} was not found."
+                );
             }
 
             return DrawWinner::create([
@@ -218,36 +268,49 @@ class DrawService
     private function validateDraw(Draw $draw): void
     {
         if ($draw->status !== DrawStatus::RUNNING) {
-            throw new RuntimeException('Only a running draw can be executed.');
+            throw new RuntimeException(
+                'Only a running draw can be executed.'
+            );
         }
 
         if (!$draw->snapshot_at) {
-            throw new RuntimeException('The participant snapshot has not been created.');
+            throw new RuntimeException(
+                'The participant snapshot has not been created.'
+            );
         }
 
         if ($draw->drawPrizes->isEmpty()) {
-            throw new RuntimeException('No prizes have been configured for this draw.');
+            throw new RuntimeException(
+                'No prizes have been configured for this draw.'
+            );
         }
 
         $entryCount = $draw->entries()->count();
 
         if ($entryCount === 0) {
-            throw new RuntimeException('The draw has no eligible entries.');
+            throw new RuntimeException(
+                'The draw has no eligible entries.'
+            );
         }
 
         if ($draw->winners()->exists()) {
-            throw new RuntimeException('This draw has already been executed.');
+            throw new RuntimeException(
+                'This draw has already been executed.'
+            );
         }
 
-        $totalWinners = $draw->drawPrizes
-            ->sum('quantity');
+        $totalWinners = $draw->drawPrizes->sum('quantity');
 
         if ($totalWinners < 1) {
-            throw new RuntimeException('The draw must contain at least one prize.');
+            throw new RuntimeException(
+                'The draw must contain at least one prize.'
+            );
         }
 
         if ($totalWinners > $entryCount) {
-            throw new RuntimeException('There are not enough eligible entries for all prizes.');
+            throw new RuntimeException(
+                'There are not enough eligible entries for all prizes.'
+            );
         }
     }
 }

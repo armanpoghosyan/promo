@@ -283,8 +283,7 @@ class DrawController extends Controller
                 );
             }
 
-            $requiredWinnerCount = $draw->drawPrizes()
-                ->sum('quantity');
+            $requiredWinnerCount = $draw->drawPrizes()->sum('quantity');
 
             if ($requiredWinnerCount < 1) {
                 abort(
@@ -363,11 +362,17 @@ class DrawController extends Controller
     }
 
     public function execute(
+        Request $request,
         Draw $draw,
         DrawService $drawService
     ): JsonResponse {
         try {
-            $draw = $drawService->execute($draw);
+            $draw = $drawService->execute(
+                $draw,
+                $request->user()->id,
+                $request->ip(),
+                $request->userAgent()
+            );
 
             return response()->json([
                 'message' => 'Draw executed successfully.',
@@ -410,15 +415,6 @@ class DrawController extends Controller
         ]);
     }
 
-    /*
-     * One approved receipt = one entry.
-     *
-     * Once a receipt has ever been selected as a winner,
-     * it can never participate in another draw.
-     *
-     * Other approved receipts belonging to the same
-     * participant remain eligible.
-     */
     private function eligibleReceiptsQuery(): Builder
     {
         return Receipt::query()
