@@ -101,7 +101,7 @@ export default function Dashboard() {
             value: kpis.pending_receipts,
             description:
                 'Receipts waiting for verification',
-            to: '/admin/receipts?status=submitted&page=1',
+            to: '/admin/receipts?filter=needs_review',
             action: 'Review receipts',
             important:
                 kpis.pending_receipts > 0,

@@ -19,12 +19,9 @@ class DashboardService
             'kpis' => [
                 'total_receipts' => Receipt::count(),
 
-                'pending_receipts' => Receipt::whereIn(
+                'pending_receipts' => Receipt::where(
                     'status',
-                    [
-                        ReceiptStatus::SUBMITTED,
-                        ReceiptStatus::REVIEWING,
-                    ]
+                    ReceiptStatus::SUBMITTED
                 )->count(),
 
                 'approved_receipts' => Receipt::where(
@@ -32,12 +29,6 @@ class DashboardService
                     ReceiptStatus::APPROVED
                 )->count(),
 
-                /*
-                 * Entries in the current running draw.
-                 *
-                 * Historical draw entries should not be presented
-                 * as "active entries".
-                 */
                 'active_entries' => $this->activeEntriesCount(),
 
                 'total_winners' => DrawWinner::count(),
@@ -62,11 +53,8 @@ class DashboardService
             ],
 
             'current_draw' => $this->currentDraw(),
-
             'recent_receipts' => $this->recentReceipts(),
-
             'recent_winners' => $this->recentWinners(),
-
             'prizes' => $this->prizes(),
         ];
     }
@@ -74,10 +62,7 @@ class DashboardService
     private function activeEntriesCount(): int
     {
         $runningDraw = Draw::query()
-            ->where(
-                'status',
-                DrawStatus::RUNNING
-            )
+            ->where('status', DrawStatus::RUNNING)
             ->orderByDesc('started_at')
             ->first();
 
@@ -85,32 +70,16 @@ class DashboardService
             return 0;
         }
 
-        return DrawEntry::query()
-            ->where(
-                'draw_id',
-                $runningDraw->id
-            )
-            ->count();
+        return DrawEntry::where('draw_id', $runningDraw->id)->count();
     }
 
     private function currentDraw(): ?array
     {
-        /*
-         * A running draw is more important than
-         * a future scheduled/draft draw.
-         */
         $draw = Draw::query()
-            ->where(
-                'status',
-                DrawStatus::RUNNING
-            )
+            ->where('status', DrawStatus::RUNNING)
             ->orderByDesc('started_at')
             ->first();
 
-        /*
-         * If nothing is currently running,
-         * find the next future draw.
-         */
         if (!$draw) {
             $draw = Draw::query()
                 ->whereIn(
@@ -120,12 +89,7 @@ class DashboardService
                         DrawStatus::SCHEDULED,
                     ]
                 )
-                ->whereNotNull('draw_date')
-                ->where(
-                    'draw_date',
-                    '>=',
-                    now()
-                )
+                ->where('draw_date', '>=', now())
                 ->orderBy('draw_date')
                 ->first();
         }
@@ -138,12 +102,9 @@ class DashboardService
             'id' => $draw->id,
             'week_number' => $draw->week_number,
             'draw_date' => $draw->draw_date,
-            'status' => $draw->status?->value
-                ?? $draw->status,
+            'status' => $draw->status->value,
             'entries' => $draw->entries()->count(),
-            'prizes' => $draw->drawPrizes()->sum(
-                'quantity'
-            ),
+            'prizes' => $draw->drawPrizes()->sum('quantity'),
         ];
     }
 
@@ -158,8 +119,7 @@ class DashboardService
                     'id' => $receipt->id,
                     'participant_id' => $receipt->participant_id,
                     'receipt_number' => $receipt->receipt_number,
-                    'status' => $receipt->status?->value
-                        ?? $receipt->status,
+                    'status' => $receipt->status->value,
                     'created_at' => $receipt->created_at,
                 ];
             })
@@ -185,8 +145,7 @@ class DashboardService
                     'prize' => $winner->drawPrize?->prize?->name,
                     'receipt_id' => $winner->receipt_id,
                     'entry_number' => $winner->entry_number,
-                    'status' => $winner->status?->value
-                        ?? $winner->status,
+                    'status' => $winner->status->value,
                     'selected_at' => $winner->selected_at,
                 ];
             })
@@ -200,15 +159,12 @@ class DashboardService
             ->with('drawPrizes')
             ->get()
             ->map(function (Prize $prize) {
-                $allocated = $prize
-                    ->drawPrizes
-                    ->sum('quantity');
+                $allocated = $prize->drawPrizes->sum('quantity');
 
                 return [
                     'id' => $prize->id,
                     'name' => $prize->name,
-                    'type' => $prize->type?->value
-                        ?? $prize->type,
+                    'type' => $prize->type->value,
                     'total' => $prize->total_quantity,
                     'allocated' => $allocated,
                     'remaining' => max(
