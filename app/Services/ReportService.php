@@ -15,21 +15,10 @@ class ReportService
         return [
             'receipts' => [
                 'total' => Receipt::count(),
-
-                'submitted' => Receipt::where(
-                    'status',
-                    ReceiptStatus::SUBMITTED
-                )->count(),
-
-                'approved' => Receipt::where(
-                    'status',
-                    ReceiptStatus::APPROVED
-                )->count(),
-
-                'rejected' => Receipt::where(
-                    'status',
-                    ReceiptStatus::REJECTED
-                )->count(),
+                'submitted' => Receipt::where('status', ReceiptStatus::SUBMITTED)->count(),
+                'approved' => Receipt::where('status', ReceiptStatus::APPROVED)->count(),
+                'rejected' => Receipt::where('status', ReceiptStatus::REJECTED)->count(),
+                'suspicious' => Receipt::where('is_suspicious', true)->count(),
             ],
         ];
     }
@@ -45,48 +34,58 @@ class ReportService
             ->orderBy('week_number')
             ->get()
             ->map(function (Draw $draw) {
+                $selected = $draw->winners
+                    ->where('status', DrawWinnerStatus::SELECTED)
+                    ->count();
+
+                $contacting = $draw->winners
+                    ->where('status', DrawWinnerStatus::CONTACTING)
+                    ->count();
+
+                $confirmed = $draw->winners
+                    ->where('status', DrawWinnerStatus::CONFIRMED)
+                    ->count();
+
+                $cancelled = $draw->winners
+                    ->where('status', DrawWinnerStatus::CANCELLED)
+                    ->count();
+
                 return [
                     'id' => $draw->id,
                     'week_number' => $draw->week_number,
                     'draw_date' => $draw->draw_date,
-                    'status' => $draw->status?->value ?? $draw->status,
-
+                    'status' => $draw->status->value,
                     'eligible_entries' => $draw->entries->count(),
 
                     'prizes' => $draw->drawPrizes
-                        ->map(function ($drawPrize) {
-                            return [
-                                'id' => $drawPrize->id,
-                                'prize_id' => $drawPrize->prize_id,
-                                'name' => $drawPrize->prize?->name,
-                                'type' => $drawPrize->prize?->type?->value
-                                    ?? $drawPrize->prize?->type,
-                                'quantity' => $drawPrize->quantity,
-                            ];
-                        })
+                        ->map(fn ($drawPrize) => [
+                            'id' => $drawPrize->id,
+                            'prize_id' => $drawPrize->prize_id,
+                            'name' => $drawPrize->prize?->name,
+                            'type' => $drawPrize->prize?->type?->value,
+                            'quantity' => $drawPrize->quantity,
+                        ])
                         ->values()
                         ->all(),
 
-                    'total_prizes' => $draw->drawPrizes->sum('quantity'),
+                    'prize_slots' => $draw->drawPrizes->sum('quantity'),
 
                     'winners' => [
-                        'total' => $draw->winners->count(),
-
-                        'selected' => $draw->winners
-                            ->where('status', DrawWinnerStatus::SELECTED)
+                        'winner_records' => $draw->winners->count(),
+                        'active_winners' => $selected + $contacting + $confirmed,
+                        'selected' => $selected,
+                        'contacting' => $contacting,
+                        'confirmed' => $confirmed,
+                        'cancelled' => $cancelled,
+                        'replacements' => $draw->winners
+                            ->whereNotNull('replaced_winner_id')
                             ->count(),
+                    ],
 
-                        'contacting' => $draw->winners
-                            ->where('status', DrawWinnerStatus::CONTACTING)
-                            ->count(),
-
-                        'confirmed' => $draw->winners
-                            ->where('status', DrawWinnerStatus::CONFIRMED)
-                            ->count(),
-
-                        'cancelled' => $draw->winners
-                            ->where('status', DrawWinnerStatus::CANCELLED)
-                            ->count(),
+                    'random' => [
+                        'provider' => $draw->random_provider,
+                        'request_id' => $draw->random_request_id,
+                        'randomized_at' => $draw->randomized_at,
                     ],
                 ];
             })
@@ -105,7 +104,7 @@ class ReportService
                 return [
                     'prize_id' => $prize->id,
                     'name' => $prize->name,
-                    'type' => $prize->type?->value ?? $prize->type,
+                    'type' => $prize->type->value,
                     'total_quantity' => $prize->total_quantity,
                     'allocated_quantity' => $allocated,
                     'remaining_quantity' => max(
