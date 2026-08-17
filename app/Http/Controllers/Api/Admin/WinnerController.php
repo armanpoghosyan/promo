@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 use Throwable;
 
 class WinnerController extends Controller
@@ -100,7 +101,7 @@ class WinnerController extends Controller
                     ],
                     true
                 )) {
-                    throw new \RuntimeException(
+                    throw new RuntimeException(
                         'This winner cannot be confirmed.'
                     );
                 }
@@ -183,7 +184,7 @@ class WinnerController extends Controller
                     ],
                     true
                 )) {
-                    throw new \RuntimeException(
+                    throw new RuntimeException(
                         'Contact attempts cannot be added to this winner.'
                     );
                 }
@@ -263,7 +264,7 @@ class WinnerController extends Controller
                     ],
                     true
                 )) {
-                    throw new \RuntimeException(
+                    throw new RuntimeException(
                         'This winner cannot be cancelled.'
                     );
                 }
@@ -318,30 +319,12 @@ class WinnerController extends Controller
         DrawWinner $winner,
         DrawService $drawService
     ): JsonResponse {
-        if ($winner->status !== DrawWinnerStatus::CANCELLED) {
-            return response()->json([
-                'message' => 'Only a cancelled winner can be replaced.',
-            ], 422);
-        }
-
         try {
-            $replacement = $drawService
-                ->selectReplacementWinner($winner);
-
-            $this->audit(
-                $request,
-                $replacement,
-                'winner.replacement_selected',
-                [
-                    'replaced_winner_id' => $winner->id,
-                    'entry_number' => $winner->entry_number,
-                ],
-                [
-                    'replacement_winner_id' => $replacement->id,
-                    'entry_number' => $replacement->entry_number,
-                    'draw_prize_id' => $replacement->draw_prize_id,
-                ],
-                'Replacement winner selected.'
+            $replacement = $drawService->selectReplacementWinner(
+                $winner,
+                $request->user()->id,
+                $request->ip(),
+                $request->userAgent()
             );
 
             return response()->json([

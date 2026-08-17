@@ -148,9 +148,18 @@ class DrawService
         });
     }
 
-    public function selectReplacementWinner(DrawWinner $cancelledWinner): DrawWinner
-    {
-        return DB::transaction(function () use ($cancelledWinner) {
+    public function selectReplacementWinner(
+        DrawWinner $cancelledWinner,
+        int $userId,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): DrawWinner {
+        return DB::transaction(function () use (
+            $cancelledWinner,
+            $userId,
+            $ipAddress,
+            $userAgent
+        ) {
             $cancelledWinner = DrawWinner::query()
                 ->whereKey($cancelledWinner->id)
                 ->lockForUpdate()
@@ -253,7 +262,7 @@ class DrawService
                 );
             }
 
-            return DrawWinner::create([
+            $replacement = DrawWinner::create([
                 'draw_id' => $draw->id,
                 'draw_prize_id' => $cancelledWinner->draw_prize_id,
                 'receipt_id' => $entry->receipt_id,
@@ -262,6 +271,27 @@ class DrawService
                 'selected_at' => now(),
                 'replaced_winner_id' => $cancelledWinner->id,
             ]);
+
+            AuditLog::create([
+                'user_id' => $userId,
+                'action' => 'winner.replacement_selected',
+                'auditable_type' => DrawWinner::class,
+                'auditable_id' => $replacement->id,
+                'old_values' => [
+                    'replaced_winner_id' => $cancelledWinner->id,
+                    'entry_number' => $cancelledWinner->entry_number,
+                ],
+                'new_values' => [
+                    'replacement_winner_id' => $replacement->id,
+                    'entry_number' => $replacement->entry_number,
+                    'draw_prize_id' => $replacement->draw_prize_id,
+                ],
+                'description' => 'Replacement winner selected.',
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+            ]);
+
+            return $replacement;
         });
     }
 
