@@ -27,7 +27,17 @@ class ParticipantIdentityService
 
     public function normalizePhone(string $phone): string
     {
-        return preg_replace('/\D+/', '', trim($phone)) ?? '';
+        $digits = preg_replace('/\D+/', '', trim($phone)) ?? '';
+
+        if (preg_match('/^0(\d{8})$/', $digits, $matches)) {
+            return '374' . $matches[1];
+        }
+
+        if (preg_match('/^(\d{8})$/', $digits, $matches)) {
+            return '374' . $matches[1];
+        }
+
+        return $digits;
     }
 
     public function normalizeEmail(string $email): string
