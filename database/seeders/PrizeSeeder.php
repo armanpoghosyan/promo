@@ -17,7 +17,7 @@ class PrizeSeeder extends Seeder
 
         Prize::create([
             'name' => 'New Balance Certificate',
-            'type' => 'new_balance_gift_card',
+            'type' => 'new_balance_certificate',
             'total_quantity' => 20,
         ]);
 
