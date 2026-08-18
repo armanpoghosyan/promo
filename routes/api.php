@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DrawController;
 use App\Http\Controllers\Api\Admin\ParticipantController;
@@ -35,6 +36,16 @@ Route::prefix('admin')
         );
 
         Route::get(
+            '/dashboard',
+            [DashboardController::class, 'overview']
+        );
+
+        Route::get(
+            '/audit-logs',
+            [AuditLogController::class, 'index']
+        );
+
+        Route::get(
             '/receipts',
             [ReceiptController::class, 'index']
         );
@@ -62,6 +73,16 @@ Route::prefix('admin')
         Route::get(
             '/receipts/{receipt}/image',
             [ReceiptController::class, 'image']
+        );
+
+        Route::get(
+            '/participants',
+            [ParticipantController::class, 'index']
+        );
+
+        Route::get(
+            '/participants/{participant}',
+            [ParticipantController::class, 'show']
         );
 
         Route::get(
@@ -157,20 +178,5 @@ Route::prefix('admin')
         Route::get(
             '/reports/export/draws',
             [ReportExportController::class, 'draws']
-        );
-
-        Route::get(
-            '/dashboard',
-            [DashboardController::class, 'overview']
-        );
-
-        Route::get(
-            '/participants',
-            [ParticipantController::class, 'index']
-        );
-
-        Route::get(
-            '/participants/{participant}',
-            [ParticipantController::class, 'show']
         );
     });
