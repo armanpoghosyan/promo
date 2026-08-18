@@ -193,21 +193,33 @@ class DrawController extends Controller
         ]);
 
         $drawPrize = DB::transaction(function () use ($draw, $data) {
-            $prize = Prize::query()
-                ->whereKey($data['prize_id'])
-                ->lockForUpdate()
-                ->firstOrFail();
+           $prize = Prize::query()
+               ->whereKey($data['prize_id'])
+               ->lockForUpdate()
+               ->firstOrFail();
 
-            $alreadyAllocated = DrawPrize::query()
-                ->where('prize_id', $prize->id)
-                ->sum('quantity');
+           $alreadyConfigured = DrawPrize::query()
+               ->where('draw_id', $draw->id)
+               ->where('prize_id', $prize->id)
+               ->exists();
 
-            if ($alreadyAllocated + $data['quantity'] > $prize->total_quantity) {
-                abort(
-                    422,
-                    'Prize allocation exceeds the total available quantity.'
-                );
-            }
+           if ($alreadyConfigured) {
+               abort(
+                   422,
+                   'This prize is already configured for this draw.'
+               );
+           }
+
+           $alreadyAllocated = DrawPrize::query()
+               ->where('prize_id', $prize->id)
+               ->sum('quantity');
+
+           if ($alreadyAllocated + $data['quantity'] > $prize->total_quantity) {
+               abort(
+                   422,
+                   'Prize allocation exceeds the total available quantity.'
+               );
+           }
 
             return DrawPrize::create([
                 'draw_id' => $draw->id,
