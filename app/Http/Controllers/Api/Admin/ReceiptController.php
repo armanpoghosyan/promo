@@ -21,6 +21,33 @@ class ReceiptController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $filters = $request->validate([
+            'date_from' => [
+                'nullable',
+                'date',
+            ],
+            'date_to' => [
+                'nullable',
+                'date',
+            ],
+        ]);
+
+        if (
+            !empty($filters['date_from']) &&
+            !empty($filters['date_to']) &&
+            strtotime($filters['date_to']) <
+            strtotime($filters['date_from'])
+        ) {
+            return response()->json([
+                'message' => 'The date to must be after or equal to date from.',
+                'errors' => [
+                    'date_to' => [
+                        'The date to must be after or equal to date from.',
+                    ],
+                ],
+            ], 422);
+        }
+
         $query = Receipt::query()
             ->with('participant');
 
@@ -119,13 +146,31 @@ class ReceiptController extends Controller
             );
         }
 
+        if (!empty($filters['date_from'])) {
+            $query->whereDate(
+                'submitted_at',
+                '>=',
+                $filters['date_from']
+            );
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->whereDate(
+                'submitted_at',
+                '<=',
+                $filters['date_to']
+            );
+        }
+
         $perPage = min(
             max($request->integer('per_page', 20), 1),
             100
         );
 
         return response()->json(
-            $query->latest()->paginate($perPage)
+            $query
+                ->latest()
+                ->paginate($perPage)
         );
     }
 
