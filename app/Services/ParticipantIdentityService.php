@@ -21,9 +21,6 @@ class ParticipantIdentityService
                 'last_name' => trim($data['last_name']),
                 'phone' => trim($data['phone']),
                 'email' => trim($data['email']),
-                'privacy_policy_accepted_at' => now(),
-                'official_rules_accepted_at' => now(),
-                'personal_data_consent_at' => now(),
             ]
         );
     }

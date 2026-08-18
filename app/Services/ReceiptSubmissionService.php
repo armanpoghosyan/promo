@@ -54,6 +54,7 @@ class ReceiptSubmissionService
                 );
 
                 $path = $receiptImage->store('receipts', 'private');
+                $submittedAt = now();
 
                 $receipt = Receipt::create([
                     'participant_id' => $participant->id,
@@ -63,7 +64,10 @@ class ReceiptSubmissionService
                     'status' => ReceiptStatus::SUBMITTED,
                     'is_suspicious' => $duplicateCheck['is_suspicious'],
                     'suspicious_reasons' => $duplicateCheck['reasons'],
-                    'submitted_at' => now(),
+                    'submitted_at' => $submittedAt,
+                    'privacy_policy_accepted_at' => $submittedAt,
+                    'official_rules_accepted_at' => $submittedAt,
+                    'personal_data_consent_at' => $submittedAt,
                 ]);
 
                 AuditLog::create([
@@ -76,6 +80,9 @@ class ReceiptSubmissionService
                         'participant_id' => $participant->id,
                         'status' => ReceiptStatus::SUBMITTED->value,
                         'is_suspicious' => $receipt->is_suspicious,
+                        'privacy_policy_accepted_at' => $submittedAt->toISOString(),
+                        'official_rules_accepted_at' => $submittedAt->toISOString(),
+                        'personal_data_consent_at' => $submittedAt->toISOString(),
                     ],
                     'description' => 'Participant submitted a receipt.',
                     'ip_address' => $ipAddress,

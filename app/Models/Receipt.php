@@ -22,6 +22,9 @@ class Receipt extends Model
         'is_suspicious',
         'suspicious_reasons',
         'submitted_at',
+        'privacy_policy_accepted_at',
+        'official_rules_accepted_at',
+        'personal_data_consent_at',
         'verified_at',
         'verified_by',
         'rejection_reason',
@@ -32,6 +35,9 @@ class Receipt extends Model
         'is_suspicious' => 'boolean',
         'suspicious_reasons' => 'array',
         'submitted_at' => 'datetime',
+        'privacy_policy_accepted_at' => 'datetime',
+        'official_rules_accepted_at' => 'datetime',
+        'personal_data_consent_at' => 'datetime',
         'verified_at' => 'datetime',
     ];
 
