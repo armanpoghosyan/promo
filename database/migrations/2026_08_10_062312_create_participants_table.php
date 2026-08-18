@@ -20,10 +20,6 @@ return new class extends Migration
             $table->string('email', 255);
             $table->string('email_normalized', 255);
 
-            $table->timestamp('privacy_policy_accepted_at')->nullable();
-            $table->timestamp('official_rules_accepted_at')->nullable();
-            $table->timestamp('personal_data_consent_at')->nullable();
-
             $table->timestamps();
 
             $table->index('phone_normalized');

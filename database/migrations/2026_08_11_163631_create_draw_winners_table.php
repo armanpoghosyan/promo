@@ -17,7 +17,7 @@ return new class extends Migration
 
             $table->foreignId('draw_prize_id')
                 ->constrained()
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
 
             $table->foreignId('receipt_id')
                 ->constrained()
@@ -46,13 +46,22 @@ return new class extends Migration
                 'status',
             ]);
 
-            $table->index('receipt_id');
             $table->index('entry_number');
 
             $table->unique([
                 'draw_id',
                 'entry_number',
             ]);
+
+            $table->unique(
+                'receipt_id',
+                'draw_winners_receipt_id_unique'
+            );
+
+            $table->unique(
+                'replaced_winner_id',
+                'draw_winners_replaced_winner_id_unique'
+            );
         });
     }
 

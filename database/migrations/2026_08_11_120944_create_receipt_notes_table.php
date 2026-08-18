@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('receipt_notes', function (Blueprint $table) {
@@ -19,8 +16,9 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->foreignId('user_id')
+                ->nullable()
                 ->constrained()
-                ->cascadeOnDelete();
+                ->nullOnDelete();
 
             $table->text('note');
 
@@ -28,9 +26,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('receipt_notes');

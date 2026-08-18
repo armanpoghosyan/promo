@@ -30,6 +30,11 @@ return new class extends Migration
                 ->nullable();
 
             $table->timestamp('submitted_at')->nullable();
+
+            $table->timestamp('privacy_policy_accepted_at')->nullable();
+            $table->timestamp('official_rules_accepted_at')->nullable();
+            $table->timestamp('personal_data_consent_at')->nullable();
+
             $table->timestamp('verified_at')->nullable();
 
             $table->foreignId('verified_by')

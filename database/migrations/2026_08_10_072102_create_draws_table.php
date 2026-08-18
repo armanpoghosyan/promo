@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('status', 30)
                 ->default('draft');
 
-            $table->timestamp('started_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('snapshot_at')->nullable();
 
