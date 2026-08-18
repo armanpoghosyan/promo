@@ -17,7 +17,6 @@ class Draw extends Model
         'week_number',
         'draw_date',
         'status',
-        'started_at',
         'completed_at',
         'snapshot_at',
         'random_provider',
@@ -31,7 +30,6 @@ class Draw extends Model
     protected $casts = [
         'status' => DrawStatus::class,
         'draw_date' => 'datetime',
-        'started_at' => 'datetime',
         'completed_at' => 'datetime',
         'snapshot_at' => 'datetime',
         'random_request' => 'array',

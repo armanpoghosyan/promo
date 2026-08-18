@@ -326,7 +326,6 @@ class DrawController extends Controller
 
             $draw->update([
                 'status' => DrawStatus::RUNNING,
-                'started_at' => $now,
                 'snapshot_at' => $now,
             ]);
 
