@@ -12,24 +12,18 @@ class PrizeSeeder extends Seeder
         Prize::create([
             'name' => 'Burn',
             'type' => 'burn',
-            'value' => null,
-            'currency' => null,
             'total_quantity' => 500,
         ]);
 
         Prize::create([
-            'name' => 'New Balance Gift Card',
+            'name' => 'New Balance Certificate',
             'type' => 'new_balance_gift_card',
-            'value' => 40000,
-            'currency' => 'AMD',
-            'total_quantity' => 30,
+            'total_quantity' => 20,
         ]);
 
         Prize::create([
-            'name' => 'Scooter',
+            'name' => 'Electric Scooter',
             'type' => 'scooter',
-            'value' => null,
-            'currency' => null,
             'total_quantity' => 5,
         ]);
     }

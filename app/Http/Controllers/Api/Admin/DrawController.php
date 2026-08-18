@@ -399,8 +399,6 @@ class DrawController extends Controller
                     'id' => $prize->id,
                     'name' => $prize->name,
                     'type' => $prize->type,
-                    'value' => $prize->value,
-                    'currency' => $prize->currency,
                     'total_quantity' => $prize->total_quantity,
                     'allocated_quantity' => $allocatedQuantity,
                     'available_quantity' => max(

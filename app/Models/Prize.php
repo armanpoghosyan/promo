@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\PrizeType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use App\Enums\PrizeType;
 
 class Prize extends Model
 {
@@ -15,8 +15,6 @@ class Prize extends Model
     protected $fillable = [
         'name',
         'type',
-        'value',
-        'currency',
         'total_quantity',
     ];
 

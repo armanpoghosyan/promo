@@ -18,9 +18,6 @@ class ParticipantFactory extends Factory
             'phone_normalized' => preg_replace('/\D+/', '', $phone),
             'email' => $email,
             'email_normalized' => strtolower($email),
-            'privacy_policy_accepted_at' => now(),
-            'official_rules_accepted_at' => now(),
-            'personal_data_consent_at' => now(),
         ];
     }
 }

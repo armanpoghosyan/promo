@@ -119,13 +119,11 @@ class DatabaseSeeder extends Seeder
                 'phone_normalized' => $this->normalizePhone($participantData['phone']),
                 'email' => $participantData['email'],
                 'email_normalized' => strtolower($participantData['email']),
-                'privacy_policy_accepted_at' => now(),
-                'official_rules_accepted_at' => now(),
-                'personal_data_consent_at' => now(),
             ]);
 
             foreach ($participantData['receipts'] as $receiptData) {
                 $status = $receiptData['status'];
+                $submittedAt = now()->subDays(2);
 
                 Receipt::create([
                     'participant_id' => $participant->id,
@@ -138,7 +136,10 @@ class DatabaseSeeder extends Seeder
                     'status' => $status,
                     'is_suspicious' => $receiptData['suspicious'] ?? false,
                     'suspicious_reasons' => $receiptData['reasons'] ?? null,
-                    'submitted_at' => now()->subDays(2),
+                    'submitted_at' => $submittedAt,
+                    'privacy_policy_accepted_at' => $submittedAt,
+                    'official_rules_accepted_at' => $submittedAt,
+                    'personal_data_consent_at' => $submittedAt,
                     'verified_at' => $status === ReceiptStatus::SUBMITTED
                         ? null
                         : now()->subDay(),
