@@ -10,6 +10,5 @@ class RandomResult
         public readonly ?string $requestId = null,
         public readonly ?array $request = null,
         public readonly ?array $response = null
-    ) {
-    }
+    ) {}
 }

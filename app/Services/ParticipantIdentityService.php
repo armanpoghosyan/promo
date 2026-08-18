@@ -30,11 +30,11 @@ class ParticipantIdentityService
         $digits = preg_replace('/\D+/', '', trim($phone)) ?? '';
 
         if (preg_match('/^0(\d{8})$/', $digits, $matches)) {
-            return '374' . $matches[1];
+            return '374'.$matches[1];
         }
 
         if (preg_match('/^(\d{8})$/', $digits, $matches)) {
-            return '374' . $matches[1];
+            return '374'.$matches[1];
         }
 
         return $digits;

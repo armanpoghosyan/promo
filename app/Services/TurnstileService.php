@@ -24,7 +24,7 @@ class TurnstileService
             ]
         );
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new RuntimeException(
                 'CAPTCHA verification service is unavailable.'
             );

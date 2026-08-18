@@ -27,7 +27,7 @@ class RandomOrgProvider implements RandomProvider
 
         $apiKey = config('services.random_org.api_key');
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             throw new RuntimeException(
                 'Random.org API key is not configured.'
             );
@@ -58,7 +58,7 @@ class RandomOrgProvider implements RandomProvider
                 $apiRequest
             );
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new RuntimeException(
                 'Random.org request failed.'
             );
@@ -77,7 +77,7 @@ class RandomOrgProvider implements RandomProvider
             $body['result']['random']['data']
             ?? null;
 
-        if (!is_array($randomIndexes)) {
+        if (! is_array($randomIndexes)) {
             throw new RuntimeException(
                 'Invalid response from Random.org.'
             );
@@ -92,7 +92,7 @@ class RandomOrgProvider implements RandomProvider
         $shuffled = [];
 
         foreach ($randomIndexes as $index) {
-            if (!array_key_exists($index, $values)) {
+            if (! array_key_exists($index, $values)) {
                 throw new RuntimeException(
                     'Random.org returned an invalid index.'
                 );

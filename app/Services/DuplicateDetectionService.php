@@ -46,7 +46,7 @@ class DuplicateDetectionService
         }
 
         return [
-            'is_suspicious' => !empty($reasons),
+            'is_suspicious' => ! empty($reasons),
             'reasons' => $reasons,
             'image_hash' => $imageHash,
         ];

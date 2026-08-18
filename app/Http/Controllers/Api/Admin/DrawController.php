@@ -50,19 +50,16 @@ class DrawController extends Controller
                     ],
                     true
                 )
-                    && !$draw->snapshot_at
+                    && ! $draw->snapshot_at
                     && $requiredWinners > 0
                     && $eligibleEntriesCount >=
                         $requiredWinners;
 
                 return [
                     ...$draw->toArray(),
-                    'eligible_entries_count' =>
-                        $eligibleEntriesCount,
-                    'required_winners' =>
-                        $requiredWinners,
-                    'can_prepare' =>
-                        $canPrepare,
+                    'eligible_entries_count' => $eligibleEntriesCount,
+                    'required_winners' => $requiredWinners,
+                    'can_prepare' => $canPrepare,
                 ];
             }
         );
@@ -97,7 +94,7 @@ class DrawController extends Controller
             ],
             true
         )
-            && !$draw->snapshot_at
+            && ! $draw->snapshot_at
             && $requiredWinners > 0
             && $eligibleEntriesCount >=
                 $requiredWinners;
@@ -105,12 +102,9 @@ class DrawController extends Controller
         return response()->json([
             'data' => [
                 ...$draw->toArray(),
-                'eligible_entries_count' =>
-                    $eligibleEntriesCount,
-                'required_winners' =>
-                    $requiredWinners,
-                'can_prepare' =>
-                    $canPrepare,
+                'eligible_entries_count' => $eligibleEntriesCount,
+                'required_winners' => $requiredWinners,
+                'can_prepare' => $canPrepare,
             ],
         ]);
     }
@@ -137,37 +131,24 @@ class DrawController extends Controller
                     'week_number' => $data['week_number'],
                     'draw_date' => $data['draw_date'],
                     'status' => DrawStatus::DRAFT,
-                    'created_by' =>
-                        $request->user()->id,
+                    'created_by' => $request->user()->id,
                 ]);
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'draw.created',
-                    'auditable_type' =>
-                        Draw::class,
-                    'auditable_id' =>
-                        $draw->id,
-                    'old_values' =>
-                        null,
+                    'user_id' => $request->user()->id,
+                    'action' => 'draw.created',
+                    'auditable_type' => Draw::class,
+                    'auditable_id' => $draw->id,
+                    'old_values' => null,
                     'new_values' => [
-                        'week_number' =>
-                            $draw->week_number,
-                        'draw_date' =>
-                            $draw->draw_date?->toISOString(),
-                        'status' =>
-                            $draw->status->value,
-                        'created_by' =>
-                            $draw->created_by,
+                        'week_number' => $draw->week_number,
+                        'draw_date' => $draw->draw_date?->toISOString(),
+                        'status' => $draw->status->value,
+                        'created_by' => $draw->created_by,
                     ],
-                    'description' =>
-                        'Draw created.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'description' => 'Draw created.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $draw;
@@ -175,8 +156,7 @@ class DrawController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Draw created successfully.',
+            'message' => 'Draw created successfully.',
             'data' => $draw,
         ], 201);
     }
@@ -210,7 +190,7 @@ class DrawController extends Controller
                     ->firstOrFail();
 
                 if (
-                    !in_array(
+                    ! in_array(
                         $draw->status,
                         [
                             DrawStatus::DRAFT,
@@ -283,24 +263,15 @@ class DrawController extends Controller
                 }
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'draw.updated',
-                    'auditable_type' =>
-                        Draw::class,
-                    'auditable_id' =>
-                        $draw->id,
-                    'old_values' =>
-                        $oldValues,
-                    'new_values' =>
-                        $newValues,
-                    'description' =>
-                        'Draw configuration updated.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'user_id' => $request->user()->id,
+                    'action' => 'draw.updated',
+                    'auditable_type' => Draw::class,
+                    'auditable_id' => $draw->id,
+                    'old_values' => $oldValues,
+                    'new_values' => $newValues,
+                    'description' => 'Draw configuration updated.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $draw;
@@ -308,8 +279,7 @@ class DrawController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Draw updated successfully.',
+            'message' => 'Draw updated successfully.',
             'data' => $draw,
         ]);
     }
@@ -319,7 +289,7 @@ class DrawController extends Controller
         Draw $draw
     ): JsonResponse {
         if (
-            !in_array(
+            ! in_array(
                 $draw->status,
                 [
                     DrawStatus::DRAFT,
@@ -329,15 +299,13 @@ class DrawController extends Controller
             )
         ) {
             return response()->json([
-                'message' =>
-                    'This draw can no longer be modified.',
+                'message' => 'This draw can no longer be modified.',
             ], 422);
         }
 
         if ($draw->snapshot_at) {
             return response()->json([
-                'message' =>
-                    'Prize allocation is locked after preparation.',
+                'message' => 'Prize allocation is locked after preparation.',
             ], 422);
         }
 
@@ -366,7 +334,7 @@ class DrawController extends Controller
                     ->firstOrFail();
 
                 if (
-                    !in_array(
+                    ! in_array(
                         $draw->status,
                         [
                             DrawStatus::DRAFT,
@@ -431,41 +399,26 @@ class DrawController extends Controller
                 }
 
                 $drawPrize = DrawPrize::create([
-                    'draw_id' =>
-                        $draw->id,
-                    'prize_id' =>
-                        $prize->id,
-                    'quantity' =>
-                        $data['quantity'],
+                    'draw_id' => $draw->id,
+                    'prize_id' => $prize->id,
+                    'quantity' => $data['quantity'],
                 ]);
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'draw.prize_added',
-                    'auditable_type' =>
-                        Draw::class,
-                    'auditable_id' =>
-                        $draw->id,
-                    'old_values' =>
-                        null,
+                    'user_id' => $request->user()->id,
+                    'action' => 'draw.prize_added',
+                    'auditable_type' => Draw::class,
+                    'auditable_id' => $draw->id,
+                    'old_values' => null,
                     'new_values' => [
-                        'draw_prize_id' =>
-                            $drawPrize->id,
-                        'prize_id' =>
-                            $prize->id,
-                        'prize_name' =>
-                            $prize->name,
-                        'quantity' =>
-                            $drawPrize->quantity,
+                        'draw_prize_id' => $drawPrize->id,
+                        'prize_id' => $prize->id,
+                        'prize_name' => $prize->name,
+                        'quantity' => $drawPrize->quantity,
                     ],
-                    'description' =>
-                        'Prize allocation added to draw.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'description' => 'Prize allocation added to draw.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $drawPrize;
@@ -473,10 +426,8 @@ class DrawController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Prize added to draw successfully.',
-            'data' =>
-                $drawPrize->load('prize'),
+            'message' => 'Prize added to draw successfully.',
+            'data' => $drawPrize->load('prize'),
         ], 201);
     }
 
@@ -512,7 +463,7 @@ class DrawController extends Controller
                 }
 
                 if (
-                    !in_array(
+                    ! in_array(
                         $draw->status,
                         [
                             DrawStatus::DRAFT,
@@ -539,45 +490,32 @@ class DrawController extends Controller
                 );
 
                 $oldValues = [
-                    'draw_prize_id' =>
-                        $drawPrize->id,
-                    'prize_id' =>
-                        $drawPrize->prize_id,
-                    'prize_name' =>
-                        $prize?->name,
-                    'quantity' =>
-                        $drawPrize->quantity,
+                    'draw_prize_id' => $drawPrize->id,
+                    'prize_id' => $drawPrize->prize_id,
+                    'prize_name' => $prize?->name,
+                    'quantity' => $drawPrize->quantity,
                 ];
 
                 $drawPrize->delete();
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'draw.prize_removed',
-                    'auditable_type' =>
-                        Draw::class,
-                    'auditable_id' =>
-                        $draw->id,
-                    'old_values' =>
-                        $oldValues,
+                    'user_id' => $request->user()->id,
+                    'action' => 'draw.prize_removed',
+                    'auditable_type' => Draw::class,
+                    'auditable_id' => $draw->id,
+                    'old_values' => $oldValues,
                     'new_values' => [
                         'removed' => true,
                     ],
-                    'description' =>
-                        'Prize allocation removed from draw.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'description' => 'Prize allocation removed from draw.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
             }
         );
 
         return response()->json([
-            'message' =>
-                'Prize removed from draw successfully.',
+            'message' => 'Prize removed from draw successfully.',
         ]);
     }
 
@@ -593,7 +531,7 @@ class DrawController extends Controller
                     ->firstOrFail();
 
                 if (
-                    !in_array(
+                    ! in_array(
                         $draw->status,
                         [
                             DrawStatus::DRAFT,
@@ -655,75 +593,52 @@ class DrawController extends Controller
                 $entries = [];
 
                 foreach (
-                    $eligibleReceipts
-                    as $index => $receipt
+                    $eligibleReceipts as $index => $receipt
                 ) {
                     $entries[] = [
-                        'draw_id' =>
-                            $draw->id,
-                        'receipt_id' =>
-                            $receipt->id,
-                        'entry_number' =>
-                            $index + 1,
-                        'created_at' =>
-                            $now,
-                        'updated_at' =>
-                            $now,
+                        'draw_id' => $draw->id,
+                        'receipt_id' => $receipt->id,
+                        'entry_number' => $index + 1,
+                        'created_at' => $now,
+                        'updated_at' => $now,
                     ];
                 }
 
                 DrawEntry::insert($entries);
 
                 $draw->update([
-                    'status' =>
-                        DrawStatus::RUNNING,
-                    'snapshot_at' =>
-                        $now,
+                    'status' => DrawStatus::RUNNING,
+                    'snapshot_at' => $now,
                 ]);
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'draw.snapshot_created',
-                    'auditable_type' =>
-                        Draw::class,
-                    'auditable_id' =>
-                        $draw->id,
+                    'user_id' => $request->user()->id,
+                    'action' => 'draw.snapshot_created',
+                    'auditable_type' => Draw::class,
+                    'auditable_id' => $draw->id,
                     'old_values' => [
-                        'status' =>
-                            $previousStatus->value,
+                        'status' => $previousStatus->value,
                     ],
                     'new_values' => [
-                        'status' =>
-                            DrawStatus::RUNNING->value,
-                        'entries_count' =>
-                            count($entries),
-                        'required_winners' =>
-                            $requiredWinnerCount,
+                        'status' => DrawStatus::RUNNING->value,
+                        'entries_count' => count($entries),
+                        'required_winners' => $requiredWinnerCount,
                     ],
-                    'description' =>
-                        'Draw participant snapshot created.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'description' => 'Draw participant snapshot created.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return [
-                    'draw' =>
-                        $draw->fresh(),
-                    'entries_count' =>
-                        count($entries),
-                    'required_winners' =>
-                        $requiredWinnerCount,
+                    'draw' => $draw->fresh(),
+                    'entries_count' => count($entries),
+                    'required_winners' => $requiredWinnerCount,
                 ];
             }
         );
 
         return response()->json([
-            'message' =>
-                'Draw prepared successfully.',
+            'message' => 'Draw prepared successfully.',
             'data' => $result,
         ]);
     }
@@ -742,8 +657,7 @@ class DrawController extends Controller
             );
 
             return response()->json([
-                'message' =>
-                    'Draw executed successfully.',
+                'message' => 'Draw executed successfully.',
                 'data' => $draw,
             ]);
         } catch (Throwable $e) {
@@ -768,22 +682,16 @@ class DrawController extends Controller
                         ->sum('quantity');
 
                 return [
-                    'id' =>
-                        $prize->id,
-                    'name' =>
-                        $prize->name,
-                    'type' =>
-                        $prize->type,
-                    'total_quantity' =>
-                        $prize->total_quantity,
-                    'allocated_quantity' =>
-                        $allocatedQuantity,
-                    'available_quantity' =>
-                        max(
-                            0,
-                            $prize->total_quantity -
-                            $allocatedQuantity
-                        ),
+                    'id' => $prize->id,
+                    'name' => $prize->name,
+                    'type' => $prize->type,
+                    'total_quantity' => $prize->total_quantity,
+                    'allocated_quantity' => $allocatedQuantity,
+                    'available_quantity' => max(
+                        0,
+                        $prize->total_quantity -
+                        $allocatedQuantity
+                    ),
                 ];
             });
 

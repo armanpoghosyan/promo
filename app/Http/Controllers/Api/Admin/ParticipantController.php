@@ -12,8 +12,7 @@ class ParticipantController extends Controller
 {
     public function __construct(
         private ParticipantIdentityService $participantIdentity
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): JsonResponse
     {

@@ -16,8 +16,7 @@ class ReceiptController extends Controller
 {
     public function __construct(
         private ParticipantIdentityService $participantIdentity
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -33,8 +32,8 @@ class ReceiptController extends Controller
         ]);
 
         if (
-            !empty($filters['date_from']) &&
-            !empty($filters['date_to']) &&
+            ! empty($filters['date_from']) &&
+            ! empty($filters['date_to']) &&
             strtotime($filters['date_to']) <
             strtotime($filters['date_from'])
         ) {
@@ -66,7 +65,7 @@ class ReceiptController extends Controller
             $query->where(
                 'receipt_number',
                 'like',
-                '%' . $receiptNumber . '%'
+                '%'.$receiptNumber.'%'
             );
         }
 
@@ -91,14 +90,14 @@ class ReceiptController extends Controller
                         $query->where(
                             'phone',
                             'like',
-                            '%' . $phone . '%'
+                            '%'.$phone.'%'
                         );
 
                         if ($normalizedPhone !== '') {
                             $query->orWhere(
                                 'phone_normalized',
                                 'like',
-                                '%' . $normalizedPhone . '%'
+                                '%'.$normalizedPhone.'%'
                             );
                         }
                     });
@@ -127,12 +126,12 @@ class ReceiptController extends Controller
                         $query->where(
                             'email',
                             'like',
-                            '%' . $email . '%'
+                            '%'.$email.'%'
                         )
                             ->orWhere(
                                 'email_normalized',
                                 'like',
-                                '%' . $normalizedEmail . '%'
+                                '%'.$normalizedEmail.'%'
                             );
                     });
                 }
@@ -146,7 +145,7 @@ class ReceiptController extends Controller
             );
         }
 
-        if (!empty($filters['date_from'])) {
+        if (! empty($filters['date_from'])) {
             $query->whereDate(
                 'submitted_at',
                 '>=',
@@ -154,7 +153,7 @@ class ReceiptController extends Controller
             );
         }
 
-        if (!empty($filters['date_to'])) {
+        if (! empty($filters['date_to'])) {
             $query->whereDate(
                 'submitted_at',
                 '<=',
@@ -232,18 +231,13 @@ class ReceiptController extends Controller
                         'status' => $oldStatus,
                     ],
                     'new_values' => [
-                        'status' =>
-                            ReceiptStatus::APPROVED->value,
-                        'verified_at' =>
-                            $verifiedAt->toISOString(),
-                        'verified_by' =>
-                            $request->user()->id,
+                        'status' => ReceiptStatus::APPROVED->value,
+                        'verified_at' => $verifiedAt->toISOString(),
+                        'verified_by' => $request->user()->id,
                     ],
-                    'description' =>
-                        'Receipt approved by organizer.',
+                    'description' => 'Receipt approved by organizer.',
                     'ip_address' => $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $receipt;
@@ -319,20 +313,14 @@ class ReceiptController extends Controller
                         'status' => $oldStatus,
                     ],
                     'new_values' => [
-                        'status' =>
-                            ReceiptStatus::REJECTED->value,
-                        'verified_at' =>
-                            $verifiedAt->toISOString(),
-                        'verified_by' =>
-                            $request->user()->id,
-                        'rejection_reason' =>
-                            $data['reason'],
+                        'status' => ReceiptStatus::REJECTED->value,
+                        'verified_at' => $verifiedAt->toISOString(),
+                        'verified_by' => $request->user()->id,
+                        'rejection_reason' => $data['reason'],
                     ],
-                    'description' =>
-                        'Receipt rejected by organizer.',
+                    'description' => 'Receipt rejected by organizer.',
                     'ip_address' => $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $receipt;
@@ -374,23 +362,16 @@ class ReceiptController extends Controller
                 ]);
 
                 AuditLog::create([
-                    'user_id' =>
-                        $request->user()->id,
-                    'action' =>
-                        'receipt.note_added',
-                    'auditable_type' =>
-                        Receipt::class,
-                    'auditable_id' =>
-                        $receipt->id,
+                    'user_id' => $request->user()->id,
+                    'action' => 'receipt.note_added',
+                    'auditable_type' => Receipt::class,
+                    'auditable_id' => $receipt->id,
                     'new_values' => [
                         'note_id' => $note->id,
                     ],
-                    'description' =>
-                        'Organizer added a receipt note.',
-                    'ip_address' =>
-                        $request->ip(),
-                    'user_agent' =>
-                        $request->userAgent(),
+                    'description' => 'Organizer added a receipt note.',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return $note;
@@ -408,8 +389,8 @@ class ReceiptController extends Controller
     public function image(Receipt $receipt)
     {
         if (
-            !$receipt->receipt_image ||
-            !Storage::disk('private')
+            ! $receipt->receipt_image ||
+            ! Storage::disk('private')
                 ->exists($receipt->receipt_image)
         ) {
             return response()->json([

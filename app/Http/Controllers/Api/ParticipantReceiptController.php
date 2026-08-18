@@ -20,7 +20,7 @@ class ParticipantReceiptController extends Controller
             ip: $request->ip()
         );
 
-        if (!$captchaValid) {
+        if (! $captchaValid) {
             return response()->json([
                 'message' => 'CAPTCHA verification failed.',
             ], 422);

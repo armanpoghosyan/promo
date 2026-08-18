@@ -18,8 +18,8 @@ class ReportExportController extends Controller
         Request $request
     ): StreamedResponse {
         $filename =
-            'receipts-' .
-            now()->format('Y-m-d-His') .
+            'receipts-'.
+            now()->format('Y-m-d-His').
             '.csv';
 
         $this->auditExport(
@@ -70,8 +70,7 @@ class ReportExportController extends Controller
                             $handle
                         ) {
                             foreach (
-                                $receipts
-                                as $receipt
+                                $receipts as $receipt
                             ) {
                                 fputcsv(
                                     $handle,
@@ -127,8 +126,7 @@ class ReportExportController extends Controller
             },
             $filename,
             [
-                'Content-Type' =>
-                    'text/csv; charset=UTF-8',
+                'Content-Type' => 'text/csv; charset=UTF-8',
             ]
         );
     }
@@ -137,8 +135,8 @@ class ReportExportController extends Controller
         Request $request
     ): StreamedResponse {
         $filename =
-            'winners-' .
-            now()->format('Y-m-d-His') .
+            'winners-'.
+            now()->format('Y-m-d-His').
             '.csv';
 
         $this->auditExport(
@@ -196,8 +194,7 @@ class ReportExportController extends Controller
                             $handle
                         ) {
                             foreach (
-                                $winners
-                                as $winner
+                                $winners as $winner
                             ) {
                                 $participant =
                                     $winner
@@ -261,8 +258,7 @@ class ReportExportController extends Controller
             },
             $filename,
             [
-                'Content-Type' =>
-                    'text/csv; charset=UTF-8',
+                'Content-Type' => 'text/csv; charset=UTF-8',
             ]
         );
     }
@@ -271,8 +267,8 @@ class ReportExportController extends Controller
         Request $request
     ): StreamedResponse {
         $filename =
-            'draws-' .
-            now()->format('Y-m-d-His') .
+            'draws-'.
+            now()->format('Y-m-d-His').
             '.csv';
 
         $this->auditExport(
@@ -328,8 +324,7 @@ class ReportExportController extends Controller
                             $handle
                         ) {
                             foreach (
-                                $draws
-                                as $draw
+                                $draws as $draw
                             ) {
                                 $selected =
                                     $draw
@@ -382,8 +377,7 @@ class ReportExportController extends Controller
 
                                 foreach (
                                     $draw
-                                        ->drawPrizes
-                                    as $drawPrize
+                                        ->drawPrizes as $drawPrize
                                 ) {
                                     fputcsv(
                                         $handle,
@@ -436,8 +430,7 @@ class ReportExportController extends Controller
             },
             $filename,
             [
-                'Content-Type' =>
-                    'text/csv; charset=UTF-8',
+                'Content-Type' => 'text/csv; charset=UTF-8',
             ]
         );
     }
@@ -449,26 +442,17 @@ class ReportExportController extends Controller
         string $description
     ): void {
         AuditLog::create([
-            'user_id' =>
-                $request->user()->id,
-            'action' =>
-                $action,
-            'auditable_type' =>
-                User::class,
-            'auditable_id' =>
-                $request->user()->id,
-            'old_values' =>
-                null,
+            'user_id' => $request->user()->id,
+            'action' => $action,
+            'auditable_type' => User::class,
+            'auditable_id' => $request->user()->id,
+            'old_values' => null,
             'new_values' => [
-                'filename' =>
-                    $filename,
+                'filename' => $filename,
             ],
-            'description' =>
-                $description,
-            'ip_address' =>
-                $request->ip(),
-            'user_agent' =>
-                $request->userAgent(),
+            'description' => $description,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
     }
 }

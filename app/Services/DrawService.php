@@ -14,9 +14,7 @@ use RuntimeException;
 
 class DrawService
 {
-    public function __construct(private RandomProvider $randomProvider)
-    {
-    }
+    public function __construct(private RandomProvider $randomProvider) {}
 
     public function execute(
         Draw $draw,
@@ -80,7 +78,7 @@ class DrawService
 
             foreach ($draw->drawPrizes as $drawPrize) {
                 for ($i = 0; $i < $drawPrize->quantity; $i++) {
-                    if (!isset($randomizedEntryNumbers[$randomIndex])) {
+                    if (! isset($randomizedEntryNumbers[$randomIndex])) {
                         throw new RuntimeException(
                             'Not enough randomized entries for all prizes.'
                         );
@@ -94,7 +92,7 @@ class DrawService
                         $entryNumber
                     );
 
-                    if (!$entry) {
+                    if (! $entry) {
                         throw new RuntimeException(
                             "Draw entry {$entryNumber} was not found."
                         );
@@ -203,7 +201,7 @@ class DrawService
                 $randomResponse = json_decode($randomResponse, true);
             }
 
-            if (!is_array($randomResponse)) {
+            if (! is_array($randomResponse)) {
                 throw new RuntimeException(
                     'The original randomization result is missing.'
                 );
@@ -212,7 +210,7 @@ class DrawService
             $randomizedEntryNumbers = $randomResponse['values'] ?? null;
 
             if (
-                !is_array($randomizedEntryNumbers)
+                ! is_array($randomizedEntryNumbers)
                 || empty($randomizedEntryNumbers)
             ) {
                 throw new RuntimeException(
@@ -256,7 +254,7 @@ class DrawService
                 ->where('entry_number', $replacementEntryNumber)
                 ->first();
 
-            if (!$entry) {
+            if (! $entry) {
                 throw new RuntimeException(
                     "Replacement entry {$replacementEntryNumber} was not found."
                 );
@@ -303,7 +301,7 @@ class DrawService
             );
         }
 
-        if (!$draw->snapshot_at) {
+        if (! $draw->snapshot_at) {
             throw new RuntimeException(
                 'The participant snapshot has not been created.'
             );

@@ -51,7 +51,7 @@ class WinnerController extends Controller
                 $query->where(
                     'receipt_number',
                     'like',
-                    '%' . $receiptNumber . '%'
+                    '%'.$receiptNumber.'%'
                 );
             });
         }
@@ -93,7 +93,7 @@ class WinnerController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if (!in_array(
+                if (! in_array(
                     $winner->status,
                     [
                         DrawWinnerStatus::SELECTED,
@@ -176,7 +176,7 @@ class WinnerController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if (!in_array(
+                if (! in_array(
                     $winner->status,
                     [
                         DrawWinnerStatus::SELECTED,
@@ -256,7 +256,7 @@ class WinnerController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                if (!in_array(
+                if (! in_array(
                     $winner->status,
                     [
                         DrawWinnerStatus::SELECTED,

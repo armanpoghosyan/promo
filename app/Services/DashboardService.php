@@ -44,7 +44,7 @@ class DashboardService
             ->orderByDesc('snapshot_at')
             ->first();
 
-        if (!$runningDraw) {
+        if (! $runningDraw) {
             return 0;
         }
 
@@ -58,7 +58,7 @@ class DashboardService
             ->orderByDesc('snapshot_at')
             ->first();
 
-        if (!$draw) {
+        if (! $draw) {
             $draw = Draw::query()
                 ->whereIn('status', [
                     DrawStatus::DRAFT,
@@ -69,7 +69,7 @@ class DashboardService
                 ->first();
         }
 
-        if (!$draw) {
+        if (! $draw) {
             return null;
         }
 

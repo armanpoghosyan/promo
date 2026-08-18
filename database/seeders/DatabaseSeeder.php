@@ -159,73 +159,52 @@ class DatabaseSeeder extends Seeder
 
         foreach ($participants as $participantData) {
             $participant = Participant::create([
-                'first_name' =>
-                    $participantData['first_name'],
-                'last_name' =>
-                    $participantData['last_name'],
-                'phone' =>
-                    $participantData['phone'],
-                'phone_normalized' =>
-                    $identityService->normalizePhone(
-                        $participantData['phone']
-                    ),
-                'email' =>
-                    $participantData['email'],
-                'email_normalized' =>
-                    $identityService->normalizeEmail(
-                        $participantData['email']
-                    ),
+                'first_name' => $participantData['first_name'],
+                'last_name' => $participantData['last_name'],
+                'phone' => $participantData['phone'],
+                'phone_normalized' => $identityService->normalizePhone(
+                    $participantData['phone']
+                ),
+                'email' => $participantData['email'],
+                'email_normalized' => $identityService->normalizeEmail(
+                    $participantData['email']
+                ),
             ]);
 
             foreach (
-                $participantData['receipts']
-                as $receiptData
+                $participantData['receipts'] as $receiptData
             ) {
                 $status = $receiptData['status'];
                 $submittedAt = now()->subDays(2);
 
                 Receipt::create([
-                    'participant_id' =>
-                        $participant->id,
-                    'receipt_number' =>
-                        $receiptData['number'],
-                    'receipt_image' =>
-                        'receipts/test.jpg',
-                    'image_hash' =>
-                        hash(
-                            'sha256',
-                            $participant->id .
-                            ':' .
-                            $receiptData['number']
-                        ),
-                    'status' =>
-                        $status,
-                    'is_suspicious' =>
-                        $receiptData['suspicious']
+                    'participant_id' => $participant->id,
+                    'receipt_number' => $receiptData['number'],
+                    'receipt_image' => 'receipts/test.jpg',
+                    'image_hash' => hash(
+                        'sha256',
+                        $participant->id.
+                        ':'.
+                        $receiptData['number']
+                    ),
+                    'status' => $status,
+                    'is_suspicious' => $receiptData['suspicious']
                         ?? false,
-                    'suspicious_reasons' =>
-                        $receiptData['reasons']
+                    'suspicious_reasons' => $receiptData['reasons']
                         ?? null,
-                    'submitted_at' =>
-                        $submittedAt,
-                    'privacy_policy_accepted_at' =>
-                        $submittedAt,
-                    'official_rules_accepted_at' =>
-                        $submittedAt,
-                    'personal_data_consent_at' =>
-                        $submittedAt,
-                    'verified_at' =>
-                        $status ===
+                    'submitted_at' => $submittedAt,
+                    'privacy_policy_accepted_at' => $submittedAt,
+                    'official_rules_accepted_at' => $submittedAt,
+                    'personal_data_consent_at' => $submittedAt,
+                    'verified_at' => $status ===
                         ReceiptStatus::SUBMITTED
                             ? null
                             : now()->subDay(),
-                    'verified_by' =>
-                        $status ===
+                    'verified_by' => $status ===
                         ReceiptStatus::SUBMITTED
                             ? null
                             : $admin->id,
-                    'rejection_reason' =>
-                        $status ===
+                    'rejection_reason' => $status ===
                         ReceiptStatus::REJECTED
                             ? 'Receipt information could not be verified.'
                             : null,

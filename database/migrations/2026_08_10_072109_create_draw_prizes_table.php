@@ -12,24 +12,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('draw_prizes', function (Blueprint $table) {
-           $table->id();
+            $table->id();
 
-           $table->foreignId('draw_id')
-               ->constrained()
-               ->cascadeOnDelete();
+            $table->foreignId('draw_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-           $table->foreignId('prize_id')
-               ->constrained()
-               ->cascadeOnDelete();
+            $table->foreignId('prize_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
-           $table->unsignedInteger('quantity');
+            $table->unsignedInteger('quantity');
 
-           $table->timestamps();
+            $table->timestamps();
 
-           $table->unique([
-               'draw_id',
-               'prize_id',
-           ]);
+            $table->unique([
+                'draw_id',
+                'prize_id',
+            ]);
         });
     }
 

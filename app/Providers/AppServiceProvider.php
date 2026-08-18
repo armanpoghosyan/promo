@@ -2,10 +2,10 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
-use App\Services\Random\RandomProvider;
-use App\Services\Random\RandomOrgProvider;
 use App\Services\Random\LocalRandomProvider;
+use App\Services\Random\RandomOrgProvider;
+use App\Services\Random\RandomProvider;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {

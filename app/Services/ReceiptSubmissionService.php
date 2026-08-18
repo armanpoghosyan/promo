@@ -15,8 +15,7 @@ class ReceiptSubmissionService
     public function __construct(
         private DuplicateDetectionService $duplicateDetector,
         private ParticipantIdentityService $participantIdentity
-    ) {
-    }
+    ) {}
 
     public function submit(
         array $participantData,

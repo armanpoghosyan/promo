@@ -45,14 +45,13 @@ class AuditLogController extends Controller
         ]);
 
         if (
-            !empty($filters['date_from']) &&
-            !empty($filters['date_to']) &&
+            ! empty($filters['date_from']) &&
+            ! empty($filters['date_to']) &&
             strtotime($filters['date_to']) <
             strtotime($filters['date_from'])
         ) {
             return response()->json([
-                'message' =>
-                    'The date to must be after or equal to date from.',
+                'message' => 'The date to must be after or equal to date from.',
                 'errors' => [
                     'date_to' => [
                         'The date to must be after or equal to date from.',
@@ -65,21 +64,21 @@ class AuditLogController extends Controller
             ->with('user')
             ->latest();
 
-        if (!empty($filters['action'])) {
+        if (! empty($filters['action'])) {
             $query->where(
                 'action',
                 $filters['action']
             );
         }
 
-        if (!empty($filters['user_id'])) {
+        if (! empty($filters['user_id'])) {
             $query->where(
                 'user_id',
                 $filters['user_id']
             );
         }
 
-        if (!empty($filters['auditable_type'])) {
+        if (! empty($filters['auditable_type'])) {
             $auditableType = $this->resolveAuditableType(
                 $filters['auditable_type']
             );
@@ -90,14 +89,14 @@ class AuditLogController extends Controller
             );
         }
 
-        if (!empty($filters['auditable_id'])) {
+        if (! empty($filters['auditable_id'])) {
             $query->where(
                 'auditable_id',
                 $filters['auditable_id']
             );
         }
 
-        if (!empty($filters['date_from'])) {
+        if (! empty($filters['date_from'])) {
             $query->whereDate(
                 'created_at',
                 '>=',
@@ -105,7 +104,7 @@ class AuditLogController extends Controller
             );
         }
 
-        if (!empty($filters['date_to'])) {
+        if (! empty($filters['date_to'])) {
             $query->whereDate(
                 'created_at',
                 '<=',

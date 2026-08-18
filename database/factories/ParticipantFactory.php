@@ -8,7 +8,7 @@ class ParticipantFactory extends Factory
 {
     public function definition(): array
     {
-        $phone = '+374' . fake()->unique()->numerify('########');
+        $phone = '+374'.fake()->unique()->numerify('########');
         $email = fake()->unique()->safeEmail();
 
         return [
