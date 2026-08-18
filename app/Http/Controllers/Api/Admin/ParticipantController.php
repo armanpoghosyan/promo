@@ -16,13 +16,39 @@ class ParticipantController extends Controller
             ->latest();
 
         if ($request->filled('search')) {
-            $search = $request->string('search')->toString();
+            $search = trim($request->string('search')->toString());
+            $normalizedPhone = preg_replace('/\D+/', '', $search) ?? '';
+            $normalizedEmail = strtolower($search);
 
-            $query->where(function ($q) use ($search) {
+            if (str_starts_with($normalizedPhone, '0')) {
+                $normalizedPhone = substr($normalizedPhone, 1);
+            }
+
+            $query->where(function ($q) use (
+                $search,
+                $normalizedPhone,
+                $normalizedEmail
+            ) {
                 $q->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
+
+                if ($normalizedPhone !== '') {
+                    $q->orWhere(
+                        'phone_normalized',
+                        'like',
+                        "%{$normalizedPhone}%"
+                    );
+                }
+
+                if ($normalizedEmail !== '') {
+                    $q->orWhere(
+                        'email_normalized',
+                        'like',
+                        "%{$normalizedEmail}%"
+                    );
+                }
             });
         }
 
