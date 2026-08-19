@@ -63,4 +63,6 @@ export const translations = {
     'When will the draws take place?': {hy: 'Ե՞րբ են անցկացվելու խաղարկությունները։',}, 'Close': {hy: 'Փակել',},
 } as const;
 
-export type Language = string;
+export type Language =
+    | 'hy'
+    | 'en';
