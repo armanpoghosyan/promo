@@ -1,3 +1,8 @@
+import type { DrawStatus } from './draw';
+import type { PrizeType } from './prize';
+import type { ReceiptStatus } from './receipt';
+import type { WinnerStatus } from './winner';
+
 export interface DashboardKpis {
     total_receipts: number;
     pending_receipts: number;
@@ -12,17 +17,22 @@ export interface DashboardKpis {
 
 export interface DashboardDraw {
     id: number;
+
     week_number: number;
-    draw_date: string | null;
-    status: string;
+    draw_date: string;
+
+    status: DrawStatus;
+
     entries: number;
     prizes: number;
 }
 
 export interface DashboardPrize {
     id: number;
+
     name: string;
-    type: string;
+    type: PrizeType;
+
     total: number;
     allocated: number;
     remaining: number;
@@ -30,20 +40,28 @@ export interface DashboardPrize {
 
 export interface DashboardReceipt {
     id: number;
+
     participant_id: number;
+
     receipt_number: string;
-    status: string;
+    status: ReceiptStatus;
+
     created_at: string;
 }
 
 export interface DashboardWinner {
     id: number;
+
     draw_id: number;
     week_number: number | null;
+
     prize: string | null;
+
     receipt_id: number;
     entry_number: number;
-    status: string;
+
+    status: WinnerStatus;
+
     selected_at: string;
 }
 
@@ -53,7 +71,6 @@ export interface DashboardData {
     current_draw: DashboardDraw | null;
 
     recent_receipts: DashboardReceipt[];
-
     recent_winners: DashboardWinner[];
 
     prizes: DashboardPrize[];
