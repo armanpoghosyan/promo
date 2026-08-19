@@ -1,7 +1,8 @@
 import api from './api';
 
 function extractFilename(
-    contentDisposition: string | undefined,
+    contentDisposition:
+        string | undefined,
     fallback: string
 ): string {
     if (!contentDisposition) {
@@ -14,9 +15,13 @@ function extractFilename(
         );
 
     if (utf8Match?.[1]) {
-        return decodeURIComponent(
-            utf8Match[1]
-        );
+        try {
+            return decodeURIComponent(
+                utf8Match[1]
+            );
+        } catch {
+            return utf8Match[1];
+        }
     }
 
     const filenameMatch =
@@ -24,8 +29,10 @@ function extractFilename(
             /filename="?([^";]+)"?/
         );
 
-    return filenameMatch?.[1]
-        ?? fallback;
+    return (
+        filenameMatch?.[1] ??
+        fallback
+    );
 }
 
 export async function fetchProtectedBlob(
@@ -48,7 +55,19 @@ export async function createProtectedObjectUrl(
     const blob =
         await fetchProtectedBlob(url);
 
-    return URL.createObjectURL(blob);
+    return URL.createObjectURL(
+        blob
+    );
+}
+
+export function revokeObjectUrl(
+    url: string | null | undefined
+): void {
+    if (!url) {
+        return;
+    }
+
+    URL.revokeObjectURL(url);
 }
 
 export async function downloadProtectedFile(
@@ -82,10 +101,16 @@ export async function downloadProtectedFile(
     anchor.href = objectUrl;
     anchor.download = filename;
 
-    document.body.appendChild(anchor);
+    document.body.appendChild(
+        anchor
+    );
 
     anchor.click();
     anchor.remove();
 
-    URL.revokeObjectURL(objectUrl);
+    setTimeout(() => {
+        URL.revokeObjectURL(
+            objectUrl
+        );
+    }, 0);
 }
