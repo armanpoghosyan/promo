@@ -635,12 +635,11 @@ export default function Receipts() {
                                                         }}
                                                         className="inline-flex rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
                                                     >
-                                                        {receipt.status ===
-                                                        'submitted' ||
-                                                        receipt.status ===
-                                                        'reviewing'
-                                                            ? 'Review'
-                                                            : 'View'}
+                                                        {
+                                                            receipt.status === 'submitted'
+                                                                ? 'Review'
+                                                                : 'View'
+                                                        }
                                                     </Link>
 
                                                 </td>
