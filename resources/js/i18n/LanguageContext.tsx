@@ -1,55 +1,110 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { translations, type Language } from './translations';
+import {
+    createContext,
+    type ReactNode,
+    useContext,
+    useEffect,
+    useState,
+} from 'react';
+
+import {
+    translations,
+    type Language,
+} from './translations';
 
 type LanguageContextValue = {
     language: Language;
-    setLanguage: (language: Language) => void;
-    tr: (text: string) => string;
+
+    setLanguage: (
+        language: Language
+    ) => void;
+
+    tr: (
+        text: string
+    ) => string;
 };
 
-const DEFAULT_LANGUAGE = 'hy';
-const FALLBACK_LANGUAGE = 'en';
-const STORAGE_KEY = 'language';
+const DEFAULT_LANGUAGE: Language = 'hy';
 
-const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
+const STORAGE_KEY =
+    'language';
 
-type Props = {
-    children: ReactNode;
-};
+const supportedLanguages:
+    Language[] = [
+    'hy',
+    'en',
+];
 
-export function LanguageProvider({children}: Props) {
-    const [language, setLanguageState,] = useState<Language>(() => {
-        return (
-            localStorage.getItem(STORAGE_KEY) || DEFAULT_LANGUAGE
+const LanguageContext =
+    createContext<
+        LanguageContextValue | undefined
+    >(undefined);
+
+function getInitialLanguage(): Language {
+    const storedLanguage =
+        localStorage.getItem(
+            STORAGE_KEY
         );
-    });
 
-    const setLanguage = (nextLanguage: Language) => {
-        setLanguageState(nextLanguage);
-    };
+    if (
+        storedLanguage &&
+        supportedLanguages.includes(
+            storedLanguage as Language
+        )
+    ) {
+        return storedLanguage as Language;
+    }
+
+    return DEFAULT_LANGUAGE;
+}
+
+export function LanguageProvider({
+                                     children,
+                                 }: {
+    children: ReactNode;
+}) {
+    const [
+        language,
+        setLanguage,
+    ] = useState<Language>(
+        getInitialLanguage
+    );
 
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, language);
-        document.documentElement.lang = language;
+        localStorage.setItem(
+            STORAGE_KEY,
+            language
+        );
+
+        document.documentElement.lang =
+            language;
     }, [language]);
 
-    const tr = (text: string): string => {
-        const translation = translations[text as keyof typeof translations];
+    const tr = (
+        text: string
+    ): string => {
+        if (language === 'en') {
+            return text;
+        }
+
+        const translation =
+            translations[
+                text as keyof typeof translations
+                ];
 
         if (!translation) {
             return text;
         }
 
-        if (language === 'en') {
-            return text;
-        }
-
-        return (translation[language as keyof typeof translation] ?? text);
+        return translation.hy ?? text;
     };
 
     return (
         <LanguageContext.Provider
-            value={{language, setLanguage, tr}}
+            value={{
+                language,
+                setLanguage,
+                tr,
+            }}
         >
             {children}
         </LanguageContext.Provider>
@@ -57,10 +112,15 @@ export function LanguageProvider({children}: Props) {
 }
 
 export function useLanguage() {
-    const context = useContext(LanguageContext);
+    const context =
+        useContext(
+            LanguageContext
+        );
 
     if (!context) {
-        throw new Error('useLanguage must be used inside LanguageProvider.');
+        throw new Error(
+            'useLanguage must be used inside LanguageProvider.'
+        );
     }
 
     return context;

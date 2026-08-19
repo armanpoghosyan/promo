@@ -2,19 +2,26 @@ import axios from 'axios';
 
 const api = axios.create({
     baseURL: '/api',
+
     headers: {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
     },
+
     withCredentials: true,
 });
 
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('admin_access_token');
+        const token =
+            localStorage.getItem(
+                'admin_access_token'
+            );
+
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            config.headers.Authorization =
+                `Bearer ${token}`;
         }
+
         return config;
     }
 );
@@ -24,9 +31,15 @@ api.interceptors.response.use(
 
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('admin_access_token');
+            localStorage.removeItem(
+                'admin_access_token'
+            );
 
-            window.dispatchEvent(new CustomEvent('admin:unauthorized'));
+            window.dispatchEvent(
+                new CustomEvent(
+                    'admin:unauthorized'
+                )
+            );
         }
 
         return Promise.reject(error);

@@ -1,16 +1,22 @@
-import {createContext, useCallback, useContext, useEffect, useState, type ReactNode} from 'react';
+import {
+    createContext,
+    type ReactNode,
+    useCallback,
+    useContext,
+    useEffect,
+    useState,
+} from 'react';
+
+import { useLocation } from 'react-router-dom';
+
 import api from '../services/api';
 
-export type AdminUser = {
-    id: number;
-    name: string;
-    email?: string | null;
-};
-
-type LoginCredentials = {
-    email: string;
-    password: string;
-};
+import type {
+    AdminUser,
+    CurrentUserResponse,
+    LoginCredentials,
+    LoginResponse,
+} from '../types/auth';
 
 type AuthContextValue = {
     user: AdminUser | null;
@@ -19,58 +25,85 @@ type AuthContextValue = {
 
     login: (credentials: LoginCredentials) => Promise<void>;
     logout: () => Promise<void>;
-
     refreshUser: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const AuthContext =
+    createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({children}: { children: ReactNode; }) {
-    const [user, setUser] = useState<AdminUser | null>(null);
-    const [loading, setLoading] = useState(true);
+export function AuthProvider({
+                                 children,
+                             }: {
+    children: ReactNode;
+}) {
+    const location = useLocation();
 
-    const refreshUser =
-        useCallback(async () => {
+    const [user, setUser] =
+        useState<AdminUser | null>(null);
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const refreshUser = useCallback(
+        async () => {
+            const token =
+                localStorage.getItem(
+                    'admin_access_token'
+                );
+
+            if (!token) {
+                setUser(null);
+                setLoading(false);
+
+                return;
+            }
+
             try {
-                const response = await api.get('/admin/me');
+                const response =
+                    await api.get<CurrentUserResponse>(
+                        '/admin/me'
+                    );
 
-                const loadedUser =
-                    response.data?.data ??
-                    response.data?.user ??
-                    response.data;
-
-                setUser(loadedUser);
-            } catch (error: any) {
-                if (error.response?.status !== 401) {
-                    console.error('Unable to load admin user.', error);
-                }
-
+                setUser(response.data.data);
+            } catch (error: unknown) {
                 setUser(null);
             } finally {
                 setLoading(false);
             }
-        }, []);
+        },
+        []
+    );
 
-    const login = async (credentials: LoginCredentials) => {
+    const login = async (
+        credentials: LoginCredentials
+    ) => {
         const response =
-            await api.post('/admin/login', credentials);
+            await api.post<LoginResponse>(
+                '/admin/login',
+                credentials
+            );
 
-        const token =   response.data?.access_token ??
-                        response.data?.token ??
-                        response.data?.data?.access_token ??
-                        response.data?.data?.token;
+        const {
+            token,
+            user: loggedInUser,
+        } = response.data.data;
 
-        if (token) {
-            localStorage.setItem('admin_access_token', token);
-        }
+        localStorage.setItem(
+            'admin_access_token',
+            token
+        );
 
-        await refreshUser();
+        setUser(loggedInUser);
+        setLoading(false);
     };
 
     const logout = async () => {
-        try {await api.post('/admin/logout');
+        try {
+            await api.post('/admin/logout');
         } finally {
-            localStorage.removeItem('admin_access_token');
+            localStorage.removeItem(
+                'admin_access_token'
+            );
 
             setUser(null);
         }
@@ -83,23 +116,39 @@ export function AuthProvider({children}: { children: ReactNode; }) {
 
         if (!shouldCheckAuth) {
             setLoading(false);
+
             return;
         }
 
         if (user) {
             setLoading(false);
+
             return;
         }
 
         refreshUser();
-    }, [location.pathname, refreshUser, user]);
+    }, [
+        location.pathname,
+        refreshUser,
+        user,
+    ]);
 
     useEffect(() => {
-        const handleUnauthorized = () => {setUser(null);};
+        const handleUnauthorized = () => {
+            setUser(null);
+        };
 
-        window.addEventListener('admin:unauthorized', handleUnauthorized);
+        window.addEventListener(
+            'admin:unauthorized',
+            handleUnauthorized
+        );
 
-        return () => {window.removeEventListener('admin:unauthorized', handleUnauthorized);};
+        return () => {
+            window.removeEventListener(
+                'admin:unauthorized',
+                handleUnauthorized
+            );
+        };
     }, []);
 
     return (
@@ -107,7 +156,6 @@ export function AuthProvider({children}: { children: ReactNode; }) {
             value={{
                 user,
                 loading,
-
                 authenticated: user !== null,
 
                 login,
@@ -121,10 +169,13 @@ export function AuthProvider({children}: { children: ReactNode; }) {
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
+    const context =
+        useContext(AuthContext);
 
     if (!context) {
-        throw new Error('useAuth must be used inside AuthProvider');
+        throw new Error(
+            'useAuth must be used inside AuthProvider.'
+        );
     }
 
     return context;
