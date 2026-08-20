@@ -707,26 +707,20 @@ export default function ReceiptQuickReviewModal({
                                                                             [];
 
                                                                         return (
-                                                                            <button
+                                                                            <div
                                                                                 key={
                                                                                     participantReceipt.id
                                                                                 }
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                    openRelatedReceipt(
-                                                                                        participantReceipt.id
-                                                                                    )
-                                                                                }
-                                                                                className="block w-full px-4 py-3 text-left transition hover:bg-gray-50"
+                                                                                className="px-4 py-3"
                                                                             >
                                                                                 <div className="flex items-start justify-between gap-3">
                                                                                     <div className="min-w-0">
                                                                                         <div className="flex flex-wrap items-center gap-2">
-                                                                                        <span className="text-sm font-medium text-gray-900">
-                                                                                            {
-                                                                                                participantReceipt.receipt_number
-                                                                                            }
-                                                                                        </span>
+                                                                                            <span className="text-sm font-medium text-gray-900">
+                                                                                                {
+                                                                                                    participantReceipt.receipt_number
+                                                                                                }
+                                                                                            </span>
 
                                                                                             <StatusBadge
                                                                                                 status={
@@ -736,8 +730,7 @@ export default function ReceiptQuickReviewModal({
                                                                                         </div>
 
                                                                                         <div className="mt-1 text-[11px] text-gray-400">
-                                                                                            Receipt
-                                                                                            ID
+                                                                                            Receipt ID
                                                                                             #{' '}
                                                                                             {
                                                                                                 participantReceipt.id
@@ -784,11 +777,19 @@ export default function ReceiptQuickReviewModal({
                                                                                             )}
                                                                                     </div>
 
-                                                                                    <span className="shrink-0 text-xs font-medium text-blue-600">
-                                                                                    Review →
-                                                                                </span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() =>
+                                                                                            openRelatedReceipt(
+                                                                                                participantReceipt.id
+                                                                                            )
+                                                                                        }
+                                                                                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                                                                    >
+                                                                                        Review →
+                                                                                    </button>
                                                                                 </div>
-                                                                            </button>
+                                                                            </div>
                                                                         );
                                                                     }
                                                                 )}
