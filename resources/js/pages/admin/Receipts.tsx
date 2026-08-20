@@ -42,8 +42,12 @@ type ReceiptTab =
     | 'all'
     | 'submitted'
     | 'approved'
-    | 'rejected'
-    | 'suspicious';
+    | 'rejected';
+
+type ReviewFilter =
+    | 'all'
+    | 'suspicious'
+    | 'normal';
 
 type SortDirection =
     | 'asc'
@@ -51,10 +55,14 @@ type SortDirection =
 
 const emptyCounts: ReceiptListCounts = {
     all: 0,
+
     submitted: 0,
+
+    submitted_suspicious: 0,
+    submitted_normal: 0,
+
     approved: 0,
     rejected: 0,
-    suspicious: 0,
 };
 
 const suspiciousReasonLabels: Record<
@@ -80,15 +88,20 @@ const suspiciousReasonLabels: Record<
 const suspiciousReasonOptions = [
     {
         value: '',
-        label: 'All suspicious reasons',
+        label:
+            'All suspicious reasons',
     },
     {
-        value: 'duplicate_receipt_number',
-        label: 'Duplicate receipt number',
+        value:
+            'duplicate_receipt_number',
+        label:
+            'Duplicate receipt number',
     },
     {
-        value: 'duplicate_receipt_image',
-        label: 'Duplicate receipt image',
+        value:
+            'duplicate_receipt_image',
+        label:
+            'Duplicate receipt image',
     },
     {
         value:
@@ -170,6 +183,13 @@ export default function Receipts() {
             ) as ReceiptTab | null
         ) ?? 'all';
 
+    const initialReviewFilter =
+        (
+            searchParams.get(
+                'review'
+            ) as ReviewFilter | null
+        ) ?? 'all';
+
     const initialSearch =
         searchParams.get(
             'search'
@@ -234,6 +254,13 @@ export default function Receipts() {
         setTab,
     ] = useState<ReceiptTab>(
         initialTab
+    );
+
+    const [
+        reviewFilter,
+        setReviewFilter,
+    ] = useState<ReviewFilter>(
+        initialReviewFilter
     );
 
     const [
@@ -318,6 +345,22 @@ export default function Receipts() {
                     ) {
                         params.status =
                             'submitted';
+
+                        if (
+                            reviewFilter ===
+                            'suspicious'
+                        ) {
+                            params.suspicious =
+                                true;
+                        }
+
+                        if (
+                            reviewFilter ===
+                            'normal'
+                        ) {
+                            params.suspicious =
+                                false;
+                        }
                     }
 
                     if (
@@ -334,14 +377,6 @@ export default function Receipts() {
                     ) {
                         params.status =
                             'rejected';
-                    }
-
-                    if (
-                        tab ===
-                        'suspicious'
-                    ) {
-                        params.suspicious =
-                            true;
                     }
 
                     if (
@@ -362,6 +397,10 @@ export default function Receipts() {
                     }
 
                     if (
+                        tab ===
+                        'submitted' &&
+                        reviewFilter ===
+                        'suspicious' &&
                         suspiciousReason
                     ) {
                         params.suspicious_reason =
@@ -377,12 +416,14 @@ export default function Receipts() {
                         );
 
                     setReceipts(
-                        response.data.data
+                        response.data
+                            .data
                     );
 
                     setCounts(
                         response.data
-                            .meta.counts
+                            .meta
+                            .counts
                     );
 
                     setPagination({
@@ -418,6 +459,7 @@ export default function Receipts() {
             [
                 page,
                 tab,
+                reviewFilter,
                 search,
                 dateFrom,
                 dateTo,
@@ -429,11 +471,10 @@ export default function Receipts() {
     /*
      * Global live search.
      *
-     * Numeric input may represent
-     * an exact receipt ID, so it
-     * searches immediately.
+     * Numeric input may be
+     * an exact receipt ID.
      *
-     * Text searches begin from
+     * Text search starts at
      * three characters.
      */
     useEffect(() => {
@@ -469,6 +510,7 @@ export default function Receipts() {
             window.setTimeout(
                 () => {
                     setPage(1);
+
                     setSearch(
                         value
                     );
@@ -487,8 +529,8 @@ export default function Receipts() {
     ]);
 
     /*
-     * Preserve the complete receipt
-     * workspace in the URL.
+     * Keep complete workspace
+     * represented in the URL.
      */
     useEffect(() => {
         const params =
@@ -510,6 +552,18 @@ export default function Receipts() {
             params.set(
                 'tab',
                 tab
+            );
+        }
+
+        if (
+            tab ===
+            'submitted' &&
+            reviewFilter !==
+            'all'
+        ) {
+            params.set(
+                'review',
+                reviewFilter
             );
         }
 
@@ -535,6 +589,10 @@ export default function Receipts() {
         }
 
         if (
+            tab ===
+            'submitted' &&
+            reviewFilter ===
+            'suspicious' &&
             suspiciousReason
         ) {
             params.set(
@@ -562,6 +620,7 @@ export default function Receipts() {
     }, [
         page,
         tab,
+        reviewFilter,
         search,
         dateFrom,
         dateTo,
@@ -579,7 +638,13 @@ export default function Receipts() {
             search ||
             dateFrom ||
             dateTo ||
-            suspiciousReason
+            (
+                tab ===
+                'submitted' &&
+                reviewFilter ===
+                'suspicious' &&
+                suspiciousReason
+            )
         );
 
     const resetFilters =
@@ -605,6 +670,42 @@ export default function Receipts() {
         );
 
         setPage(1);
+
+        /*
+         * Review subtype belongs only
+         * to the submitted queue.
+         */
+        if (
+            nextTab !==
+            'submitted'
+        ) {
+            setReviewFilter(
+                'all'
+            );
+
+            setSuspiciousReason(
+                ''
+            );
+        }
+    };
+
+    const changeReviewFilter = (
+        nextFilter: ReviewFilter
+    ) => {
+        setReviewFilter(
+            nextFilter
+        );
+
+        setPage(1);
+
+        if (
+            nextFilter !==
+            'suspicious'
+        ) {
+            setSuspiciousReason(
+                ''
+            );
+        }
     };
 
     const toggleSubmittedSort =
@@ -655,14 +756,6 @@ export default function Receipts() {
             count:
             counts.rejected,
         },
-        {
-            value:
-                'suspicious',
-            label:
-                'Suspicious',
-            count:
-            counts.suspicious,
-        },
     ];
 
     const currentListUrl =
@@ -675,7 +768,7 @@ export default function Receipts() {
                 description="Review participation receipts and prepare approved entries for the next draw."
             />
 
-            {/* Navigation */}
+            {/* Main status navigation */}
 
             <div className="overflow-x-auto border-b border-gray-200">
                 <nav className="flex min-w-max gap-6">
@@ -736,6 +829,88 @@ export default function Receipts() {
                 </nav>
             </div>
 
+            {/* Review queue subtype */}
+
+            {tab ===
+                'submitted' && (
+                    <section className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold text-gray-900">
+                                Review Queue
+                            </div>
+
+                            <div className="mt-0.5 text-xs text-gray-500">
+                                Separate normal
+                                submissions from
+                                receipts that require
+                                deeper review.
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'all'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'all'
+                                        ? 'rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                }
+                            >
+                                All{' '}
+                                {
+                                    counts.submitted
+                                }
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'suspicious'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'suspicious'
+                                        ? 'rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100'
+                                }
+                            >
+                                Suspicious{' '}
+                                {
+                                    counts.submitted_suspicious
+                                }
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'normal'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'normal'
+                                        ? 'rounded-lg bg-gray-700 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                }
+                            >
+                                Normal{' '}
+                                {
+                                    counts.submitted_normal
+                                }
+                            </button>
+                        </div>
+                    </section>
+                )}
+
             {/* Search */}
 
             <div>
@@ -748,7 +923,8 @@ export default function Receipts() {
                         event
                     ) =>
                         setSearchInput(
-                            event.target
+                            event
+                                .target
                                 .value
                         )
                     }
@@ -765,10 +941,9 @@ export default function Receipts() {
                         .length <
                     3 && (
                         <div className="mt-1.5 text-xs text-gray-400">
-                            Enter at
-                            least 3
-                            characters
-                            to search.
+                            Enter at least
+                            3 characters to
+                            search.
                         </div>
                     )}
             </div>
@@ -782,8 +957,7 @@ export default function Receipts() {
                             htmlFor="date-from"
                             className="mb-1.5 block text-xs font-medium text-gray-500"
                         >
-                            Submitted
-                            from
+                            Submitted from
                         </label>
 
                         <input
@@ -814,8 +988,7 @@ export default function Receipts() {
                             htmlFor="date-to"
                             className="mb-1.5 block text-xs font-medium text-gray-500"
                         >
-                            Submitted
-                            to
+                            Submitted to
                         </label>
 
                         <input
@@ -841,55 +1014,60 @@ export default function Receipts() {
                         />
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                        <label
-                            htmlFor="suspicious-reason"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Suspicious
-                            reason
-                        </label>
+                    {tab ===
+                        'submitted' &&
+                        reviewFilter ===
+                        'suspicious' && (
+                            <div className="min-w-0 flex-1">
+                                <label
+                                    htmlFor="suspicious-reason"
+                                    className="mb-1.5 block text-xs font-medium text-gray-500"
+                                >
+                                    Suspicious
+                                    reason
+                                </label>
 
-                        <select
-                            id="suspicious-reason"
-                            value={
-                                suspiciousReason
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setSuspiciousReason(
-                                    event
-                                        .target
-                                        .value
-                                );
+                                <select
+                                    id="suspicious-reason"
+                                    value={
+                                        suspiciousReason
+                                    }
+                                    onChange={(
+                                        event
+                                    ) => {
+                                        setSuspiciousReason(
+                                            event
+                                                .target
+                                                .value
+                                        );
 
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                        >
-                            {suspiciousReasonOptions.map(
-                                (
-                                    option
-                                ) => (
-                                    <option
-                                        key={
-                                            option.value
-                                        }
-                                        value={
-                                            option.value
-                                        }
-                                    >
-                                        {
-                                            option.label
-                                        }
-                                    </option>
-                                )
-                            )}
-                        </select>
-                    </div>
+                                        setPage(
+                                            1
+                                        );
+                                    }}
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                >
+                                    {suspiciousReasonOptions.map(
+                                        (
+                                            option
+                                        ) => (
+                                            <option
+                                                key={
+                                                    option.value
+                                                }
+                                                value={
+                                                    option.value
+                                                }
+                                            >
+                                                {
+                                                    option.label
+                                                }
+                                            </option>
+                                        )
+                                    )}
+                                </select>
+                            </div>
+                        )}
 
                     {hasFilters && (
                         <button
@@ -899,8 +1077,7 @@ export default function Receipts() {
                             }
                             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
                         >
-                            Reset
-                            filters
+                            Reset filters
                         </button>
                     )}
                 </div>
@@ -931,7 +1108,10 @@ export default function Receipts() {
                         description={
                             hasFilters
                                 ? 'Try changing the search or filters.'
-                                : 'There are no receipts in this section.'
+                                : tab ===
+                                'submitted'
+                                    ? 'There are no receipts waiting for review in this queue.'
+                                    : 'There are no receipts in this section.'
                         }
                     />
                 ) : (
@@ -957,8 +1137,7 @@ export default function Receipts() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Latest
-                                        Note
+                                        Latest Note
                                     </th>
 
                                     <th className="px-5 py-3">
@@ -1050,8 +1229,7 @@ export default function Receipts() {
                                                     </div>
 
                                                     <div className="mt-1 text-xs text-gray-400">
-                                                        Receipt
-                                                        ID
+                                                        Receipt ID
                                                         #{' '}
                                                         {
                                                             receipt.id
@@ -1209,37 +1387,36 @@ export default function Receipts() {
                                     nextPage
                                 );
 
-                                window.scrollTo(
-                                    {
-                                        top: 0,
-                                        behavior:
-                                            'smooth',
-                                    }
-                                );
+                                window.scrollTo({
+                                    top: 0,
+                                    behavior:
+                                        'smooth',
+                                });
                             }}
                         />
                     </>
                 )}
             </section>
 
-            {quickReviewReceiptId !== null && (
-                <ReceiptQuickReviewModal
-                    receiptId={
-                        quickReviewReceiptId
-                    }
-                    backUrl={
-                        currentListUrl
-                    }
-                    onClose={() =>
-                        setQuickReviewReceiptId(
-                            null
-                        )
-                    }
-                    onChanged={() => {
-                        loadReceipts();
-                    }}
-                />
-            )}
+            {quickReviewReceiptId !==
+                null && (
+                    <ReceiptQuickReviewModal
+                        receiptId={
+                            quickReviewReceiptId
+                        }
+                        backUrl={
+                            currentListUrl
+                        }
+                        onClose={() =>
+                            setQuickReviewReceiptId(
+                                null
+                            )
+                        }
+                        onChanged={() => {
+                            loadReceipts();
+                        }}
+                    />
+                )}
         </div>
     );
 }

@@ -49,6 +49,7 @@ export interface Receipt {
 
     receipt_number: string;
     receipt_image: string;
+
     image_hash:
         | string
         | null;
@@ -120,10 +121,14 @@ export interface ReceiptNoteResponse {
 
 export interface ReceiptListCounts {
     all: number;
+
     submitted: number;
+
+    submitted_suspicious: number;
+    submitted_normal: number;
+
     approved: number;
     rejected: number;
-    suspicious: number;
 }
 
 export interface ReceiptListMeta {
@@ -138,7 +143,9 @@ export interface ReceiptListMeta {
             | ReceiptStatus
             | null;
 
-        suspicious: boolean;
+        suspicious:
+            | boolean
+            | null;
 
         suspicious_reason:
             | string
