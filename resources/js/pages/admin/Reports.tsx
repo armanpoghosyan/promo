@@ -1,909 +1,1284 @@
 import {
+    useCallback,
     useEffect,
-    useMemo,
     useState,
 } from 'react';
 
-import { Link } from 'react-router-dom';
+import {
+    useLocation,
+    useSearchParams,
+} from 'react-router-dom';
+
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
+import Pagination from '../../components/Pagination';
+import ReceiptQuickReviewModal from '../../components/receipts/ReceiptQuickReviewModal';
+import StatusBadge from '../../components/StatusBadge';
 
 import api from '../../services/api';
-import StatusBadge from '../../components/StatusBadge';
-import { formatDate } from '../../utils/date';
-import { formatEnumLabel } from '../../utils/format';
 
-type ReceiptOverview = {
-    total: number;
-    submitted: number;
-    reviewing: number;
-    approved: number;
-    rejected: number;
-    winner: number;
-    cancelled: number;
+import type {
+    Receipt,
+    ReceiptListCounts,
+    ReceiptListResponse,
+    SuspiciousReason,
+} from '../../types/receipt';
+
+import {
+    getApiErrorMessage,
+} from '../../utils/apiError';
+
+import {
+    formatDateTime,
+} from '../../utils/date';
+
+import {
+    positiveIntegerParam,
+} from '../../utils/query';
+
+type ReceiptTab =
+    | 'all'
+    | 'submitted'
+    | 'approved'
+    | 'rejected'
+    | 'suspicious';
+
+type SortDirection =
+    | 'asc'
+    | 'desc';
+
+const emptyCounts: ReceiptListCounts = {
+    all: 0,
+    submitted: 0,
+    approved: 0,
+    rejected: 0,
+    suspicious: 0,
 };
 
-type DrawPrize = {
-    id: number;
-    prize_id: number;
-    name: string | null;
-    type: string | null;
-    quantity: number;
+const suspiciousReasonLabels: Record<
+    string,
+    string
+> = {
+    duplicate_receipt_number:
+        'Duplicate receipt number',
+
+    duplicate_receipt_image:
+        'Duplicate receipt image',
+
+    phone_used_by_another_participant:
+        'Phone used by another participant',
+
+    email_used_by_another_participant:
+        'Email used by another participant',
+
+    receipt_number_non_numeric:
+        'Receipt number contains unexpected characters',
 };
 
-type DrawWinners = {
-    total: number;
-    selected: number;
-    confirmed: number;
-    cancelled: number;
-};
+const suspiciousReasonOptions = [
+    {
+        value: '',
+        label: 'All suspicious reasons',
+    },
 
-type DrawReport = {
-    id: number;
-    week_number: number;
-    draw_date: string | null;
-    status: string | null;
-    eligible_entries: number;
-    prizes: DrawPrize[];
-    total_prizes: number;
-    winners: DrawWinners;
-};
+    {
+        value:
+            'duplicate_receipt_number',
+        label:
+            'Duplicate receipt number',
+    },
 
-type PrizeAllocation = {
-    prize_id: number;
-    name: string;
-    type: string | null;
-    total_quantity: number;
-    allocated_quantity: number;
-    remaining_quantity: number;
-    within_limit: boolean;
-};
+    {
+        value:
+            'duplicate_receipt_image',
+        label:
+            'Duplicate receipt image',
+    },
 
-type ReportsResponse = {
-    data: {
-        overview: {
-            receipts: ReceiptOverview;
-        };
+    {
+        value:
+            'phone_used_by_another_participant',
+        label:
+            'Phone used by another participant',
+    },
 
-        draws: DrawReport[];
+    {
+        value:
+            'email_used_by_another_participant',
+        label:
+            'Email used by another participant',
+    },
 
-        prize_allocation: PrizeAllocation[];
-    };
-};
+    {
+        value:
+            'receipt_number_non_numeric',
+        label:
+            'Unexpected receipt number format',
+    },
+];
 
+function suspiciousReasonLabel(
+    reason: SuspiciousReason
+): string {
+    return (
+        suspiciousReasonLabels[
+            reason
+            ] ??
+        reason
+            .replaceAll(
+                '_',
+                ' '
+            )
+            .replace(
+                /\b\w/g,
+                (character) =>
+                    character.toUpperCase()
+            )
+    );
+}
 
+function truncate(
+    value: string,
+    limit: number
+): string {
+    if (
+        value.length <=
+        limit
+    ) {
+        return value;
+    }
 
-export default function Reports() {
-    const [report, setReport] =
-        useState<
-            ReportsResponse['data'] | null
-        >(null);
+    return `${value.slice(
+        0,
+        limit
+    )}...`;
+}
 
-    const [loading, setLoading] =
-        useState(true);
+export default function Receipts() {
+    const location =
+        useLocation();
 
-    const [error, setError] =
-        useState<string | null>(null);
+    const [
+        searchParams,
+        setSearchParams,
+    ] = useSearchParams();
 
-    const loadReports = async () => {
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response =
-                await api.get<ReportsResponse>(
-                    '/admin/reports/overview'
-                );
-
-            setReport(
-                response.data.data
-            );
-        } catch (err) {
-            console.error(err);
-
-            setError(
-                'Unable to load reports.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadReports();
-    }, []);
-
-    const exportReport = (
-        type:
-            | 'receipts'
-            | 'winners'
-            | 'draws'
-    ) => {
-        window.open(
-            `/api/admin/reports/export/${type}`,
-            '_blank'
+    const initialPage =
+        positiveIntegerParam(
+            searchParams.get(
+                'page'
+            )
         );
-    };
 
-    const totals =
-        useMemo(() => {
-            if (!report) {
-                return {
-                    draws: 0,
-                    eligibleEntries: 0,
-                    prizes: 0,
-                    winners: 0,
-                    confirmed: 0,
-                    cancelled: 0,
-                };
+    const initialTab =
+        (
+            searchParams.get(
+                'tab'
+            ) as ReceiptTab | null
+        ) ?? 'all';
+
+    const initialSearch =
+        searchParams.get(
+            'search'
+        ) ?? '';
+
+    const initialDateFrom =
+        searchParams.get(
+            'date_from'
+        ) ?? '';
+
+    const initialDateTo =
+        searchParams.get(
+            'date_to'
+        ) ?? '';
+
+    const initialReason =
+        searchParams.get(
+            'suspicious_reason'
+        ) ?? '';
+
+    const initialDirection =
+        (
+            searchParams.get(
+                'direction'
+            ) as SortDirection | null
+        ) ?? 'desc';
+
+    const [
+        receipts,
+        setReceipts,
+    ] = useState<Receipt[]>([]);
+
+    const [
+        counts,
+        setCounts,
+    ] =
+        useState<ReceiptListCounts>(
+            emptyCounts
+        );
+
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
+
+    const [
+        page,
+        setPage,
+    ] = useState(
+        initialPage
+    );
+
+    const [
+        tab,
+        setTab,
+    ] = useState<ReceiptTab>(
+        initialTab
+    );
+
+    const [
+        search,
+        setSearch,
+    ] = useState(
+        initialSearch
+    );
+
+    const [
+        searchInput,
+        setSearchInput,
+    ] = useState(
+        initialSearch
+    );
+
+    const [
+        dateFrom,
+        setDateFrom,
+    ] = useState(
+        initialDateFrom
+    );
+
+    const [
+        dateTo,
+        setDateTo,
+    ] = useState(
+        initialDateTo
+    );
+
+    const [
+        suspiciousReason,
+        setSuspiciousReason,
+    ] = useState(
+        initialReason
+    );
+
+    const [
+        direction,
+        setDirection,
+    ] = useState<SortDirection>(
+        initialDirection
+    );
+
+    const [
+        quickReviewReceiptId,
+        setQuickReviewReceiptId,
+    ] = useState<number | null>(
+        null
+    );
+
+    const [
+        pagination,
+        setPagination,
+    ] = useState({
+        current_page: 1,
+        last_page: 1,
+        per_page: 20,
+        total: 0,
+    });
+
+    const loadReceipts =
+        useCallback(
+            async () => {
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const params: Record<
+                        string,
+                        | string
+                        | number
+                        | boolean
+                    > = {
+                        page,
+                        direction,
+                    };
+
+                    if (
+                        tab ===
+                        'submitted'
+                    ) {
+                        params.status =
+                            'submitted';
+                    }
+
+                    if (
+                        tab ===
+                        'approved'
+                    ) {
+                        params.status =
+                            'approved';
+                    }
+
+                    if (
+                        tab ===
+                        'rejected'
+                    ) {
+                        params.status =
+                            'rejected';
+                    }
+
+                    if (
+                        tab ===
+                        'suspicious'
+                    ) {
+                        params.suspicious =
+                            true;
+                    }
+
+                    if (
+                        search.trim()
+                    ) {
+                        params.search =
+                            search.trim();
+                    }
+
+                    if (dateFrom) {
+                        params.date_from =
+                            dateFrom;
+                    }
+
+                    if (dateTo) {
+                        params.date_to =
+                            dateTo;
+                    }
+
+                    if (
+                        suspiciousReason
+                    ) {
+                        params.suspicious_reason =
+                            suspiciousReason;
+                    }
+
+                    const response =
+                        await api.get<ReceiptListResponse>(
+                            '/admin/receipts',
+                            {
+                                params,
+                            }
+                        );
+
+                    setReceipts(
+                        response.data
+                            .data
+                    );
+
+                    setCounts(
+                        response.data
+                            .meta
+                            .counts
+                    );
+
+                    setPagination({
+                        current_page:
+                        response.data
+                            .current_page,
+
+                        last_page:
+                        response.data
+                            .last_page,
+
+                        per_page:
+                        response.data
+                            .per_page,
+
+                        total:
+                        response.data
+                            .total,
+                    });
+                } catch (
+                    error: unknown
+                    ) {
+                    setError(
+                        getApiErrorMessage(
+                            error,
+                            'Unable to load receipts.'
+                        )
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            },
+            [
+                page,
+                tab,
+                search,
+                dateFrom,
+                dateTo,
+                suspiciousReason,
+                direction,
+            ]
+        );
+
+    /*
+     * Live global search.
+     *
+     * Numeric values can search
+     * immediately because they may
+     * be exact receipt IDs.
+     *
+     * Other searches start from
+     * three characters.
+     */
+    useEffect(() => {
+        const value =
+            searchInput.trim();
+
+        if (
+            value === ''
+        ) {
+            if (
+                search !== ''
+            ) {
+                setPage(1);
+                setSearch('');
             }
 
-            return report.draws.reduce(
-                (
-                    result,
-                    draw
-                ) => {
-                    result.draws += 1;
+            return;
+        }
 
-                    result.eligibleEntries +=
-                        draw.eligible_entries;
-
-                    result.prizes +=
-                        draw.total_prizes;
-
-                    result.winners +=
-                        draw.winners.total;
-
-                    result.confirmed +=
-                        draw.winners.confirmed;
-
-                    result.cancelled +=
-                        draw.winners.cancelled;
-
-                    return result;
-                },
-                {
-                    draws: 0,
-                    eligibleEntries: 0,
-                    prizes: 0,
-                    winners: 0,
-                    confirmed: 0,
-                    cancelled: 0,
-                }
+        const numeric =
+            /^\d+$/.test(
+                value
             );
-        }, [report]);
 
-    if (loading) {
-        return (
-            <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                Loading reports...
-            </div>
+        if (
+            !numeric &&
+            value.length < 3
+        ) {
+            return;
+        }
+
+        const timeout =
+            window.setTimeout(
+                () => {
+                    setPage(1);
+
+                    setSearch(
+                        value
+                    );
+                },
+                350
+            );
+
+        return () => {
+            window.clearTimeout(
+                timeout
+            );
+        };
+    }, [
+        searchInput,
+        search,
+    ]);
+
+    /*
+     * Keep the list workspace
+     * represented in the URL.
+     */
+    useEffect(() => {
+        const params =
+            new URLSearchParams();
+
+        if (
+            page > 1
+        ) {
+            params.set(
+                'page',
+                String(page)
+            );
+        }
+
+        if (
+            tab !==
+            'all'
+        ) {
+            params.set(
+                'tab',
+                tab
+            );
+        }
+
+        if (
+            search
+        ) {
+            params.set(
+                'search',
+                search
+            );
+        }
+
+        if (
+            dateFrom
+        ) {
+            params.set(
+                'date_from',
+                dateFrom
+            );
+        }
+
+        if (
+            dateTo
+        ) {
+            params.set(
+                'date_to',
+                dateTo
+            );
+        }
+
+        if (
+            suspiciousReason
+        ) {
+            params.set(
+                'suspicious_reason',
+                suspiciousReason
+            );
+        }
+
+        if (
+            direction !==
+            'desc'
+        ) {
+            params.set(
+                'direction',
+                direction
+            );
+        }
+
+        setSearchParams(
+            params,
+            {
+                replace: true,
+            }
         );
-    }
+    }, [
+        page,
+        tab,
+        search,
+        dateFrom,
+        dateTo,
+        suspiciousReason,
+        direction,
+        setSearchParams,
+    ]);
 
-    if (error || !report) {
-        return (
-            <div className="space-y-4">
+    useEffect(() => {
+        loadReceipts();
+    }, [loadReceipts]);
 
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {error ??
-                        'Report data is unavailable.'}
-                </div>
-
-                <button
-                    type="button"
-                    onClick={
-                        loadReports
-                    }
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                >
-                    Retry
-                </button>
-
-            </div>
+    const hasFilters =
+        Boolean(
+            search ||
+            dateFrom ||
+            dateTo ||
+            suspiciousReason
         );
-    }
 
-    const receipts =
-        report.overview.receipts;
+    const resetFilters = () => {
+        setPage(1);
+
+        setSearch('');
+        setSearchInput('');
+
+        setDateFrom('');
+        setDateTo('');
+
+        setSuspiciousReason(
+            ''
+        );
+    };
+
+    const changeTab = (
+        nextTab: ReceiptTab
+    ) => {
+        setTab(
+            nextTab
+        );
+
+        setPage(1);
+    };
+
+    const toggleSubmittedSort =
+        () => {
+            setDirection(
+                (current) =>
+                    current ===
+                    'desc'
+                        ? 'asc'
+                        : 'desc'
+            );
+
+            setPage(1);
+        };
+
+    const tabs: Array<{
+        value: ReceiptTab;
+        label: string;
+        count: number;
+    }> = [
+        {
+            value: 'all',
+            label: 'All',
+            count:
+            counts.all,
+        },
+        {
+            value:
+                'submitted',
+            label:
+                'Needs Review',
+            count:
+            counts.submitted,
+        },
+        {
+            value:
+                'approved',
+            label:
+                'Approved',
+            count:
+            counts.approved,
+        },
+        {
+            value:
+                'rejected',
+            label:
+                'Rejected',
+            count:
+            counts.rejected,
+        },
+        {
+            value:
+                'suspicious',
+            label:
+                'Suspicious',
+            count:
+            counts.suspicious,
+        },
+    ];
+
+    const currentListUrl =
+        `${location.pathname}${location.search}`;
 
     return (
         <div className="space-y-6">
+            <PageHeader
+                title="Receipts"
+                description="Review participation receipts and prepare approved entries for the next draw."
+            />
 
-            {/* Header */}
+            {/* Tabs */}
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="overflow-x-auto border-b border-gray-200">
+                <nav className="flex min-w-max gap-6">
+                    {tabs.map(
+                        (
+                            item
+                        ) => {
+                            const active =
+                                tab ===
+                                item.value;
 
-                <div>
+                            return (
+                                <button
+                                    key={
+                                        item.value
+                                    }
+                                    type="button"
+                                    onClick={() =>
+                                        changeTab(
+                                            item.value
+                                        )
+                                    }
+                                    className={[
+                                        'relative whitespace-nowrap pb-3 text-sm font-medium transition',
+                                        active
+                                            ? 'text-gray-900'
+                                            : 'text-gray-500 hover:text-gray-900',
+                                    ].join(
+                                        ' '
+                                    )}
+                                >
+                                    {
+                                        item.label
+                                    }
 
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Reports & Exports
-                    </h2>
+                                    <span
+                                        className={[
+                                            'ml-2 rounded-full px-2 py-0.5 text-xs',
+                                            active
+                                                ? 'bg-gray-900 text-white'
+                                                : 'bg-gray-100 text-gray-500',
+                                        ].join(
+                                            ' '
+                                        )}
+                                    >
+                                        {
+                                            item.count
+                                        }
+                                    </span>
 
-                    <p className="mt-1 text-sm text-gray-500">
-                        Review campaign results and
-                        export operational data.
-                    </p>
-
-                </div>
-
-                <button
-                    type="button"
-                    onClick={
-                        loadReports
-                    }
-                    disabled={
-                        loading
-                    }
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                    Refresh
-                </button>
-
+                                    {active && (
+                                        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gray-900" />
+                                    )}
+                                </button>
+                            );
+                        }
+                    )}
+                </nav>
             </div>
 
-            {/* Export Center */}
+            {/* Search */}
 
-            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div>
+                <input
+                    type="search"
+                    value={
+                        searchInput
+                    }
+                    onChange={(
+                        event
+                    ) =>
+                        setSearchInput(
+                            event
+                                .target
+                                .value
+                        )
+                    }
+                    placeholder="Search receipt ID, receipt number, participant name, phone or email..."
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                />
 
-                <div className="border-b border-gray-200 px-5 py-4">
-
-                    <h3 className="font-semibold text-gray-900">
-                        Export Center
-                    </h3>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Download campaign data for
-                        external analysis,
-                        documentation or audit.
-                    </p>
-
-                </div>
-
-                <div className="grid gap-4 p-5 md:grid-cols-3">
-
-                    <div className="rounded-xl border border-gray-200 p-4">
-
-                        <div className="font-medium text-gray-900">
-                            Receipts
+                {searchInput.trim() &&
+                    !/^\d+$/.test(
+                        searchInput.trim()
+                    ) &&
+                    searchInput
+                        .trim()
+                        .length <
+                    3 && (
+                        <div className="mt-1.5 text-xs text-gray-400">
+                            Enter at
+                            least 3
+                            characters
+                            to search.
                         </div>
+                    )}
+            </div>
 
-                        <p className="mt-1 text-sm text-gray-500">
-                            Participant receipt
-                            records and verification
-                            results.
-                        </p>
+            {/* Filters */}
 
-                        <button
-                            type="button"
-                            onClick={() =>
-                                exportReport(
-                                    'receipts'
-                                )
-                            }
-                            className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                        >
-                            Export Receipts
-                        </button>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 p-4">
-
-                        <div className="font-medium text-gray-900">
-                            Winners
-                        </div>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            Winner selection,
-                            confirmation and
-                            cancellation data.
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                exportReport(
-                                    'winners'
-                                )
-                            }
-                            className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                        >
-                            Export Winners
-                        </button>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 p-4">
-
-                        <div className="font-medium text-gray-900">
-                            Draws
-                        </div>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            Draw configuration,
-                            participation and
-                            execution results.
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                exportReport(
-                                    'draws'
-                                )
-                            }
-                            className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                        >
-                            Export Draws
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-            {/* Campaign totals */}
-
-            <section>
-
-                <div className="mb-4">
-
-                    <h3 className="font-semibold text-gray-900">
-                        Campaign Summary
-                    </h3>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        High-level historical totals.
-                    </p>
-
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                        <div className="text-sm text-gray-500">
-                            Receipts
-                        </div>
-
-                        <div className="mt-2 text-3xl font-bold text-gray-900">
-                            {
-                                receipts.total
-                            }
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-400">
-                            All submitted receipts
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                        <div className="text-sm text-gray-500">
-                            Draws
-                        </div>
-
-                        <div className="mt-2 text-3xl font-bold text-gray-900">
-                            {
-                                totals.draws
-                            }
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-400">
-                            Draw records
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                        <div className="text-sm text-gray-500">
-                            Winners Selected
-                        </div>
-
-                        <div className="mt-2 text-3xl font-bold text-gray-900">
-                            {
-                                totals.winners
-                            }
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-400">
-                            Winner records created
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                        <div className="text-sm text-gray-500">
-                            Confirmed Winners
-                        </div>
-
-                        <div className="mt-2 text-3xl font-bold text-green-700">
-                            {
-                                totals.confirmed
-                            }
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-400">
-                            Confirmed prize winners
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-            {/* Receipt status */}
-
-            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
                     <div>
-
-                        <h3 className="font-semibold text-gray-900">
-                            Receipt Status
-                        </h3>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            Current receipt
-                            distribution.
-                        </p>
-
-                    </div>
-
-                    <Link
-                        to="/admin/receipts"
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                    >
-                        View Receipts →
-                    </Link>
-
-                </div>
-
-                <div className="grid grid-cols-2 gap-px bg-gray-200 md:grid-cols-4 xl:grid-cols-7">
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-gray-500">
-                            Total
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-gray-900">
-                            {
-                                receipts.total
-                            }
-                        </div>
-
-                    </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-amber-600">
+                        <label
+                            htmlFor="date-from"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
                             Submitted
-                        </div>
+                            from
+                        </label>
 
-                        <div className="mt-1 text-xl font-bold text-amber-700">
-                            {
-                                receipts.submitted
+                        <input
+                            id="date-from"
+                            type="date"
+                            value={
+                                dateFrom
                             }
-                        </div>
+                            onChange={(
+                                event
+                            ) => {
+                                setDateFrom(
+                                    event
+                                        .target
+                                        .value
+                                );
 
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
+                        />
                     </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-blue-600">
-                            Reviewing
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-blue-700">
-                            {
-                                receipts.reviewing
-                            }
-                        </div>
-
-                    </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-green-600">
-                            Approved
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-green-700">
-                            {
-                                receipts.approved
-                            }
-                        </div>
-
-                    </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-red-600">
-                            Rejected
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-red-700">
-                            {
-                                receipts.rejected
-                            }
-                        </div>
-
-                    </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-purple-600">
-                            Winner
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-purple-700">
-                            {
-                                receipts.winner
-                            }
-                        </div>
-
-                    </div>
-
-                    <div className="bg-white p-4">
-
-                        <div className="text-xs text-gray-500">
-                            Cancelled
-                        </div>
-
-                        <div className="mt-1 text-xl font-bold text-gray-700">
-                            {
-                                receipts.cancelled
-                            }
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-            {/* Draw performance */}
-
-            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 
                     <div>
+                        <label
+                            htmlFor="date-to"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
+                            Submitted
+                            to
+                        </label>
 
-                        <h3 className="font-semibold text-gray-900">
-                            Draw Results
-                        </h3>
+                        <input
+                            id="date-to"
+                            type="date"
+                            value={
+                                dateTo
+                            }
+                            onChange={(
+                                event
+                            ) => {
+                                setDateTo(
+                                    event
+                                        .target
+                                        .value
+                                );
 
-                        <p className="mt-1 text-sm text-gray-500">
-                            Participation and winner
-                            results by draw.
-                        </p>
-
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
+                        />
                     </div>
 
-                    <Link
-                        to="/admin/draws"
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                    >
-                        View Draws →
-                    </Link>
+                    <div className="min-w-0 flex-1">
+                        <label
+                            htmlFor="suspicious-reason"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
+                            Suspicious
+                            reason
+                        </label>
 
-                </div>
+                        <select
+                            id="suspicious-reason"
+                            value={
+                                suspiciousReason
+                            }
+                            onChange={(
+                                event
+                            ) => {
+                                setSuspiciousReason(
+                                    event
+                                        .target
+                                        .value
+                                );
 
-                {report.draws.length ===
-                0 ? (
-
-                    <div className="p-8 text-center text-sm text-gray-400">
-                        No draws found.
-                    </div>
-
-                ) : (
-
-                    <div className="overflow-x-auto">
-
-                        <table className="min-w-full text-left text-sm">
-
-                            <thead className="bg-gray-50">
-
-                            <tr>
-
-                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Draw
-                                </th>
-
-                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Status
-                                </th>
-
-                                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Entries
-                                </th>
-
-                                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Prizes
-                                </th>
-
-                                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Winners
-                                </th>
-
-                                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Confirmed
-                                </th>
-
-                                <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    Cancelled
-                                </th>
-
-                                <th className="px-5 py-3" />
-
-                            </tr>
-
-                            </thead>
-
-                            <tbody className="divide-y divide-gray-100">
-
-                            {report.draws.map(
-                                (draw) => (
-
-                                    <tr
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                        >
+                            {suspiciousReasonOptions.map(
+                                (
+                                    option
+                                ) => (
+                                    <option
                                         key={
-                                            draw.id
+                                            option.value
                                         }
-                                        className="hover:bg-gray-50"
+                                        value={
+                                            option.value
+                                        }
                                     >
-
-                                        <td className="px-5 py-4">
-
-                                            <div className="font-medium text-gray-900">
-                                                Week{' '}
-                                                {
-                                                    draw.week_number
-                                                }
-                                            </div>
-
-                                            <div className="mt-1 text-xs text-gray-500">
-                                                {formatDate(
-                                                    draw.draw_date,
-                                                    'Not scheduled'
-                                                )}
-
-                                                {' · '}
-
-                                                ID #
-                                                {
-                                                    draw.id
-                                                }
-                                            </div>
-
-                                        </td>
-
-                                        <td className="px-5 py-4">
-
-                                            {draw.status ? (
-                                                <StatusBadge
-                                                    status={
-                                                        draw.status
-                                                    }
-                                                />
-                                            ) : (
-                                                <span className="text-gray-400">
-                                                    -
-                                                </span>
-                                            )}
-
-                                        </td>
-
-                                        <td className="px-5 py-4 text-center font-medium text-gray-700">
-                                            {
-                                                draw.eligible_entries
-                                            }
-                                        </td>
-
-                                        <td className="px-5 py-4 text-center font-medium text-gray-700">
-                                            {
-                                                draw.total_prizes
-                                            }
-                                        </td>
-
-                                        <td className="px-5 py-4 text-center font-medium text-gray-700">
-                                            {
-                                                draw.winners.total
-                                            }
-                                        </td>
-
-                                        <td className="px-5 py-4 text-center font-medium text-green-700">
-                                            {
-                                                draw.winners.confirmed
-                                            }
-                                        </td>
-
-                                        <td className="px-5 py-4 text-center font-medium text-red-700">
-                                            {
-                                                draw.winners.cancelled
-                                            }
-                                        </td>
-
-                                        <td className="px-5 py-4 text-right">
-
-                                            <Link
-                                                to={`/admin/draws/${draw.id}`}
-                                                className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                            >
-                                                View
-                                            </Link>
-
-                                        </td>
-
-                                    </tr>
-
+                                        {
+                                            option.label
+                                        }
+                                    </option>
                                 )
                             )}
-
-                            </tbody>
-
-                        </table>
-
+                        </select>
                     </div>
-                )}
 
+                    {hasFilters && (
+                        <button
+                            type="button"
+                            onClick={
+                                resetFilters
+                            }
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                            Reset
+                            filters
+                        </button>
+                    )}
+                </div>
             </section>
 
-            {/* Prize allocation compact */}
+            {error && (
+                <Alert
+                    variant="error"
+                    onDismiss={() =>
+                        setError(null)
+                    }
+                >
+                    {error}
+                </Alert>
+            )}
+
+            {/* Table */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                    <div>
-
-                        <h3 className="font-semibold text-gray-900">
-                            Prize Allocation
-                        </h3>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            Allocation audit across
-                            all configured draws.
-                        </p>
-
-                    </div>
-
-                    <Link
-                        to="/admin/prizes"
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                    >
-                        View Inventory →
-                    </Link>
-
-                </div>
-
-                {report.prize_allocation
-                    .length === 0 ? (
-
-                    <div className="p-8 text-center text-sm text-gray-400">
-                        No prize allocation data.
-                    </div>
-
+                {loading ? (
+                    <LoadingState
+                        message="Loading receipts..."
+                    />
+                ) : receipts.length ===
+                0 ? (
+                    <EmptyState
+                        title="No receipts found."
+                        description={
+                            hasFilters
+                                ? 'Try changing the search or filters.'
+                                : 'There are no receipts in this section.'
+                        }
+                    />
                 ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-[1180px] w-full text-left text-sm">
+                                <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Receipt
+                                    </th>
 
-                    <div className="divide-y divide-gray-100">
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Participant
+                                    </th>
 
-                        {report.prize_allocation.map(
-                            (
-                                prize
-                            ) => {
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Status
+                                    </th>
 
-                                const percentage =
-                                    prize.total_quantity >
-                                    0
-                                        ? Math.min(
-                                            100,
-                                            (
-                                                prize.allocated_quantity /
-                                                prize.total_quantity
-                                            ) *
-                                            100
-                                        )
-                                        : 0;
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Suspicious
+                                    </th>
 
-                                return (
-                                    <div
-                                        key={
-                                            prize.prize_id
-                                        }
-                                        className="p-5"
-                                    >
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Latest
+                                        Note
+                                    </th>
 
-                                        <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr_auto] lg:items-center">
+                                    <th className="px-5 py-3">
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                toggleSubmittedSort
+                                            }
+                                            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-900"
+                                        >
+                                            Submitted
 
-                                            <div>
+                                            <span>
+                                                    {direction ===
+                                                    'desc'
+                                                        ? '↓'
+                                                        : '↑'}
+                                                </span>
+                                        </button>
+                                    </th>
+                                </tr>
+                                </thead>
 
-                                                <div className="font-medium text-gray-900">
-                                                    {
-                                                        prize.name
-                                                    }
-                                                </div>
+                                <tbody className="divide-y divide-gray-100">
+                                {receipts.map(
+                                    (
+                                        receipt
+                                    ) => {
+                                        const participant =
+                                            receipt.participant;
 
-                                                <div className="mt-1 text-xs text-gray-500">
-                                                    {formatEnumLabel(
-                                                        prize.type
-                                                    )}
-                                                </div>
+                                        const otherReceipts =
+                                            Math.max(
+                                                (participant?.receipts_count ??
+                                                    1) -
+                                                1,
+                                                0
+                                            );
 
-                                            </div>
+                                        const noteCount =
+                                            receipt.notes_count ??
+                                            0;
 
-                                            <div>
+                                        const olderNotes =
+                                            Math.max(
+                                                noteCount -
+                                                1,
+                                                0
+                                            );
 
-                                                <div className="flex justify-between text-sm">
+                                        const reasons =
+                                            receipt.suspicious_reasons ??
+                                            [];
 
-                                                    <span className="text-gray-500">
-                                                        {
-                                                            prize.allocated_quantity
-                                                        }{' '}
-                                                        allocated
-                                                    </span>
+                                        const extraReasons =
+                                            Math.max(
+                                                reasons.length -
+                                                1,
+                                                0
+                                            );
 
-                                                    <span className="font-medium text-gray-700">
-                                                        {
-                                                            prize.total_quantity
-                                                        }{' '}
-                                                        total
-                                                    </span>
+                                        const latestNote =
+                                            receipt.latest_note;
 
-                                                </div>
-
-                                                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-
-                                                    <div
-                                                        className="h-full rounded-full bg-gray-900"
-                                                        style={{
-                                                            width:
-                                                                `${percentage}%`,
-                                                        }}
-                                                    />
-
-                                                </div>
-
-                                            </div>
-
-                                            <div className="text-right">
-
-                                                <div className="text-lg font-semibold text-gray-900">
-                                                    {
-                                                        prize.remaining_quantity
-                                                    }
-                                                </div>
-
-                                                <div className="text-xs text-gray-500">
-                                                    remaining
-                                                </div>
-
-                                                {!prize.within_limit && (
-                                                    <div className="mt-1 text-xs font-medium text-red-600">
-                                                        Over allocated
-                                                    </div>
+                                        return (
+                                            <tr
+                                                key={
+                                                    receipt.id
+                                                }
+                                                onClick={() =>
+                                                    setQuickReviewReceiptId(
+                                                        receipt.id
+                                                    )
+                                                }
+                                                className={[
+                                                    'cursor-pointer transition hover:bg-gray-50',
+                                                    receipt.is_suspicious
+                                                        ? 'bg-amber-50/30'
+                                                        : '',
+                                                ].join(
+                                                    ' '
                                                 )}
+                                            >
+                                                {/* Receipt */}
 
-                                            </div>
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="font-semibold text-gray-900">
+                                                        {
+                                                            receipt.receipt_number
+                                                        }
+                                                    </div>
 
-                                        </div>
+                                                    <div className="mt-1 text-xs text-gray-400">
+                                                        Receipt
+                                                        ID
+                                                        #{' '}
+                                                        {
+                                                            receipt.id
+                                                        }
+                                                    </div>
+                                                </td>
 
-                                    </div>
-                                );
+                                                {/* Participant */}
+
+                                                <td className="px-5 py-4 align-top">
+                                                    {participant ? (
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                    <span className="font-medium text-gray-900">
+                                                                        {
+                                                                            participant.first_name
+                                                                        }{' '}
+                                                                        {
+                                                                            participant.last_name
+                                                                        }
+                                                                    </span>
+
+                                                                {otherReceipts >
+                                                                    0 && (
+                                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                                                            +
+                                                                            {
+                                                                                otherReceipts
+                                                                            }{' '}
+                                                                            other
+                                                                            receipt
+                                                                            {otherReceipts ===
+                                                                            1
+                                                                                ? ''
+                                                                                : 's'}
+                                                                        </span>
+                                                                    )}
+                                                            </div>
+
+                                                            <div className="mt-1 text-xs text-gray-500">
+                                                                {
+                                                                    participant.phone
+                                                                }
+                                                            </div>
+
+                                                            <div className="mt-0.5 max-w-[220px] truncate text-xs text-gray-400">
+                                                                {
+                                                                    participant.email
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Status */}
+
+                                                <td className="px-5 py-4 align-top">
+                                                    <StatusBadge
+                                                        status={
+                                                            receipt.status
+                                                        }
+                                                    />
+                                                </td>
+
+                                                {/* Suspicious */}
+
+                                                <td className="px-5 py-4 align-top">
+                                                    {receipt.is_suspicious &&
+                                                    reasons.length >
+                                                    0 ? (
+                                                        <div>
+                                                            <div className="max-w-[210px] text-xs font-medium text-amber-800">
+                                                                {suspiciousReasonLabel(
+                                                                    reasons[0]
+                                                                )}
+                                                            </div>
+
+                                                            {extraReasons >
+                                                                0 && (
+                                                                    <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                                                        +
+                                                                        {
+                                                                            extraReasons
+                                                                        }{' '}
+                                                                        more
+                                                                    </div>
+                                                                )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Latest note */}
+
+                                                <td className="px-5 py-4 align-top">
+                                                    {latestNote ? (
+                                                        <div className="max-w-[260px]">
+                                                                <span className="text-xs text-gray-700">
+                                                                    {truncate(
+                                                                        latestNote.note,
+                                                                        38
+                                                                    )}
+                                                                </span>
+
+                                                            {olderNotes >
+                                                                0 && (
+                                                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                        +
+                                                                        {
+                                                                            olderNotes
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Submitted */}
+
+                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                    {formatDateTime(
+                                                        receipt.submitted_at ??
+                                                        receipt.created_at
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    }
+                                )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <Pagination
+                            currentPage={
+                                pagination.current_page
                             }
-                        )}
+                            lastPage={
+                                pagination.last_page
+                            }
+                            perPage={
+                                pagination.per_page
+                            }
+                            total={
+                                pagination.total
+                            }
+                            loading={
+                                loading
+                            }
+                            onPageChange={(
+                                nextPage
+                            ) => {
+                                setPage(
+                                    nextPage
+                                );
 
-                    </div>
+                                window.scrollTo(
+                                    {
+                                        top: 0,
+                                        behavior:
+                                            'smooth',
+                                    }
+                                );
+                            }}
+                        />
+                    </>
                 )}
-
             </section>
 
+            {/* Quick review */}
+
+            {quickReviewReceiptId !== null && (
+                <ReceiptQuickReviewModal
+                    receiptId={
+                        quickReviewReceiptId
+                    }
+                    backUrl={
+                        currentListUrl
+                    }
+                    onClose={() =>
+                        setQuickReviewReceiptId(
+                            null
+                        )
+                    }
+                    onChanged={() => {
+                        /*
+                         * Refreshes:
+                         * - row state
+                         * - tab counts
+                         * - suspicious count
+                         * - pagination totals
+                         */
+                        loadReceipts();
+                    }}
+                />
+            )}
         </div>
     );
 }

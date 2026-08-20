@@ -7,10 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Receipt;
 use App\Services\ParticipantIdentityService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class ReceiptController extends Controller
 {
@@ -21,21 +23,58 @@ class ReceiptController extends Controller
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'status' => [
+                'nullable',
+                Rule::enum(ReceiptStatus::class),
+            ],
+
+            'suspicious' => [
+                'nullable',
+                'boolean',
+            ],
+
+            'suspicious_reason' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
             'date_from' => [
                 'nullable',
                 'date',
             ],
+
             'date_to' => [
                 'nullable',
                 'date',
+            ],
+
+            'direction' => [
+                'nullable',
+                Rule::in([
+                    'asc',
+                    'desc',
+                ]),
+            ],
+
+            'per_page' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100',
             ],
         ]);
 
         if (
             ! empty($filters['date_from']) &&
             ! empty($filters['date_to']) &&
-            strtotime($filters['date_to']) <
-            strtotime($filters['date_from'])
+            strtotime($filters['date_to']) < strtotime($filters['date_from'])
         ) {
             return response()->json([
                 'message' => 'The date to must be after or equal to date from.',
@@ -47,136 +86,375 @@ class ReceiptController extends Controller
             ], 422);
         }
 
-        $query = Receipt::query()
-            ->with('participant');
+        $baseQuery = Receipt::query();
 
-        if ($request->filled('status')) {
+        $this->applySearch(
+            $baseQuery,
+            $filters['search'] ?? null
+        );
+
+        $this->applyDateFilters(
+            $baseQuery,
+            $filters['date_from'] ?? null,
+            $filters['date_to'] ?? null
+        );
+
+        $this->applySuspiciousReasonFilter(
+            $baseQuery,
+            $filters['suspicious_reason'] ?? null
+        );
+
+        /*
+         * Counts used by frontend navigation:
+         *
+         * All 1000
+         * Needs Review 240
+         * Approved 700
+         * Rejected 60
+         * Suspicious 34
+         *
+         * Search/date/reason filters affect these
+         * counts, while the currently selected
+         * status tab does not.
+         */
+        $counts = [
+            'all' => (clone $baseQuery)
+                ->count(),
+
+            'submitted' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    ReceiptStatus::SUBMITTED
+                )
+                ->count(),
+
+            'approved' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    ReceiptStatus::APPROVED
+                )
+                ->count(),
+
+            'rejected' => (clone $baseQuery)
+                ->where(
+                    'status',
+                    ReceiptStatus::REJECTED
+                )
+                ->count(),
+
+            'suspicious' => (clone $baseQuery)
+                ->where(
+                    'is_suspicious',
+                    true
+                )
+                ->count(),
+        ];
+
+        /*
+         * Query for the actual selected table.
+         */
+        $query =
+            clone $baseQuery;
+
+        if (
+            ! empty($filters['status'])
+        ) {
             $query->where(
                 'status',
-                $request->string('status')->toString()
+                $filters['status']
             );
         }
 
-        if ($request->filled('receipt_number')) {
-            $receiptNumber = $request
-                ->string('receipt_number')
-                ->toString();
-
-            $query->where(
-                'receipt_number',
-                'like',
-                '%'.$receiptNumber.'%'
-            );
-        }
-
-        if ($request->filled('phone')) {
-            $phone = trim(
-                $request->string('phone')->toString()
-            );
-
-            $normalizedPhone = $this->participantIdentity
-                ->normalizePhone($phone);
-
-            $query->whereHas(
-                'participant',
-                function ($query) use (
-                    $phone,
-                    $normalizedPhone
-                ) {
-                    $query->where(function ($query) use (
-                        $phone,
-                        $normalizedPhone
-                    ) {
-                        $query->where(
-                            'phone',
-                            'like',
-                            '%'.$phone.'%'
-                        );
-
-                        if ($normalizedPhone !== '') {
-                            $query->orWhere(
-                                'phone_normalized',
-                                'like',
-                                '%'.$normalizedPhone.'%'
-                            );
-                        }
-                    });
-                }
-            );
-        }
-
-        if ($request->filled('email')) {
-            $email = trim(
-                $request->string('email')->toString()
-            );
-
-            $normalizedEmail = $this->participantIdentity
-                ->normalizeEmail($email);
-
-            $query->whereHas(
-                'participant',
-                function ($query) use (
-                    $email,
-                    $normalizedEmail
-                ) {
-                    $query->where(function ($query) use (
-                        $email,
-                        $normalizedEmail
-                    ) {
-                        $query->where(
-                            'email',
-                            'like',
-                            '%'.$email.'%'
-                        )
-                            ->orWhere(
-                                'email_normalized',
-                                'like',
-                                '%'.$normalizedEmail.'%'
-                            );
-                    });
-                }
-            );
-        }
-
-        if ($request->boolean('suspicious')) {
+        if (
+            $request->boolean(
+                'suspicious'
+            )
+        ) {
             $query->where(
                 'is_suspicious',
                 true
             );
         }
 
-        if (! empty($filters['date_from'])) {
+        /*
+         * List-only information.
+         *
+         * participant.receipts_count
+         * lets frontend calculate:
+         *
+         * +5 other receipts
+         *
+         * notes_count + latest_note give:
+         *
+         * Need to contact manager... +2
+         *
+         * without loading all notes.
+         */
+        $query
+            ->with([
+                'participant' => function ($query) {
+                    $query->withCount(
+                        'receipts'
+                    );
+                },
+
+                'latestNote.user',
+            ])
+            ->withCount(
+                'notes'
+            );
+
+        /*
+         * Receipt table currently sorts only
+         * by submitted date.
+         *
+         * Default:
+         * newest submissions first.
+         */
+        $direction =
+            $filters['direction'] ??
+            'desc';
+
+        $query
+            ->orderBy(
+                'submitted_at',
+                $direction
+            )
+            ->orderBy(
+                'id',
+                $direction
+            );
+
+        $perPage =
+            $filters['per_page'] ??
+            20;
+
+        $paginator =
+            $query->paginate(
+                $perPage
+            );
+
+        return response()->json([
+            'data' => $paginator->items(),
+
+            'current_page' => $paginator->currentPage(),
+
+            'last_page' => $paginator->lastPage(),
+
+            'per_page' => $paginator->perPage(),
+
+            'total' => $paginator->total(),
+
+            'from' => $paginator->firstItem(),
+
+            'to' => $paginator->lastItem(),
+
+            'meta' => [
+                'counts' => $counts,
+
+                'filters' => [
+                    'search' => $filters['search'] ??
+                        null,
+
+                    'status' => $filters['status'] ??
+                        null,
+
+                    'suspicious' => $request->boolean(
+                        'suspicious'
+                    ),
+
+                    'suspicious_reason' => $filters[
+                            'suspicious_reason'
+                        ] ?? null,
+
+                    'date_from' => $filters[
+                            'date_from'
+                        ] ?? null,
+
+                    'date_to' => $filters[
+                            'date_to'
+                        ] ?? null,
+
+                    'direction' => $direction,
+                ],
+            ],
+        ]);
+    }
+
+    private function applySearch(
+        Builder $query,
+        ?string $search
+    ): void {
+        $search =
+            trim(
+                (string) $search
+            );
+
+        if ($search === '') {
+            return;
+        }
+
+        $like =
+            '%'.$search.'%';
+
+        $normalizedPhone =
+            $this
+                ->participantIdentity
+                ->normalizePhone(
+                    $search
+                );
+
+        $normalizedEmail =
+            $this
+                ->participantIdentity
+                ->normalizeEmail(
+                    $search
+                );
+
+        $query->where(
+            function (
+                Builder $query
+            ) use (
+                $search,
+                $like,
+                $normalizedPhone,
+                $normalizedEmail
+            ) {
+                /*
+                 * Receipt ID is an exact match.
+                 */
+                if (
+                    ctype_digit(
+                        $search
+                    )
+                ) {
+                    $query->orWhere(
+                        'id',
+                        (int) $search
+                    );
+                }
+
+                /*
+                 * Receipt number is partial.
+                 */
+                $query->orWhere(
+                    'receipt_number',
+                    'like',
+                    $like
+                );
+
+                /*
+                 * Participant fields are all
+                 * searched as one OR group.
+                 */
+                $query->orWhereHas(
+                    'participant',
+                    function (
+                        Builder $query
+                    ) use (
+                        $like,
+                        $normalizedPhone,
+                        $normalizedEmail
+                    ) {
+                        $query
+                            ->where(
+                                'first_name',
+                                'like',
+                                $like
+                            )
+                            ->orWhere(
+                                'last_name',
+                                'like',
+                                $like
+                            )
+                            ->orWhere(
+                                'phone',
+                                'like',
+                                $like
+                            )
+                            ->orWhere(
+                                'email',
+                                'like',
+                                $like
+                            );
+
+                        if (
+                            $normalizedPhone !==
+                            ''
+                        ) {
+                            $query->orWhere(
+                                'phone_normalized',
+                                'like',
+                                '%'.
+                                    $normalizedPhone.
+                                    '%'
+                            );
+                        }
+
+                        if (
+                            $normalizedEmail !==
+                            ''
+                        ) {
+                            $query->orWhere(
+                                'email_normalized',
+                                'like',
+                                '%'.
+                                    $normalizedEmail.
+                                    '%'
+                            );
+                        }
+                    }
+                );
+            }
+        );
+    }
+
+    private function applyDateFilters(
+        Builder $query,
+        ?string $dateFrom,
+        ?string $dateTo
+    ): void {
+        if ($dateFrom) {
             $query->whereDate(
                 'submitted_at',
                 '>=',
-                $filters['date_from']
+                $dateFrom
             );
         }
 
-        if (! empty($filters['date_to'])) {
+        if ($dateTo) {
             $query->whereDate(
                 'submitted_at',
                 '<=',
-                $filters['date_to']
+                $dateTo
             );
         }
+    }
 
-        $perPage = min(
-            max($request->integer('per_page', 20), 1),
-            100
-        );
+    private function applySuspiciousReasonFilter(
+        Builder $query,
+        ?string $reason
+    ): void {
+        $reason =
+            trim(
+                (string) $reason
+            );
 
-        return response()->json(
-            $query
-                ->latest()
-                ->paginate($perPage)
+        if ($reason === '') {
+            return;
+        }
+
+        $query->whereJsonContains('suspicious_reasons', $reason
         );
     }
 
     public function show(Receipt $receipt): JsonResponse
     {
         $receipt->load([
-            'participant',
+            'participant' => function ($query) {
+                $query->withCount('receipts');
+            },
+
             'notes.user',
         ]);
 
@@ -245,7 +523,10 @@ class ReceiptController extends Controller
         );
 
         $receipt->load([
-            'participant',
+            'participant' => function ($query) {
+                $query->withCount('receipts');
+            },
+
             'notes.user',
         ]);
 
@@ -328,7 +609,10 @@ class ReceiptController extends Controller
         );
 
         $receipt->load([
-            'participant',
+            'participant' => function ($query) {
+                $query->withCount('receipts');
+            },
+
             'notes.user',
         ]);
 

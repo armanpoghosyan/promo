@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Receipt extends Model
@@ -65,6 +66,13 @@ class Receipt extends Model
     {
         return $this->hasMany(ReceiptNote::class)
             ->latest('created_at');
+    }
+
+    public function latestNote(): HasOne
+    {
+        return $this
+            ->hasOne(ReceiptNote::class)
+            ->latestOfMany();
     }
 
     public function drawWinners(): HasMany

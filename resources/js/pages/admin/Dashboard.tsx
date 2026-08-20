@@ -1,411 +1,839 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+    useCallback,
+    useEffect,
+    useState,
+} from 'react';
+
+import {
+    Link,
+} from 'react-router-dom';
+
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
+import StatusBadge from '../../components/StatusBadge';
 
 import api from '../../services/api';
-import StatusBadge from '../../components/StatusBadge';
-import { formatDateTime } from '../../utils/date';
 
 import type {
+    DashboardActivity,
     DashboardData,
+    DashboardResponse,
 } from '../../types/dashboard';
 
+import {
+    getApiErrorMessage,
+} from '../../utils/apiError';
 
+import {
+    formatDateTime,
+} from '../../utils/date';
 
-export default function Dashboard() {
-    const [dashboard, setDashboard] =
-        useState<DashboardData | null>(null);
+import {
+    formatNumber,
+} from '../../utils/format';
 
-    const [loading, setLoading] =
-        useState(true);
+function ActivityItem({
+                          activity,
+                          resource,
+                      }: {
+    activity: DashboardActivity;
+    resource: 'receipt' | 'winner';
+}) {
+    const resourceUrl =
+        resource === 'receipt'
+            ? `/admin/receipts/${activity.resource_id}`
+            : `/admin/winners/${activity.resource_id}`;
 
-    const [error, setError] =
-        useState<string | null>(null);
-
-    const loadDashboard = async () => {
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response =
-                await api.get<{
-                    data: DashboardData;
-                }>('/admin/dashboard');
-
-            setDashboard(
-                response.data.data
-            );
-        } catch (err) {
-            console.error(err);
-
-            setError(
-                'Unable to load dashboard data.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadDashboard();
-    }, []);
-
-    if (loading) {
-        return (
-            <div className="flex min-h-64 items-center justify-center">
-
-                <div className="text-center">
-
-                    <div className="text-sm font-medium text-gray-700">
-                        Loading dashboard...
-                    </div>
-
-                    <div className="mt-1 text-xs text-gray-400">
-                        Preparing promotion overview
-                    </div>
-
+    const content = (
+        <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+                <div className="text-sm font-medium text-gray-900">
+                    {activity.title}
                 </div>
 
+                {activity.description && (
+                    <div className="mt-1 truncate text-xs text-gray-500">
+                        {activity.description}
+                    </div>
+                )}
+            </div>
+
+            <div className="shrink-0 text-right text-xs text-gray-400">
+                {formatDateTime(
+                    activity.occurred_at
+                )}
+            </div>
+        </div>
+    );
+
+    if (!activity.resource_id) {
+        return (
+            <div className="px-5 py-3.5">
+                {content}
             </div>
         );
     }
 
-    if (error) {
+    return (
+        <Link
+            to={resourceUrl}
+            className="block px-5 py-3.5 transition hover:bg-gray-50"
+        >
+            {content}
+        </Link>
+    );
+}
+
+export default function Dashboard() {
+    const [
+        dashboard,
+        setDashboard,
+    ] = useState<DashboardData | null>(
+        null
+    );
+
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
+    const [
+        refreshing,
+        setRefreshing,
+    ] = useState(false);
+
+    const [
+        error,
+        setError,
+    ] = useState<string | null>(
+        null
+    );
+
+    const loadDashboard =
+        useCallback(
+            async (
+                background = false
+            ) => {
+                if (background) {
+                    setRefreshing(true);
+                } else {
+                    setLoading(true);
+                }
+
+                setError(null);
+
+                try {
+                    const response =
+                        await api.get<DashboardResponse>(
+                            '/admin/dashboard'
+                        );
+
+                    setDashboard(
+                        response.data.data
+                    );
+                } catch (
+                    error: unknown
+                    ) {
+                    setError(
+                        getApiErrorMessage(
+                            error,
+                            'Unable to load dashboard data.'
+                        )
+                    );
+                } finally {
+                    if (background) {
+                        setRefreshing(false);
+                    } else {
+                        setLoading(false);
+                    }
+                }
+            },
+            []
+        );
+
+    useEffect(() => {
+        loadDashboard();
+    }, [loadDashboard]);
+
+    if (loading) {
+        return (
+            <LoadingState
+                message="Loading dashboard..."
+            />
+        );
+    }
+
+    if (
+        error &&
+        !dashboard
+    ) {
         return (
             <div className="space-y-4">
-
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <Alert variant="error">
                     {error}
-                </div>
+                </Alert>
 
                 <button
                     type="button"
-                    onClick={loadDashboard}
+                    onClick={() =>
+                        loadDashboard()
+                    }
                     className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
                 >
                     Try Again
                 </button>
-
             </div>
         );
     }
 
     if (!dashboard) {
-        return null;
+        return (
+            <EmptyState
+                title="Dashboard data unavailable."
+                description="Unable to display the promotion overview."
+            />
+        );
     }
 
-    const { kpis } = dashboard;
+    const {
+        kpis,
+        current_draw: currentDraw,
+        receipt_activity:
+            receiptActivity,
+        winner_activity:
+            winnerActivity,
+        prizes,
+    } = dashboard;
 
-    const attentionItems = [
-        {
-            label: 'Pending Review',
-            value: kpis.pending_receipts,
-            description:
-                'Receipts waiting for verification',
-            to: '/admin/receipts?filter=needs_review',
-            action: 'Review receipts',
-            important:
-                kpis.pending_receipts > 0,
-        },
+    /*
+     * Receipts:
+     * submitted / approved / rejected
+     */
+    const rejectedReceipts =
+        Math.max(
+            0,
+            kpis.total_receipts -
+            kpis.approved_receipts -
+            kpis.pending_receipts
+        );
 
-        {
-            label: 'Awaiting Winner Action',
-            value: kpis.awaiting_winners,
-            description:
-                'Selected or contacting winners',
-            to: '/admin/winners?status=selected&page=1',
-            action: 'View winners',
-            important:
-                kpis.awaiting_winners > 0,
-        },
+    const handledReceipts =
+        kpis.approved_receipts +
+        rejectedReceipts;
 
-        {
-            label: 'Active Entries',
-            value: kpis.active_entries,
-            description:
-                'Entries in the current draw',
-            to: '/admin/draws',
-            action: 'View draws',
-            important: false,
-        },
+    /*
+     * Winners:
+     * selected / contacting /
+     * confirmed / cancelled
+     */
+    const resolvedWinners =
+        kpis.confirmed_winners +
+        kpis.cancelled_winners;
 
-        {
-            label: 'Confirmed Winners',
-            value: kpis.confirmed_winners,
-            description:
-                'Successfully confirmed prizes',
-            to: '/admin/winners?status=confirmed&page=1',
-            action: 'View winners',
-            important: false,
-        },
-    ];
+    const hasReceiptAttention =
+        kpis.pending_receipts > 0;
+
+    const hasWinnerAttention =
+        kpis.awaiting_winners > 0;
 
     return (
         <div className="space-y-8">
+            <PageHeader
+                title="Dashboard"
+                description="Daily promotion operations."
+                actions={
+                    <button
+                        type="button"
+                        disabled={
+                            refreshing
+                        }
+                        onClick={() =>
+                            loadDashboard(
+                                true
+                            )
+                        }
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {refreshing
+                            ? 'Refreshing...'
+                            : 'Refresh'}
+                    </button>
+                }
+            />
 
-            {/* Page heading */}
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Dashboard
-                    </h2>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Promotion overview and items requiring attention.
-                    </p>
-                </div>
-
-                <button
-                    type="button"
-                    onClick={loadDashboard}
-                    className="self-start rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            {error && (
+                <Alert
+                    variant="error"
+                    onDismiss={() =>
+                        setError(null)
+                    }
                 >
-                    Refresh
-                </button>
+                    {error}
+                </Alert>
+            )}
 
-            </div>
+            {/* Daily workflows */}
 
-            {/* Attention / KPI cards */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                {/* Participation workflow */}
 
-            <section>
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 bg-gray-50/70 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Participation / Next Draw
+                        </h2>
 
-                <div className="mb-3 flex items-center justify-between">
-
-                    <div>
-                        <h3 className="font-semibold text-gray-900">
-                            Overview
-                        </h3>
-
-                        <p className="mt-0.5 text-xs text-gray-500">
-                            Current promotion status
+                        <p className="mt-1 text-sm text-gray-500">
+                            Review incoming
+                            receipts and prepare
+                            participation for the
+                            next draw.
                         </p>
                     </div>
 
-                </div>
+                    {/* Receipt status */}
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-                    {attentionItems.map(
-                        (item) => (
-
-                            <div
-                                key={item.label}
-                                className={[
-                                    'rounded-xl border bg-white p-5 shadow-sm',
-                                    item.important
-                                        ? 'border-amber-200'
-                                        : 'border-gray-200',
-                                ].join(' ')}
-                            >
-
-                                <div className="flex items-start justify-between gap-3">
-
-                                    <div className="text-sm font-medium text-gray-600">
-                                        {item.label}
-                                    </div>
-
-                                    {item.important && (
-                                        <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
-                                            Needs attention
-                                        </span>
-                                    )}
-
+                    <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <div className="text-sm font-medium text-gray-500">
+                                    Receipts
                                 </div>
 
-                                <div className="mt-3 text-3xl font-bold tracking-tight text-gray-900">
-                                    {item.value}
+                                <div className="mt-2 flex items-baseline gap-2">
+                                    <span className="text-3xl font-bold tracking-tight text-gray-900">
+                                        {formatNumber(
+                                            kpis.total_receipts
+                                        )}
+                                    </span>
+
+                                    <span className="text-sm text-gray-500">
+                                        total
+                                    </span>
                                 </div>
-
-                                <div className="mt-1 text-xs text-gray-500">
-                                    {item.description}
-                                </div>
-
-                                <Link
-                                    to={item.to}
-                                    className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800"
-                                >
-                                    {item.action} →
-                                </Link>
-
                             </div>
 
-                        )
-                    )}
+                            {hasReceiptAttention && (
+                                <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
+                                    <div className="text-xl font-bold text-amber-700">
+                                        {formatNumber(
+                                            kpis.pending_receipts
+                                        )}
+                                    </div>
 
-                </div>
-
-            </section>
-
-            {/* Current draw + prizes */}
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-
-                {/* Current Draw */}
-
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm xl:col-span-3">
-
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-
-                        <div>
-                            <h3 className="font-semibold text-gray-900">
-                                Current / Next Draw
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                The draw requiring the organizer's attention.
-                            </p>
+                                    <div className="text-xs font-medium text-amber-700">
+                                        need review
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                    </div>
-
-                    {dashboard.current_draw ? (
-
-                        <div className="p-5">
-
-                            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-
-                                <div>
-
-                                    <div className="flex items-center gap-3">
-
-                                        <div className="text-2xl font-bold text-gray-900">
-                                            Week{' '}
-                                            {
-                                                dashboard.current_draw
-                                                    .week_number
-                                            }
-                                        </div>
-
-                                        <StatusBadge
-                                            status={
-                                                dashboard.current_draw
-                                                    .status
-                                            }
-                                        />
-
-                                    </div>
-
-                                    <div className="mt-2 text-sm text-gray-500">
-                                        {dashboard.current_draw.draw_date
-                                            ? formatDateTime(
-                                                dashboard.current_draw
-                                                    .draw_date
-                                            )
-                                            : 'Draw date not set'}
-                                    </div>
-
+                        <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        handledReceipts
+                                    )}
                                 </div>
 
+                                <div className="text-xs text-gray-500">
+                                    Handled
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        kpis.approved_receipts
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-gray-500">
+                                    Approved
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        rejectedReceipts
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-gray-500">
+                                    Rejected
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-5">
+                            {hasReceiptAttention ? (
                                 <Link
-                                    to={`/admin/draws/${dashboard.current_draw.id}`}
+                                    to="/admin/receipts?filter=needs_review"
                                     className="inline-flex rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
                                 >
-                                    Manage Draw
+                                    Review{' '}
+                                    {formatNumber(
+                                        kpis.pending_receipts
+                                    )}{' '}
+                                    Receipts
                                 </Link>
+                            ) : (
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-sm font-medium text-emerald-700">
+                                        All receipts
+                                        handled
+                                    </span>
 
-                            </div>
-
-                            <div className="mt-6 grid grid-cols-2 gap-4">
-
-                                <div className="rounded-lg bg-gray-50 p-4">
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Entries
-                                    </div>
-
-                                    <div className="mt-2 text-2xl font-bold text-gray-900">
-                                        {
-                                            dashboard.current_draw
-                                                .entries
-                                        }
-                                    </div>
-
+                                    <Link
+                                        to="/admin/receipts"
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        View receipts →
+                                    </Link>
                                 </div>
-
-                                <div className="rounded-lg bg-gray-50 p-4">
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Prizes
-                                    </div>
-
-                                    <div className="mt-2 text-2xl font-bold text-gray-900">
-                                        {
-                                            dashboard.current_draw
-                                                .prizes
-                                        }
-                                    </div>
-
-                                </div>
-
-                            </div>
-
+                            )}
                         </div>
+                    </div>
 
-                    ) : (
+                    {/* Current / next draw */}
 
-                        <div className="p-8 text-center">
-
-                            <div className="text-sm font-medium text-gray-700">
-                                No current or upcoming draw.
-                            </div>
-
-                            <p className="mt-1 text-sm text-gray-400">
-                                Configure the next weekly draw when ready.
-                            </p>
+                    <div className="border-t border-gray-200">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                                Current / Next
+                                Draw
+                            </h3>
 
                             <Link
                                 to="/admin/draws"
-                                className="mt-4 inline-flex rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800"
                             >
-                                View Draws
+                                All draws
                             </Link>
-
                         </div>
 
-                    )}
+                        {currentDraw ? (
+                            <div className="px-5 py-4">
+                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-gray-900">
+                                                Week{' '}
+                                                {
+                                                    currentDraw.week_number
+                                                }
+                                            </span>
 
-                </section>
+                                            <StatusBadge
+                                                status={
+                                                    currentDraw.status
+                                                }
+                                            />
+                                        </div>
 
-                {/* Prize availability */}
+                                        <div className="text-sm text-gray-500">
+                                            {formatDateTime(
+                                                currentDraw.draw_date,
+                                                'Date not set'
+                                            )}
+                                        </div>
 
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm xl:col-span-2">
+                                        <div className="text-sm text-gray-600">
+                                            <span className="font-semibold text-gray-900">
+                                                {formatNumber(
+                                                    currentDraw.entries
+                                                )}
+                                            </span>{' '}
+                                            entries
+                                        </div>
 
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                                        <div className="text-sm text-gray-600">
+                                            <span className="font-semibold text-gray-900">
+                                                {formatNumber(
+                                                    currentDraw.prizes
+                                                )}
+                                            </span>{' '}
+                                            prize
+                                            slots
+                                        </div>
+                                    </div>
 
-                        <div>
-                            <h3 className="font-semibold text-gray-900">
-                                Prize Availability
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                Remaining promotion inventory
-                            </p>
-                        </div>
-
-                        <Link
-                            to="/admin/prizes"
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                        >
-                            Details
-                        </Link>
-
+                                    <Link
+                                        to={`/admin/draws/${currentDraw.id}`}
+                                        className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        Manage Draw →
+                                    </Link>
+                                </div>
+                            </div>
+                        ) : (
+                            <EmptyState
+                                title="No upcoming draw."
+                                description="There is currently no active or scheduled draw."
+                                minHeightClassName="min-h-32"
+                                action={
+                                    <Link
+                                        to="/admin/draws"
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        View Draws
+                                    </Link>
+                                }
+                            />
+                        )}
                     </div>
 
-                    <div className="divide-y divide-gray-100">
+                    {/* Receipt activity */}
 
-                        {dashboard.prizes.map(
-                            (prize) => {
+                    <div className="border-t border-gray-200">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900">
+                                    Receipt
+                                    Activity
+                                </h3>
 
+                                <p className="mt-0.5 text-xs text-gray-500">
+                                    Latest
+                                    participation
+                                    actions
+                                </p>
+                            </div>
+
+                            <Link
+                                to="/admin/receipts"
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                            >
+                                View receipts
+                            </Link>
+                        </div>
+
+                        {receiptActivity.length ===
+                        0 ? (
+                            <EmptyState
+                                title="No receipt activity yet."
+                                minHeightClassName="min-h-36"
+                            />
+                        ) : (
+                            <div className="divide-y divide-gray-100">
+                                {receiptActivity.map(
+                                    (
+                                        activity
+                                    ) => (
+                                        <ActivityItem
+                                            key={
+                                                activity.id
+                                            }
+                                            activity={
+                                                activity
+                                            }
+                                            resource="receipt"
+                                        />
+                                    )
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+                {/* Winner workflow */}
+
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 bg-gray-50/70 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Winners / Follow-up
+                        </h2>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                            Contact selected
+                            winners, confirm
+                            prizes, and resolve
+                            cancellations.
+                        </p>
+                    </div>
+
+                    {/* Winner status */}
+
+                    <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <div className="text-sm font-medium text-gray-500">
+                                    Confirmed
+                                    Winners
+                                </div>
+
+                                <div className="mt-2 flex items-baseline gap-2">
+                                    <span className="text-3xl font-bold tracking-tight text-gray-900">
+                                        {formatNumber(
+                                            kpis.confirmed_winners
+                                        )}
+                                    </span>
+
+                                    <span className="text-sm text-gray-500">
+                                        confirmed
+                                    </span>
+                                </div>
+                            </div>
+
+                            {hasWinnerAttention && (
+                                <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
+                                    <div className="text-xl font-bold text-amber-700">
+                                        {formatNumber(
+                                            kpis.awaiting_winners
+                                        )}
+                                    </div>
+
+                                    <div className="text-xs font-medium text-amber-700">
+                                        need
+                                        follow-up
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        kpis.total_winners
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-gray-500">
+                                    Selections
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        resolvedWinners
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-gray-500">
+                                    Resolved
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                    {formatNumber(
+                                        kpis.cancelled_winners
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-gray-500">
+                                    Cancelled
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-5">
+                            {hasWinnerAttention ? (
+                                <Link
+                                    to="/admin/winners"
+                                    className="inline-flex rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                                >
+                                    Manage{' '}
+                                    {formatNumber(
+                                        kpis.awaiting_winners
+                                    )}{' '}
+                                    Winners
+                                </Link>
+                            ) : (
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-sm font-medium text-emerald-700">
+                                        No winner
+                                        follow-up
+                                        pending
+                                    </span>
+
+                                    <Link
+                                        to="/admin/winners"
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        View winners →
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Winner status summary */}
+
+                    <div className="border-t border-gray-200">
+                        <div className="border-b border-gray-100 px-5 py-3">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                                Follow-up Status
+                            </h3>
+                        </div>
+
+                        <div className="px-5 py-4">
+                            <div className="flex flex-wrap gap-x-8 gap-y-4">
+                                <div>
+                                    <div className="text-xl font-bold text-gray-900">
+                                        {formatNumber(
+                                            kpis.confirmed_winners
+                                        )}
+                                    </div>
+
+                                    <div className="text-xs text-gray-500">
+                                        Confirmed
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="text-xl font-bold text-gray-900">
+                                        {formatNumber(
+                                            kpis.cancelled_winners
+                                        )}
+                                    </div>
+
+                                    <div className="text-xs text-gray-500">
+                                        Cancelled
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div
+                                        className={[
+                                            'text-xl font-bold',
+                                            hasWinnerAttention
+                                                ? 'text-amber-700'
+                                                : 'text-gray-900',
+                                        ].join(
+                                            ' '
+                                        )}
+                                    >
+                                        {formatNumber(
+                                            kpis.awaiting_winners
+                                        )}
+                                    </div>
+
+                                    <div className="text-xs text-gray-500">
+                                        Waiting
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="text-xl font-bold text-gray-900">
+                                        {formatNumber(
+                                            resolvedWinners
+                                        )}
+                                        /
+                                        {formatNumber(
+                                            kpis.total_winners
+                                        )}
+                                    </div>
+
+                                    <div className="text-xs text-gray-500">
+                                        Resolved
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Winner activity */}
+
+                    <div className="border-t border-gray-200">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900">
+                                    Winner
+                                    Activity
+                                </h3>
+
+                                <p className="mt-0.5 text-xs text-gray-500">
+                                    Latest
+                                    follow-up
+                                    actions
+                                </p>
+                            </div>
+
+                            <Link
+                                to="/admin/winners"
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                            >
+                                View winners
+                            </Link>
+                        </div>
+
+                        {winnerActivity.length ===
+                        0 ? (
+                            <EmptyState
+                                title="No winner activity yet."
+                                minHeightClassName="min-h-36"
+                            />
+                        ) : (
+                            <div className="divide-y divide-gray-100">
+                                {winnerActivity.map(
+                                    (
+                                        activity
+                                    ) => (
+                                        <ActivityItem
+                                            key={
+                                                activity.id
+                                            }
+                                            activity={
+                                                activity
+                                            }
+                                            resource="winner"
+                                        />
+                                    )
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </section>
+            </div>
+
+            {/* Shared campaign context */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <div>
+                        <h2 className="font-semibold text-gray-900">
+                            Prize Allocation
+                        </h2>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                            Campaign prize
+                            allocation across
+                            weekly draws.
+                        </p>
+                    </div>
+
+                    <Link
+                        to="/admin/prizes"
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                    >
+                        Details
+                    </Link>
+                </div>
+
+                {prizes.length === 0 ? (
+                    <EmptyState
+                        title="No prizes configured."
+                        minHeightClassName="min-h-36"
+                    />
+                ) : (
+                    <div className="grid grid-cols-1 divide-y divide-gray-100 md:grid-cols-3 md:divide-x md:divide-y-0">
+                        {prizes.map(
+                            (
+                                prize
+                            ) => {
                                 const percentage =
                                     prize.total > 0
                                         ? Math.min(
                                             100,
                                             Math.round(
-                                                (
-                                                    prize.allocated /
-                                                    prize.total
-                                                ) *
+                                                (prize.allocated /
+                                                    prize.total) *
                                                 100
                                             )
                                         )
@@ -413,325 +841,59 @@ export default function Dashboard() {
 
                                 return (
                                     <div
-                                        key={prize.id}
+                                        key={
+                                            prize.id
+                                        }
                                         className="p-5"
                                     >
-
                                         <div className="flex items-start justify-between gap-4">
-
                                             <div>
-
                                                 <div className="font-medium text-gray-900">
-                                                    {prize.name}
+                                                    {
+                                                        prize.name
+                                                    }
                                                 </div>
 
                                                 <div className="mt-1 text-xs text-gray-500">
-                                                    {prize.allocated} of{' '}
-                                                    {prize.total} allocated
+                                                    {formatNumber(
+                                                        prize.allocated
+                                                    )}{' '}
+                                                    /{' '}
+                                                    {formatNumber(
+                                                        prize.total
+                                                    )}{' '}
+                                                    allocated
                                                 </div>
-
                                             </div>
 
                                             <div className="text-right">
-
-                                                <div className="text-lg font-semibold text-gray-900">
-                                                    {prize.remaining}
+                                                <div className="font-semibold text-gray-900">
+                                                    {formatNumber(
+                                                        prize.remaining
+                                                    )}
                                                 </div>
 
                                                 <div className="text-xs text-gray-500">
-                                                    remaining
+                                                    available
                                                 </div>
-
                                             </div>
-
                                         </div>
 
-                                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
-
+                                        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-gray-100">
                                             <div
                                                 className="h-full rounded-full bg-gray-900"
                                                 style={{
                                                     width: `${percentage}%`,
                                                 }}
                                             />
-
                                         </div>
-
                                     </div>
                                 );
                             }
                         )}
-
-                        {dashboard.prizes.length === 0 && (
-                            <div className="p-5 text-sm text-gray-400">
-                                No prizes configured.
-                            </div>
-                        )}
-
                     </div>
-
-                </section>
-
-            </div>
-
-            {/* Promotion totals */}
-
-            <section>
-
-                <div className="mb-3">
-
-                    <h3 className="font-semibold text-gray-900">
-                        Promotion Totals
-                    </h3>
-
-                    <p className="mt-0.5 text-xs text-gray-500">
-                        High-level promotion statistics
-                    </p>
-
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Total Receipts
-                        </div>
-
-                        <div className="mt-2 text-2xl font-bold text-gray-900">
-                            {kpis.total_receipts}
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Approved
-                        </div>
-
-                        <div className="mt-2 text-2xl font-bold text-gray-900">
-                            {kpis.approved_receipts}
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Total Winners
-                        </div>
-
-                        <div className="mt-2 text-2xl font-bold text-gray-900">
-                            {kpis.total_winners}
-                        </div>
-
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-
-                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Cancelled Winners
-                        </div>
-
-                        <div className="mt-2 text-2xl font-bold text-gray-900">
-                            {kpis.cancelled_winners}
-                        </div>
-
-                    </div>
-
-                </div>
-
+                )}
             </section>
-
-            {/* Recent activity */}
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-
-                {/* Receipts */}
-
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-
-                        <div>
-
-                            <h3 className="font-semibold text-gray-900">
-                                Recent Receipts
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                Latest participation submissions
-                            </p>
-
-                        </div>
-
-                        <Link
-                            to="/admin/receipts"
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                        >
-                            View all
-                        </Link>
-
-                    </div>
-
-                    {dashboard.recent_receipts.length === 0 ? (
-
-                        <div className="p-6 text-center text-sm text-gray-400">
-                            No receipts found.
-                        </div>
-
-                    ) : (
-
-                        <div className="divide-y divide-gray-100">
-
-                            {dashboard.recent_receipts.map(
-                                (receipt) => (
-
-                                    <Link
-                                        key={receipt.id}
-                                        to={`/admin/receipts/${receipt.id}`}
-                                        className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50"
-                                    >
-
-                                        <div className="min-w-0">
-
-                                            <div className="truncate text-sm font-medium text-gray-900">
-                                                Receipt #
-                                                {receipt.receipt_number}
-                                            </div>
-
-                                            <div className="mt-1 text-xs text-gray-500">
-                                                {formatDateTime(
-                                                    receipt.created_at
-                                                )}
-                                            </div>
-
-                                        </div>
-
-                                        <StatusBadge
-                                            status={
-                                                receipt.status
-                                            }
-                                        />
-
-                                    </Link>
-
-                                )
-                            )}
-
-                        </div>
-
-                    )}
-
-                </section>
-
-                {/* Winners */}
-
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-
-                        <div>
-
-                            <h3 className="font-semibold text-gray-900">
-                                Recent Winners
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                Latest winner activity
-                            </p>
-
-                        </div>
-
-                        <Link
-                            to="/admin/winners"
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                        >
-                            View all
-                        </Link>
-
-                    </div>
-
-                    {dashboard.recent_winners.length === 0 ? (
-
-                        <div className="p-6 text-center text-sm text-gray-400">
-                            No winners yet.
-                        </div>
-
-                    ) : (
-
-                        <div className="divide-y divide-gray-100">
-
-                            {dashboard.recent_winners.map(
-                                (winner) => (
-
-                                    <Link
-                                        key={winner.id}
-                                        to={`/admin/winners/${winner.id}`}
-                                        className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50"
-                                    >
-
-                                        <div className="min-w-0">
-
-                                            <div className="truncate text-sm font-medium text-gray-900">
-                                                {winner.prize ?? 'Prize'}
-                                            </div>
-
-                                            <div className="mt-1 text-xs text-gray-500">
-                                                Week{' '}
-                                                {winner.week_number ?? '-'}
-                                                {' · '}
-                                                Entry #
-                                                {winner.entry_number}
-                                            </div>
-
-                                        </div>
-
-                                        <StatusBadge
-                                            status={
-                                                winner.status
-                                            }
-                                        />
-
-                                    </Link>
-
-                                )
-                            )}
-
-                        </div>
-
-                    )}
-
-                </section>
-
-            </div>
-
-            {/* Reports shortcut */}
-
-            <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-
-                <div>
-
-                    <div className="font-semibold text-gray-900">
-                        Need detailed statistics?
-                    </div>
-
-                    <div className="mt-1 text-sm text-gray-500">
-                        Open Reports & Exports for draw results, prize allocation and downloadable reports.
-                    </div>
-
-                </div>
-
-                <Link
-                    to="/admin/reports"
-                    className="inline-flex shrink-0 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                    Reports & Exports
-                </Link>
-
-            </div>
-
         </div>
     );
 }

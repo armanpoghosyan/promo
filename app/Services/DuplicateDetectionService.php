@@ -17,7 +17,13 @@ class DuplicateDetectionService
     ): array {
         $reasons = [];
 
-        if (Receipt::where('receipt_number', trim($receiptNumber))->exists()) {
+        $receiptNumber = trim($receiptNumber);
+
+        if ($receiptNumber !== '' && ! preg_match('/^\d+$/', $receiptNumber)) {
+            $reasons[] = 'receipt_number_non_numeric';
+        }
+
+        if (Receipt::query()->where('receipt_number', $receiptNumber)->exists()) {
             $reasons[] = 'duplicate_receipt_number';
         }
 
@@ -41,7 +47,7 @@ class DuplicateDetectionService
 
         $imageHash = hash_file('sha256', $image->getRealPath());
 
-        if (Receipt::where('image_hash', $imageHash)->exists()) {
+        if (Receipt::query()->where('image_hash', $imageHash)->exists()) {
             $reasons[] = 'duplicate_receipt_image';
         }
 

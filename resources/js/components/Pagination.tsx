@@ -14,11 +14,75 @@ type PaginationProps = {
         showing?: string;
         to?: string;
         of?: string;
-        page?: string;
         previous?: string;
         next?: string;
     };
 };
+
+type PageItem =
+    | number
+    | 'ellipsis-left'
+    | 'ellipsis-right';
+
+function buildPages(
+    currentPage: number,
+    lastPage: number
+): PageItem[] {
+    if (lastPage <= 7) {
+        return Array.from(
+            {
+                length:
+                lastPage,
+            },
+            (_, index) =>
+                index + 1
+        );
+    }
+
+    const pages: PageItem[] =
+        [1];
+
+    const start =
+        Math.max(
+            2,
+            currentPage - 2
+        );
+
+    const end =
+        Math.min(
+            lastPage - 1,
+            currentPage + 2
+        );
+
+    if (start > 2) {
+        pages.push(
+            'ellipsis-left'
+        );
+    }
+
+    for (
+        let page = start;
+        page <= end;
+        page += 1
+    ) {
+        pages.push(page);
+    }
+
+    if (
+        end <
+        lastPage - 1
+    ) {
+        pages.push(
+            'ellipsis-right'
+        );
+    }
+
+    pages.push(
+        lastPage
+    );
+
+    return pages;
+}
 
 export default function Pagination({
                                        currentPage,
@@ -43,38 +107,43 @@ export default function Pagination({
 
     const to =
         Math.min(
-            currentPage * perPage,
+            currentPage *
+            perPage,
             total
         );
 
-    const previousDisabled =
-        currentPage <= 1 ||
-        loading;
-
-    const nextDisabled =
-        currentPage >= lastPage ||
-        loading;
+    const pages =
+        buildPages(
+            currentPage,
+            lastPage
+        );
 
     return (
-        <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-t border-gray-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="text-sm text-gray-500">
-                {labels?.showing ?? 'Showing'}{' '}
+                {labels?.showing ??
+                    'Showing'}{' '}
                 {from}{' '}
-                {labels?.to ?? 'to'}{' '}
+                {labels?.to ??
+                    'to'}{' '}
                 {to}{' '}
-                {labels?.of ?? 'of'}{' '}
+                {labels?.of ??
+                    'of'}{' '}
                 {total}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
                 <button
                     type="button"
                     disabled={
-                        previousDisabled
+                        currentPage <=
+                        1 ||
+                        loading
                     }
                     onClick={() =>
                         onPageChange(
-                            currentPage - 1
+                            currentPage -
+                            1
                         )
                     }
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -83,21 +152,72 @@ export default function Pagination({
                         'Previous'}
                 </button>
 
-                <span className="px-2 text-sm text-gray-600">
-                    {labels?.page ??
-                        'Page'}{' '}
-                    {currentPage} /{' '}
-                    {lastPage}
-                </span>
+                {pages.map(
+                    (item) => {
+                        if (
+                            typeof item !==
+                            'number'
+                        ) {
+                            return (
+                                <span
+                                    key={
+                                        item
+                                    }
+                                    className="px-2 text-sm text-gray-400"
+                                >
+                                    …
+                                </span>
+                            );
+                        }
+
+                        const active =
+                            item ===
+                            currentPage;
+
+                        return (
+                            <button
+                                key={
+                                    item
+                                }
+                                type="button"
+                                disabled={
+                                    loading
+                                }
+                                onClick={() =>
+                                    onPageChange(
+                                        item
+                                    )
+                                }
+                                aria-current={
+                                    active
+                                        ? 'page'
+                                        : undefined
+                                }
+                                className={
+                                    active
+                                        ? 'min-w-9 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white'
+                                        : 'min-w-9 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40'
+                                }
+                            >
+                                {
+                                    item
+                                }
+                            </button>
+                        );
+                    }
+                )}
 
                 <button
                     type="button"
                     disabled={
-                        nextDisabled
+                        currentPage >=
+                        lastPage ||
+                        loading
                     }
                     onClick={() =>
                         onPageChange(
-                            currentPage + 1
+                            currentPage +
+                            1
                         )
                     }
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
