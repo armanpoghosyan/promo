@@ -1,5 +1,4 @@
 import {
-    Fragment,
     useCallback,
     useEffect,
     useState,
@@ -16,7 +15,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
-import StatusBadge from '../../components/StatusBadge';
+import Tooltip from '../../components/Tooltip';
 
 import api from '../../services/api';
 
@@ -34,8 +33,11 @@ import {
 
 import {
     formatDate,
-    formatDateTime,
 } from '../../utils/date';
+
+import {
+    formatEnumLabel,
+} from '../../utils/format';
 
 import {
     positiveIntegerParam,
@@ -46,23 +48,6 @@ const SEARCH_MIN_LENGTH =
 
 const SEARCH_DEBOUNCE_MS =
     350;
-
-function formatSuspiciousReason(
-    reason: string
-): string {
-    return reason
-        .replaceAll(
-            '_',
-            ' '
-        )
-        .replace(
-            /\b\w/g,
-            (
-                character
-            ) =>
-                character.toUpperCase()
-        );
-}
 
 export default function Participants() {
     const location =
@@ -101,13 +86,6 @@ export default function Participants() {
     ] = useState<
         Participant[]
     >([]);
-
-    const [
-        expandedParticipantId,
-        setExpandedParticipantId,
-    ] = useState<
-        number | null
-    >(null);
 
     const [
         loading,
@@ -304,10 +282,6 @@ export default function Participants() {
         );
 
     useEffect(() => {
-        setExpandedParticipantId(
-            null
-        );
-
         loadParticipants();
     }, [
         loadParticipants,
@@ -315,20 +289,6 @@ export default function Participants() {
 
     const currentListUrl =
         `${location.pathname}${location.search}`;
-
-    const toggleParticipant = (
-        participantId: number
-    ) => {
-        setExpandedParticipantId(
-            (
-                current
-            ) =>
-                current ===
-                participantId
-                    ? null
-                    : participantId
-        );
-    };
 
     const openParticipant = (
         participantId: number
@@ -457,8 +417,6 @@ export default function Participants() {
                             <table className="w-full min-w-[900px] text-left text-sm">
                                 <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="w-8 px-3 py-3" />
-
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Participant
                                     </th>
@@ -467,7 +425,7 @@ export default function Participants() {
                                         Contact
                                     </th>
 
-                                    <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Receipts
                                     </th>
 
@@ -484,288 +442,144 @@ export default function Participants() {
                                     (
                                         participant
                                     ) => {
-                                        const expanded =
-                                            expandedParticipantId ===
-                                            participant.id;
-
                                         const receipts =
                                             participant.receipts ??
                                             [];
 
+                                        const receiptCount =
+                                            participant.receipts_count ??
+                                            receipts.length;
+
                                         return (
-                                            <Fragment
+                                            <tr
                                                 key={
                                                     participant.id
                                                 }
+                                                className="transition hover:bg-gray-50"
                                             >
-                                                {/* Participant row */}
+                                                {/* Participant */}
 
-                                                <tr
-                                                    onClick={() =>
-                                                        toggleParticipant(
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="font-semibold text-gray-900">
+                                                        {
+                                                            participant.first_name
+                                                        }{' '}
+                                                        {
+                                                            participant.last_name
+                                                        }
+                                                    </div>
+
+                                                    <div className="mt-1 text-xs text-gray-400">
+                                                        Participant
+                                                        ID
+                                                        #{' '}
+                                                        {
                                                             participant.id
-                                                        )
-                                                    }
-                                                    className={[
-                                                        'cursor-pointer transition hover:bg-gray-50',
-                                                        expanded
-                                                            ? 'bg-gray-50'
-                                                            : '',
-                                                    ].join(
-                                                        ' '
-                                                    )}
-                                                >
-                                                    {/* Expand */}
+                                                        }
+                                                    </div>
+                                                </td>
 
-                                                    <td className="px-3 py-4 align-top">
-                                                            <span
-                                                                className={[
-                                                                    'inline-block text-xs text-gray-400 transition-transform',
-                                                                    expanded
-                                                                        ? 'rotate-90'
-                                                                        : '',
-                                                                ].join(
-                                                                    ' '
-                                                                )}
-                                                            >
-                                                                ▶
-                                                            </span>
-                                                    </td>
+                                                {/* Contact */}
 
-                                                    {/* Participant */}
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="text-sm text-gray-700">
+                                                        {
+                                                            participant.phone
+                                                        }
+                                                    </div>
 
-                                                    <td className="px-5 py-4 align-top">
-                                                        <div className="font-semibold text-gray-900">
-                                                            {
-                                                                participant.first_name
-                                                            }{' '}
-                                                            {
-                                                                participant.last_name
-                                                            }
-                                                        </div>
+                                                    <div className="mt-1 max-w-[280px] truncate text-xs text-gray-500">
+                                                        {
+                                                            participant.email
+                                                        }
+                                                    </div>
+                                                </td>
 
-                                                        <div className="mt-1 text-xs text-gray-400">
-                                                            Participant
-                                                            ID
-                                                            #{' '}
-                                                            {
-                                                                participant.id
-                                                            }
-                                                        </div>
-                                                    </td>
+                                                {/* Receipts */}
 
-                                                    {/* Contact */}
-
-                                                    <td className="px-5 py-4 align-top">
-                                                        <div className="text-sm text-gray-700">
-                                                            {
-                                                                participant.phone
-                                                            }
-                                                        </div>
-
-                                                        <div className="mt-1 max-w-[280px] truncate text-xs text-gray-500">
-                                                            {
-                                                                participant.email
-                                                            }
-                                                        </div>
-                                                    </td>
-
-                                                    {/* Receipt count */}
-
-                                                    <td className="px-5 py-4 text-center align-top">
-                                                            <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                                                {
-                                                                    participant.receipts_count ??
-                                                                    receipts.length
-                                                                }
-                                                            </span>
-                                                    </td>
-
-                                                    {/* Joined */}
-
-                                                    <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
-                                                        {formatDate(
-                                                            participant.created_at
-                                                        )}
-                                                    </td>
-
-                                                    {/* View participant */}
-
-                                                    <td className="px-5 py-4 text-right align-top">
-                                                        <button
-                                                            type="button"
-                                                            onClick={(
-                                                                event
-                                                            ) => {
-                                                                event.stopPropagation();
-
-                                                                openParticipant(
-                                                                    participant.id
-                                                                );
-                                                            }}
-                                                            className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
-                                                        >
-                                                            View →
-                                                        </button>
-                                                    </td>
-                                                </tr>
-
-                                                {/* Expanded receipts */}
-
-                                                {expanded && (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={
-                                                                6
-                                                            }
-                                                            className="bg-gray-50/70 px-6 py-4"
-                                                        >
-                                                            <div className="ml-5 overflow-hidden rounded-xl border border-gray-200 bg-white">
-
-                                                                {/* Receipt table */}
-
-                                                                {receipts.length ===
-                                                                0 ? (
-                                                                    <div className="px-4 py-5 text-sm text-gray-400">
-                                                                        No
-                                                                        receipts
-                                                                        submitted.
+                                                <td className="px-5 py-4 align-top">
+                                                    {receipts.length >
+                                                    0 ? (
+                                                        <Tooltip
+                                                            content={
+                                                                <div>
+                                                                    <div className="mb-2 font-semibold">
+                                                                        Receipts
                                                                     </div>
-                                                                ) : (
-                                                                    <div className="overflow-x-auto">
-                                                                        <table className="w-full min-w-[760px] text-left text-sm">
-                                                                            <thead className="bg-gray-50">
-                                                                            <tr>
-                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                                    Receipt
-                                                                                </th>
 
-                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                                    Status
-                                                                                </th>
-
-                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                                    Suspicious
-                                                                                </th>
-
-                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                                    Submitted
-                                                                                </th>
-                                                                            </tr>
-                                                                            </thead>
-
-                                                                            <tbody className="divide-y divide-gray-100">
-                                                                            {receipts.map(
-                                                                                (
-                                                                                    receipt
-                                                                                ) => {
-                                                                                    const reasons =
-                                                                                        receipt.suspicious_reasons ??
-                                                                                        [];
-
-                                                                                    const firstReason =
-                                                                                        reasons[0];
-
-                                                                                    const extraReasons =
-                                                                                        Math.max(
-                                                                                            reasons.length -
-                                                                                            1,
-                                                                                            0
-                                                                                        );
-
-                                                                                    return (
-                                                                                        <tr
-                                                                                            key={
-                                                                                                receipt.id
+                                                                    <div className="space-y-1.5">
+                                                                        {receipts.map(
+                                                                            (
+                                                                                receipt
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        receipt.id
+                                                                                    }
+                                                                                    className="flex items-center justify-between gap-5"
+                                                                                >
+                                                                                        <span className="max-w-[230px] truncate text-gray-200">
+                                                                                            {
+                                                                                                receipt.receipt_number
                                                                                             }
-                                                                                            className="hover:bg-gray-50"
-                                                                                        >
-                                                                                            {/* Receipt */}
+                                                                                        </span>
 
-                                                                                            <td className="px-4 py-3 align-top">
-                                                                                                <div className="font-medium text-gray-900">
-                                                                                                    {
-                                                                                                        receipt.receipt_number
-                                                                                                    }
-                                                                                                </div>
-
-                                                                                                <div className="mt-1 text-xs text-gray-400">
-                                                                                                    Receipt
-                                                                                                    ID
-                                                                                                    #{' '}
-                                                                                                    {
-                                                                                                        receipt.id
-                                                                                                    }
-                                                                                                </div>
-                                                                                            </td>
-
-                                                                                            {/* Status */}
-
-                                                                                            <td className="px-4 py-3 align-top">
-                                                                                                <StatusBadge
-                                                                                                    status={
-                                                                                                        receipt.status
-                                                                                                    }
-                                                                                                />
-                                                                                            </td>
-
-                                                                                            {/* Suspicious */}
-
-                                                                                            <td className="px-4 py-3 align-top">
-                                                                                                {receipt.is_suspicious ? (
-                                                                                                    firstReason ? (
-                                                                                                        <div>
-                                                                                                            <div className="max-w-[300px] text-xs font-medium text-amber-800">
-                                                                                                                {formatSuspiciousReason(
-                                                                                                                    firstReason
-                                                                                                                )}
-                                                                                                            </div>
-
-                                                                                                            {extraReasons >
-                                                                                                                0 && (
-                                                                                                                    <div className="mt-1 text-[11px] font-medium text-amber-600">
-                                                                                                                        +
-                                                                                                                        {
-                                                                                                                            extraReasons
-                                                                                                                        }{' '}
-                                                                                                                        more
-                                                                                                                    </div>
-                                                                                                                )}
-                                                                                                        </div>
-                                                                                                    ) : (
-                                                                                                        <span className="text-xs font-medium text-amber-700">
-                                                                                                                    ⚠
-                                                                                                                    Suspicious
-                                                                                                                </span>
-                                                                                                    )
-                                                                                                ) : (
-                                                                                                    <span className="text-xs text-gray-400">
-                                                                                                                —
-                                                                                                            </span>
-                                                                                                )}
-                                                                                            </td>
-
-                                                                                            {/* Submitted */}
-
-                                                                                            <td className="whitespace-nowrap px-4 py-3 align-top text-sm text-gray-500">
-                                                                                                {formatDateTime(
-                                                                                                    receipt.submitted_at ??
-                                                                                                    receipt.created_at
-                                                                                                )}
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    );
-                                                                                }
-                                                                            )}
-                                                                            </tbody>
-                                                                        </table>
+                                                                                    <span className="shrink-0 font-medium text-white">
+                                                                                            {formatEnumLabel(
+                                                                                                receipt.status
+                                                                                            )}
+                                                                                        </span>
+                                                                                </div>
+                                                                            )
+                                                                        )}
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </Fragment>
+                                                                </div>
+                                                            }
+                                                            maxWidth={
+                                                                400
+                                                            }
+                                                        >
+                                                                <span className="inline-flex cursor-help rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                                    {
+                                                                        receiptCount
+                                                                    }{' '}
+                                                                    total
+                                                                </span>
+                                                        </Tooltip>
+                                                    ) : (
+                                                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                                                                0
+                                                                total
+                                                            </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Joined */}
+
+                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                    {formatDate(
+                                                        participant.created_at
+                                                    )}
+                                                </td>
+
+                                                {/* View Participant */}
+
+                                                <td className="px-5 py-4 text-right align-top">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            openParticipant(
+                                                                participant.id
+                                                            )
+                                                        }
+                                                        className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                                    >
+                                                        View
+                                                        Participant
+                                                        →
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         );
                                     }
                                 )}

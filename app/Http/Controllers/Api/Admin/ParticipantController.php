@@ -161,8 +161,7 @@ class ParticipantController extends Controller
         );
 
         return response()->json([
-            'data' =>
-                $participant,
+            'data' => $participant,
         ]);
     }
 }

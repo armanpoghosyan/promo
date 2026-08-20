@@ -35,6 +35,8 @@ type Props = {
 
     backUrl: string;
 
+    hideParticipant?: boolean;
+
     onClose: () => void;
 
     onChanged: (
@@ -85,6 +87,7 @@ function suspiciousReasonLabel(
 export default function ReceiptQuickReviewModal({
                                                     receiptId,
                                                     backUrl,
+                                                    hideParticipant = false,
                                                     onClose,
                                                     onChanged,
                                                 }: Props) {
@@ -178,16 +181,28 @@ export default function ReceiptQuickReviewModal({
         setReceiptHistory([
             receiptId,
         ]);
-    }, [receiptId]);
+    }, [
+        receiptId,
+    ]);
 
     useEffect(() => {
         const loadReceipt =
             async () => {
-                setLoading(true);
+                setLoading(
+                    true
+                );
 
-                setError(null);
-                setActionError(null);
-                setNoteError(null);
+                setError(
+                    null
+                );
+
+                setActionError(
+                    null
+                );
+
+                setNoteError(
+                    null
+                );
 
                 setShowReject(
                     false
@@ -228,7 +243,9 @@ export default function ReceiptQuickReviewModal({
                         )
                     );
                 } finally {
-                    setLoading(false);
+                    setLoading(
+                        false
+                    );
                 }
             };
 
@@ -733,6 +750,8 @@ export default function ReceiptQuickReviewModal({
                                     {/* Context */}
 
                                     <div className="space-y-5 p-5">
+                                        {/* Receipt */}
+
                                         <section>
                                             <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                                                 Receipt Number
@@ -747,209 +766,210 @@ export default function ReceiptQuickReviewModal({
 
                                         {/* Participant */}
 
-                                        {participant && (
-                                            <section className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                                                <div className="p-4">
-                                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                        Participant
-                                                    </div>
+                                        {!hideParticipant &&
+                                            participant && (
+                                                <section className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                                                    <div className="p-4">
+                                                        <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                            Participant
+                                                        </div>
 
-                                                    <div className="mt-2 font-semibold text-gray-900">
-                                                        {
-                                                            participant.first_name
-                                                        }{' '}
-                                                        {
-                                                            participant.last_name
-                                                        }
-                                                    </div>
-
-                                                    <div className="mt-3 space-y-1 text-sm text-gray-600">
-                                                        <div>
+                                                        <div className="mt-2 font-semibold text-gray-900">
                                                             {
-                                                                participant.phone
+                                                                participant.first_name
+                                                            }{' '}
+                                                            {
+                                                                participant.last_name
                                                             }
                                                         </div>
 
-                                                        <div className="break-all">
-                                                            {
-                                                                participant.email
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Other receipts */}
-
-                                                {otherReceipts.length >
-                                                    0 && (
-                                                        <div className="border-t border-gray-200 bg-white">
-                                                            <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                Other Receipts
+                                                        <div className="mt-3 space-y-1 text-sm text-gray-600">
+                                                            <div>
+                                                                {
+                                                                    participant.phone
+                                                                }
                                                             </div>
 
-                                                            <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
-                                                                {otherReceipts.map(
-                                                                    (
-                                                                        participantReceipt
-                                                                    ) => {
-                                                                        const reasons =
-                                                                            participantReceipt.suspicious_reasons ??
-                                                                            [];
+                                                            <div className="break-all">
+                                                                {
+                                                                    participant.email
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-                                                                        const rejectionReasonTooltip =
-                                                                            participantReceipt.status ===
-                                                                            'rejected' &&
-                                                                            participantReceipt.rejection_reason
-                                                                                ? participantReceipt.rejection_reason
-                                                                                : null;
+                                                    {/* Other Receipts */}
 
-                                                                        return (
-                                                                            <div
-                                                                                key={
-                                                                                    participantReceipt.id
-                                                                                }
-                                                                                className="px-4 py-3"
-                                                                            >
-                                                                                {/* Top row */}
+                                                    {otherReceipts.length >
+                                                        0 && (
+                                                            <div className="border-t border-gray-200 bg-white">
+                                                                <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                    Other Receipts
+                                                                </div>
 
-                                                                                <div className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 truncate text-sm font-medium text-gray-900">
-            {
-                participantReceipt.receipt_number
-            }
-        </span>
+                                                                <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
+                                                                    {otherReceipts.map(
+                                                                        (
+                                                                            participantReceipt
+                                                                        ) => {
+                                                                            const reasons =
+                                                                                participantReceipt.suspicious_reasons ??
+                                                                                [];
 
-                                                                                    {participantReceipt.is_suspicious && (
+                                                                            const rejectionReasonTooltip =
+                                                                                participantReceipt.status ===
+                                                                                'rejected' &&
+                                                                                participantReceipt.rejection_reason
+                                                                                    ? participantReceipt.rejection_reason
+                                                                                    : null;
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={
+                                                                                        participantReceipt.id
+                                                                                    }
+                                                                                    className="px-4 py-3"
+                                                                                >
+                                                                                    {/* Top row */}
+
+                                                                                    <div className="flex min-w-0 items-center gap-2">
+                                                                                    <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                                                                                        {
+                                                                                            participantReceipt.receipt_number
+                                                                                        }
+                                                                                    </span>
+
+                                                                                        {participantReceipt.is_suspicious && (
+                                                                                            <Tooltip
+                                                                                                content={
+                                                                                                    reasons.length >
+                                                                                                    0 ? (
+                                                                                                        <div>
+                                                                                                            <div className="mb-1 font-semibold">
+                                                                                                                Suspicious reasons
+                                                                                                            </div>
+
+                                                                                                            <div className="space-y-1 text-gray-200">
+                                                                                                                {reasons.map(
+                                                                                                                    (
+                                                                                                                        reason
+                                                                                                                    ) => (
+                                                                                                                        <div
+                                                                                                                            key={
+                                                                                                                                reason
+                                                                                                                            }
+                                                                                                                        >
+                                                                                                                            •{' '}
+                                                                                                                            {suspiciousReasonLabel(
+                                                                                                                                reason
+                                                                                                                            )}
+                                                                                                                        </div>
+                                                                                                                    )
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        'This receipt was marked as suspicious.'
+                                                                                                    )
+                                                                                                }
+                                                                                                maxWidth={
+                                                                                                    360
+                                                                                                }
+                                                                                            >
+                                                                                            <span className="shrink-0 cursor-help text-sm text-amber-600">
+                                                                                                ⚠
+                                                                                            </span>
+                                                                                            </Tooltip>
+                                                                                        )}
+
+                                                                                        <span className="shrink-0">
                                                                                         <Tooltip
                                                                                             content={
-                                                                                                reasons.length >
-                                                                                                0 ? (
-                                                                                                    <div>
-                                                                                                        <div className="mb-1 font-semibold">
-                                                                                                            Suspicious reasons
-                                                                                                        </div>
+                                                                                                rejectionReasonTooltip
+                                                                                                    ? (
+                                                                                                        <div>
+                                                                                                            <div className="mb-1 font-semibold">
+                                                                                                                Rejection reason
+                                                                                                            </div>
 
-                                                                                                        <div className="space-y-1 text-gray-200">
-                                                                                                            {reasons.map(
-                                                                                                                (
-                                                                                                                    reason
-                                                                                                                ) => (
-                                                                                                                    <div
-                                                                                                                        key={
-                                                                                                                            reason
-                                                                                                                        }
-                                                                                                                    >
-                                                                                                                        •{' '}
-                                                                                                                        {suspiciousReasonLabel(
-                                                                                                                            reason
-                                                                                                                        )}
-                                                                                                                    </div>
-                                                                                                                )
-                                                                                                            )}
+                                                                                                            <div className="text-gray-200">
+                                                                                                                {
+                                                                                                                    rejectionReasonTooltip
+                                                                                                                }
+                                                                                                            </div>
                                                                                                         </div>
-                                                                                                    </div>
-                                                                                                ) : (
-                                                                                                    'This receipt was marked as suspicious.'
-                                                                                                )
+                                                                                                    )
+                                                                                                    : null
                                                                                             }
                                                                                             maxWidth={
                                                                                                 360
                                                                                             }
                                                                                         >
-                <span className="shrink-0 cursor-help text-sm text-amber-600">
-                    ⚠
-                </span>
+                                                                                            <span
+                                                                                                className={
+                                                                                                    rejectionReasonTooltip
+                                                                                                        ? 'cursor-help'
+                                                                                                        : undefined
+                                                                                                }
+                                                                                            >
+                                                                                                <StatusBadge
+                                                                                                    status={
+                                                                                                        participantReceipt.status
+                                                                                                    }
+                                                                                                />
+                                                                                            </span>
                                                                                         </Tooltip>
-                                                                                    )}
-
-                                                                                    <span className="shrink-0">
-            <Tooltip
-                content={
-                    rejectionReasonTooltip
-                        ? (
-                            <div>
-                                <div className="mb-1 font-semibold">
-                                    Rejection reason
-                                </div>
-
-                                <div className="text-gray-200">
-                                    {
-                                        rejectionReasonTooltip
-                                    }
-                                </div>
-                            </div>
-                        )
-                        : null
-                }
-                maxWidth={
-                    360
-                }
-            >
-                <span
-                    className={
-                        rejectionReasonTooltip
-                            ? 'cursor-help'
-                            : undefined
-                    }
-                >
-                    <StatusBadge
-                        status={
-                            participantReceipt.status
-                        }
-                    />
-                </span>
-            </Tooltip>
-        </span>
-                                                                                </div>
-
-                                                                                {/* Bottom row */}
-
-                                                                                <div className="mt-1 flex items-center justify-between gap-3">
-                                                                                    <div className="min-w-0 truncate text-[11px] text-gray-400">
-                                                                                        Receipt ID
-                                                                                        #{' '}
-                                                                                        {
-                                                                                            participantReceipt.id
-                                                                                        }
-
-                                                                                        {' · '}
-
-                                                                                        {formatDateTime(
-                                                                                            participantReceipt.submitted_at ??
-                                                                                            participantReceipt.created_at
-                                                                                        )}
+                                                                                    </span>
                                                                                     </div>
 
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() =>
-                                                                                            openRelatedReceipt(
-                                                                                                participantReceipt.id
-                                                                                            )
-                                                                                        }
-                                                                                        className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
-                                                                                    >
-                                                                                        Review →
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    }
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                                                    {/* Bottom row */}
 
-                                                <div className="border-t border-gray-200 px-4 py-3">
-                                                    <Link
-                                                        to={`/admin/participants/${participant.id}`}
-                                                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                                                    >
-                                                        View Participant →
-                                                    </Link>
-                                                </div>
-                                            </section>
-                                        )}
+                                                                                    <div className="mt-1 flex items-center justify-between gap-3">
+                                                                                        <div className="min-w-0 truncate text-[11px] text-gray-400">
+                                                                                            Receipt ID
+                                                                                            #{' '}
+                                                                                            {
+                                                                                                participantReceipt.id
+                                                                                            }
+
+                                                                                            {' · '}
+
+                                                                                            {formatDateTime(
+                                                                                                participantReceipt.submitted_at ??
+                                                                                                participantReceipt.created_at
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() =>
+                                                                                                openRelatedReceipt(
+                                                                                                    participantReceipt.id
+                                                                                                )
+                                                                                            }
+                                                                                            className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                                                        >
+                                                                                            Review →
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                    <div className="border-t border-gray-200 px-4 py-3">
+                                                        <Link
+                                                            to={`/admin/participants/${participant.id}`}
+                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                        >
+                                                            View Participant →
+                                                        </Link>
+                                                    </div>
+                                                </section>
+                                            )}
 
                                         {/* Suspicious current receipt */}
 
@@ -1150,7 +1170,7 @@ export default function ReceiptQuickReviewModal({
                                             )}
                                         </section>
 
-                                        {/* Current rejection reason */}
+                                        {/* Rejection reason */}
 
                                         {receipt.rejection_reason && (
                                             <section className="rounded-xl border border-red-200 bg-red-50 p-4">
