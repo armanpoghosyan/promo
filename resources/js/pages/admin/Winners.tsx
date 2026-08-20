@@ -1,20 +1,55 @@
-import { useEffect, useState } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useState,
+} from 'react';
+
 import {
     Link,
     useLocation,
     useSearchParams,
 } from 'react-router-dom';
 
-import api from '../../services/api';
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
+import Pagination from '../../components/Pagination';
 import StatusBadge from '../../components/StatusBadge';
-import type { PaginatedResponse } from '../../types/api';
-import { formatDateTime } from '../../utils/date';
+
+import api from '../../services/api';
+
+import type {
+    PaginatedResponse,
+} from '../../types/api';
+
+import {
+    getApiErrorMessage,
+} from '../../utils/apiError';
+
+import {
+    formatDateTime,
+} from '../../utils/date';
+
+import {
+    formatEnumLabel,
+} from '../../utils/format';
+
+import {
+    positiveIntegerParam,
+} from '../../utils/query';
 
 type WinnerStatus =
     | 'selected'
     | 'contacting'
     | 'confirmed'
     | 'cancelled';
+
+type WinnerQueue =
+    | 'needs_action'
+    | 'confirmed'
+    | 'cancelled'
+    | 'all';
 
 type Participant = {
     id: number;
@@ -34,8 +69,15 @@ type Prize = {
     id: number;
     name: string;
     type: string;
-    value: number | null;
-    currency: string | null;
+
+    value?:
+        | number
+        | string
+        | null;
+
+    currency?:
+        | string
+        | null;
 };
 
 type DrawPrize = {
@@ -61,23 +103,38 @@ type ContactAttempt = {
 
 type Winner = {
     id: number;
+
     draw_id: number;
     draw_prize_id: number;
     receipt_id: number;
     entry_number: number;
+
     status: WinnerStatus;
 
     selected_at: string;
-    confirmed_at: string | null;
-    cancelled_at: string | null;
 
-    cancellation_reason: string | null;
-    replaced_winner_id: number | null;
+    confirmed_at:
+        | string
+        | null;
+
+    cancelled_at:
+        | string
+        | null;
+
+    cancellation_reason:
+        | string
+        | null;
+
+    replaced_winner_id:
+        | number
+        | null;
 
     draw: Draw;
     draw_prize: DrawPrize;
     receipt: Receipt;
-    contact_attempts: ContactAttempt[];
+
+    contact_attempts:
+        ContactAttempt[];
 };
 
 type DrawListItem = {
@@ -90,105 +147,179 @@ type DrawListResponse = {
     data: DrawListItem[];
 };
 
-type FilterValue =
-    | ''
-    | 'selected'
-    | 'contacting'
-    | 'confirmed'
-    | 'cancelled';
+type WinnerCounts = {
+    needs_action: number;
+    confirmed: number;
+    cancelled: number;
+    all: number;
+};
 
-const statusFilters: Array<{
+type WinnerListResponse =
+    PaginatedResponse<Winner> & {
+    counts: WinnerCounts;
+};
+
+const SEARCH_MIN_LENGTH =
+    3;
+
+const SEARCH_DEBOUNCE_MS =
+    350;
+
+const queueTabs: Array<{
+    value: WinnerQueue;
     label: string;
-    value: FilterValue;
 }> = [
     {
-        label: 'All',
-        value: '',
+        value:
+            'needs_action',
+
+        label:
+            'Needs Action',
     },
+
     {
-        label: 'Selected',
-        value: 'selected',
+        value:
+            'confirmed',
+
+        label:
+            'Confirmed',
     },
+
     {
-        label: 'Contacting',
-        value: 'contacting',
+        value:
+            'cancelled',
+
+        label:
+            'Cancelled',
     },
+
     {
-        label: 'Confirmed',
-        value: 'confirmed',
-    },
-    {
-        label: 'Cancelled',
-        value: 'cancelled',
+        value:
+            'all',
+
+        label:
+            'All',
     },
 ];
 
+function isWinnerQueue(
+    value:
+        | string
+        | null
+): value is WinnerQueue {
+    return (
+        value ===
+        'needs_action' ||
+        value ===
+        'confirmed' ||
+        value ===
+        'cancelled' ||
+        value ===
+        'all'
+    );
+}
+
+function latestContactAttempt(
+    attempts:
+    ContactAttempt[]
+): ContactAttempt | null {
+    if (
+        attempts.length ===
+        0
+    ) {
+        return null;
+    }
+
+    return [...attempts].sort(
+        (
+            first,
+            second
+        ) =>
+            new Date(
+                second.attempted_at
+            ).getTime() -
+            new Date(
+                first.attempted_at
+            ).getTime()
+    )[0];
+}
 
 export default function Winners() {
-    const location = useLocation();
+    const location =
+        useLocation();
 
     const [
         searchParams,
         setSearchParams,
     ] = useSearchParams();
 
-    const initialPage =
-        Number(
-            searchParams.get('page')
-        ) || 1;
+    const queueParam =
+        searchParams.get(
+            'queue'
+        );
 
-    const initialStatus =
-        (
-            searchParams.get(
-                'status'
-            ) as FilterValue | null
-        ) ?? '';
+    const queue:
+        WinnerQueue =
+        isWinnerQueue(
+            queueParam
+        )
+            ? queueParam
+            : 'needs_action';
 
-    const initialDrawId =
+    const drawId =
         searchParams.get(
             'draw_id'
         ) ?? '';
 
-    const initialReceiptSearch =
+    const urlSearch =
         searchParams.get(
             'receipt'
         ) ?? '';
 
-    const [winners, setWinners] =
-        useState<Winner[]>([]);
-
-    const [draws, setDraws] =
-        useState<DrawListItem[]>([]);
-
-    const [loading, setLoading] =
-        useState(true);
-
-    const [drawsLoading, setDrawsLoading] =
-        useState(true);
-
-    const [error, setError] =
-        useState<string | null>(null);
-
-    const [page, setPage] =
-        useState(initialPage);
-
-    const [status, setStatus] =
-        useState<FilterValue>(
-            initialStatus
+    const page =
+        positiveIntegerParam(
+            searchParams.get(
+                'page'
+            )
         );
-
-    const [drawId, setDrawId] =
-        useState(initialDrawId);
-
-    const [
-        receiptSearch,
-        setReceiptSearch,
-    ] = useState(initialReceiptSearch);
 
     const [
         receiptSearchInput,
         setReceiptSearchInput,
-    ] = useState(initialReceiptSearch);
+    ] = useState(
+        urlSearch
+    );
+
+    const [
+        winners,
+        setWinners,
+    ] = useState<
+        Winner[]
+    >([]);
+
+    const [
+        draws,
+        setDraws,
+    ] = useState<
+        DrawListItem[]
+    >([]);
+
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
+    const [
+        drawsLoading,
+        setDrawsLoading,
+    ] = useState(true);
+
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         pagination,
@@ -200,235 +331,384 @@ export default function Winners() {
         total: 0,
     });
 
-    const loadDraws = async () => {
-        setDrawsLoading(true);
+    const [
+        counts,
+        setCounts,
+    ] = useState<WinnerCounts>({
+        needs_action: 0,
+        confirmed: 0,
+        cancelled: 0,
+        all: 0,
+    });
 
-        try {
-            const response =
-                await api.get<DrawListResponse>(
-                    '/admin/draws'
-                );
+    const updateUrl =
+        useCallback(
+            ({
+                 nextQueue = queue,
+                 nextDrawId = drawId,
+                 nextSearch = urlSearch,
+                 nextPage = page,
+             }: {
+                nextQueue?: WinnerQueue;
+                nextDrawId?: string;
+                nextSearch?: string;
+                nextPage?: number;
+            }) => {
+                const params =
+                    new URLSearchParams();
 
-            setDraws(
-                response.data.data ?? []
-            );
-        } catch (err) {
-            console.error(
-                'Unable to load draws:',
-                err
-            );
-        } finally {
-            setDrawsLoading(false);
-        }
-    };
+                if (
+                    nextQueue !==
+                    'needs_action'
+                ) {
+                    params.set(
+                        'queue',
+                        nextQueue
+                    );
+                }
 
-    const loadWinners = async () => {
-        setLoading(true);
-        setError(null);
+                if (
+                    nextDrawId
+                ) {
+                    params.set(
+                        'draw_id',
+                        nextDrawId
+                    );
+                }
 
-        try {
-            const response =
-                await api.get<PaginatedResponse<Winner>>(
-                    '/admin/winners',
+                if (
+                    nextSearch
+                ) {
+                    params.set(
+                        'receipt',
+                        nextSearch
+                    );
+                }
+
+                if (
+                    nextPage >
+                    1
+                ) {
+                    params.set(
+                        'page',
+                        String(
+                            nextPage
+                        )
+                    );
+                }
+
+                setSearchParams(
+                    params,
                     {
-                        params: {
-                            page,
-
-                            per_page: 20,
-
-                            ...(status
-                                ? {
-                                    status,
-                                }
-                                : {}),
-
-                            ...(drawId
-                                ? {
-                                    draw_id:
-                                        Number(
-                                            drawId
-                                        ),
-                                }
-                                : {}),
-
-                            ...(receiptSearch.trim()
-                                ? {
-                                    receipt_number:
-                                        receiptSearch.trim(),
-                                }
-                                : {}),
-                        },
+                        replace: true,
                     }
                 );
-
-            setWinners(
-                response.data.data ?? []
-            );
-
-            setPagination({
-                current_page:
-                response.data.current_page,
-
-                last_page:
-                response.data.last_page,
-
-                per_page:
-                response.data.per_page,
-
-                total:
-                response.data.total,
-            });
-        } catch (err) {
-            console.error(err);
-
-            setError(
-                'Unable to load winners.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
+            },
+            [
+                queue,
+                drawId,
+                urlSearch,
+                page,
+                setSearchParams,
+            ]
+        );
 
     /*
-     * Load draw filter options once.
+     * Browser back/forward
+     * should restore the input.
      */
     useEffect(() => {
-        loadDraws();
-    }, []);
-
-    /*
-     * Keep URL in sync with current queue state.
-     */
-    useEffect(() => {
-        const params =
-            new URLSearchParams();
-
-        if (page > 1) {
-            params.set(
-                'page',
-                String(page)
-            );
-        }
-
-        if (status) {
-            params.set(
-                'status',
-                status
-            );
-        }
-
-        if (drawId) {
-            params.set(
-                'draw_id',
-                drawId
-            );
-        }
-
-        if (
-            receiptSearch.trim()
-        ) {
-            params.set(
-                'receipt',
-                receiptSearch.trim()
-            );
-        }
-
-        setSearchParams(
-            params,
-            {
-                replace: true,
-            }
+        setReceiptSearchInput(
+            urlSearch
         );
     }, [
-        page,
-        status,
-        drawId,
-        receiptSearch,
-        setSearchParams,
+        urlSearch,
+    ]);
+
+    /*
+     * Type-ahead receipt search.
+     */
+    useEffect(() => {
+        const timer =
+            window.setTimeout(
+                () => {
+                    const value =
+                        receiptSearchInput.trim();
+
+                    const nextSearch =
+                        value.length >=
+                        SEARCH_MIN_LENGTH
+                            ? value
+                            : '';
+
+                    if (
+                        nextSearch !==
+                        urlSearch
+                    ) {
+                        updateUrl({
+                            nextSearch,
+                            nextPage:
+                                1,
+                        });
+                    }
+                },
+                SEARCH_DEBOUNCE_MS
+            );
+
+        return () => {
+            window.clearTimeout(
+                timer
+            );
+        };
+    }, [
+        receiptSearchInput,
+        urlSearch,
+        updateUrl,
+    ]);
+
+    const loadDraws =
+        useCallback(
+            async () => {
+                setDrawsLoading(
+                    true
+                );
+
+                try {
+                    const response =
+                        await api.get<DrawListResponse>(
+                            '/admin/draws'
+                        );
+
+                    setDraws(
+                        response.data
+                            .data ??
+                        []
+                    );
+                } catch (
+                    error: unknown
+                    ) {
+                    console.error(
+                        'Unable to load draws:',
+                        error
+                    );
+                } finally {
+                    setDrawsLoading(
+                        false
+                    );
+                }
+            },
+            []
+        );
+
+    const loadWinners =
+        useCallback(
+            async () => {
+                setLoading(
+                    true
+                );
+
+                setError(
+                    null
+                );
+
+                try {
+                    const response =
+                        await api.get<WinnerListResponse>(
+                            '/admin/winners',
+                            {
+                                params: {
+                                    queue,
+
+                                    draw_id:
+                                        drawId
+                                            ? Number(
+                                                drawId
+                                            )
+                                            : undefined,
+
+                                    receipt_number:
+                                        urlSearch ||
+                                        undefined,
+
+                                    page,
+
+                                    per_page:
+                                        20,
+                                },
+                            }
+                        );
+
+                    setWinners(
+                        response.data
+                            .data ??
+                        []
+                    );
+
+                    setCounts(
+                        response.data
+                            .counts ?? {
+                            needs_action:
+                                0,
+
+                            confirmed:
+                                0,
+
+                            cancelled:
+                                0,
+
+                            all:
+                                0,
+                        }
+                    );
+
+                    setPagination({
+                        current_page:
+                        response.data
+                            .current_page,
+
+                        last_page:
+                        response.data
+                            .last_page,
+
+                        per_page:
+                        response.data
+                            .per_page,
+
+                        total:
+                        response.data
+                            .total,
+                    });
+                } catch (
+                    error: unknown
+                    ) {
+                    setError(
+                        getApiErrorMessage(
+                            error,
+                            'Unable to load winners.'
+                        )
+                    );
+                } finally {
+                    setLoading(
+                        false
+                    );
+                }
+            },
+            [
+                queue,
+                drawId,
+                urlSearch,
+                page,
+            ]
+        );
+
+    useEffect(() => {
+        loadDraws();
+    }, [
+        loadDraws,
     ]);
 
     useEffect(() => {
         loadWinners();
     }, [
-        page,
-        status,
-        drawId,
-        receiptSearch,
+        loadWinners,
     ]);
 
-    const handleReceiptSearch = () => {
-        setPage(1);
+    const trimmedSearch =
+        receiptSearchInput.trim();
 
-        setReceiptSearch(
-            receiptSearchInput.trim()
-        );
-    };
+    const showSearchHint =
+        trimmedSearch.length >
+        0 &&
+        trimmedSearch.length <
+        SEARCH_MIN_LENGTH;
 
-    const clearReceiptSearch = () => {
-        setReceiptSearchInput('');
-        setReceiptSearch('');
-        setPage(1);
-    };
-
-    const resetFilters = () => {
-        setStatus('');
-        setDrawId('');
-        setReceiptSearch('');
-        setReceiptSearchInput('');
-        setPage(1);
-    };
-
-    const hasFilters =
-        Boolean(
-            status ||
-            drawId ||
-            receiptSearch
-        );
+    const currentListUrl =
+        `${location.pathname}${location.search}`;
 
     return (
         <div className="space-y-6">
+            <PageHeader
+                title="Winners"
+                description="Contact, confirm and manage promotion winners."
+            />
 
-            {/* Header */}
+            {/* Queue */}
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {/* Tabs */}
 
-                <div>
+                <div className="border-b border-gray-200 px-4 pt-3">
+                    <div className="flex gap-1 overflow-x-auto">
+                        {queueTabs.map(
+                            (
+                                item
+                            ) => {
+                                const active =
+                                    queue ===
+                                    item.value;
 
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Winners
-                    </h2>
+                                const count =
+                                    counts[
+                                        item
+                                            .value
+                                        ];
 
-                    <p className="mt-1 text-sm text-gray-500">
-                        Contact, confirm and
-                        manage promotion winners.
-                    </p>
+                                return (
+                                    <button
+                                        key={
+                                            item.value
+                                        }
+                                        type="button"
+                                        onClick={() =>
+                                            updateUrl({
+                                                nextQueue:
+                                                item.value,
 
+                                                nextPage:
+                                                    1,
+                                            })
+                                        }
+                                        className={[
+                                            'flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition',
+                                            active
+                                                ? 'border-gray-900 text-gray-900'
+                                                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800',
+                                        ].join(
+                                            ' '
+                                        )}
+                                    >
+                                        <span>
+                                            {
+                                                item.label
+                                            }
+                                        </span>
+
+                                        <span
+                                            className={[
+                                                'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                                                active
+                                                    ? 'bg-gray-900 text-white'
+                                                    : 'bg-gray-100 text-gray-600',
+                                            ].join(
+                                                ' '
+                                            )}
+                                        >
+                                            {
+                                                count
+                                            }
+                                        </span>
+                                    </button>
+                                );
+                            }
+                        )}
+                    </div>
                 </div>
 
-                <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
-                    {pagination.total}{' '}
-                    winner
-                    {pagination.total === 1
-                        ? ''
-                        : 's'}
-                </div>
+                {/* Search / draw */}
 
-            </div>
-
-            {/* Filters */}
-
-            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                {/* Search / Draw */}
-
-                <div className="border-b border-gray-200 p-4">
-
-                    <div className="flex flex-col gap-3 xl:flex-row">
-
-                        {/* Receipt Search */}
-
-                        <div className="flex min-w-0 flex-1 gap-2">
-
+                <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div>
+                        <div className="relative">
                             <input
                                 type="text"
                                 value={
@@ -443,205 +723,126 @@ export default function Winners() {
                                             .value
                                     )
                                 }
-                                onKeyDown={(
-                                    event
-                                ) => {
-                                    if (
-                                        event.key ===
-                                        'Enter'
-                                    ) {
-                                        handleReceiptSearch();
-                                    }
-                                }}
                                 placeholder="Search by receipt number..."
-                                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-20 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                             />
 
-                            <button
-                                type="button"
-                                onClick={
-                                    handleReceiptSearch
-                                }
-                                disabled={
-                                    loading
-                                }
-                                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Search
-                            </button>
-
-                            {receiptSearch && (
+                            {receiptSearchInput && (
                                 <button
                                     type="button"
-                                    onClick={
-                                        clearReceiptSearch
+                                    onClick={() =>
+                                        setReceiptSearchInput(
+                                            ''
+                                        )
                                     }
-                                    disabled={
-                                        loading
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 hover:text-gray-700"
                                 >
                                     Clear
                                 </button>
                             )}
-
                         </div>
 
-                        {/* Draw Filter */}
-
-                        <div className="w-full xl:w-64">
-
-                            <select
-                                value={drawId}
-                                onChange={(
-                                    event
-                                ) => {
-                                    setDrawId(
-                                        event.target.value
-                                    );
-
-                                    setPage(
-                                        1
-                                    );
-                                }}
-                                disabled={
-                                    drawsLoading
-                                }
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                            >
-                                <option value="">
-                                    All draws
-                                </option>
-
-                                {draws.map(
-                                    (draw) => (
-                                        <option
-                                            key={
-                                                draw.id
-                                            }
-                                            value={
-                                                draw.id
-                                            }
-                                        >
-                                            Week{' '}
-                                            {
-                                                draw.week_number
-                                            }
-                                            {' — '}
-                                            {
-                                                draw.status
-                                            }
-                                        </option>
-                                    )
-                                )}
-
-                            </select>
-
+                        <div className="mt-1.5 text-xs text-gray-400">
+                            {showSearchHint
+                                ? 'Type at least 3 characters to search.'
+                                : urlSearch
+                                    ? `Searching for “${urlSearch}”`
+                                    : 'Search starts automatically after 3 characters.'}
                         </div>
-
                     </div>
 
-                </div>
+                    <select
+                        value={
+                            drawId
+                        }
+                        onChange={(
+                            event
+                        ) =>
+                            updateUrl({
+                                nextDrawId:
+                                event
+                                    .target
+                                    .value,
 
-                {/* Status tabs */}
+                                nextPage:
+                                    1,
+                            })
+                        }
+                        disabled={
+                            drawsLoading
+                        }
+                        className="h-[42px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                    >
+                        <option value="">
+                            All Draws
+                        </option>
 
-                <div className="p-4">
-
-                    <div className="flex flex-wrap gap-2">
-
-                        {statusFilters.map(
-                            (item) => (
-                                <button
+                        {draws.map(
+                            (
+                                draw
+                            ) => (
+                                <option
                                     key={
-                                        item.value
+                                        draw.id
                                     }
-                                    type="button"
-                                    onClick={() => {
-                                        setStatus(
-                                            item.value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-                                    }}
-                                    className={
-                                        status ===
-                                        item.value
-                                            ? 'rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white'
-                                            : 'rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                    value={
+                                        draw.id
                                     }
                                 >
+                                    Week{' '}
                                     {
-                                        item.label
+                                        draw.week_number
                                     }
-                                </button>
+                                    {' — '}
+                                    {formatEnumLabel(
+                                        draw.status
+                                    )}
+                                </option>
                             )
                         )}
-
-                        {hasFilters && (
-                            <button
-                                type="button"
-                                onClick={
-                                    resetFilters
-                                }
-                                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900"
-                            >
-                                Reset filters
-                            </button>
-                        )}
-
-                    </div>
-
+                    </select>
                 </div>
-
             </section>
 
-            {/* Error */}
-
             {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {error}
-                </div>
+                <Alert
+                    variant="error"
+                    onDismiss={() =>
+                        setError(
+                            null
+                        )
+                    }
+                >
+                    {
+                        error
+                    }
+                </Alert>
             )}
 
             {/* Winner queue */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
                 {loading ? (
-
-                    <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                        Loading winners...
-                    </div>
-
-                ) : winners.length === 0 ? (
-
-                    <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-
-                        <div className="text-sm font-medium text-gray-700">
-                            No winners found.
-                        </div>
-
-                        <p className="mt-1 text-sm text-gray-400">
-                            Try changing the current
-                            filters or search value.
-                        </p>
-
-                    </div>
-
+                    <LoadingState
+                        message="Loading winners..."
+                    />
+                ) : winners.length ===
+                0 ? (
+                    <EmptyState
+                        title="No winners found."
+                        description={
+                            queue ===
+                            'needs_action'
+                                ? 'There are no winners that currently need organizer action.'
+                                : 'No winners match the current queue and filters.'
+                        }
+                    />
                 ) : (
-
                     <>
-
                         <div className="overflow-x-auto">
-
-                            <table className="min-w-full text-left text-sm">
-
+                            <table className="w-full min-w-[1100px] text-left text-sm">
                                 <thead className="bg-gray-50">
-
                                 <tr>
-
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Participant
                                     </th>
@@ -655,11 +856,11 @@ export default function Winners() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Status
+                                        Contact
                                     </th>
 
-                                    <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Contact
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Status
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -667,114 +868,99 @@ export default function Winners() {
                                     </th>
 
                                     <th className="px-5 py-3" />
-
                                 </tr>
-
                                 </thead>
 
                                 <tbody className="divide-y divide-gray-100">
-
                                 {winners.map(
-                                    (winner) => {
-
+                                    (
+                                        winner
+                                    ) => {
                                         const participant =
                                             winner
                                                 .receipt
                                                 ?.participant;
 
+                                        const attempts =
+                                            winner.contact_attempts ??
+                                            [];
+
+                                        const latestAttempt =
+                                            latestContactAttempt(
+                                                attempts
+                                            );
+
                                         const contactCount =
+                                            attempts.length;
+
+                                        const prizeValue =
                                             winner
-                                                .contact_attempts
-                                                ?.length ??
-                                            0;
+                                                .draw_prize
+                                                ?.prize
+                                                ?.value;
 
                                         return (
                                             <tr
                                                 key={
                                                     winner.id
                                                 }
-                                                className="hover:bg-gray-50"
+                                                className="transition hover:bg-gray-50"
                                             >
-
                                                 {/* Participant */}
 
-                                                <td className="px-5 py-4">
-
-                                                    <div className="font-medium text-gray-900">
-
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="font-semibold text-gray-900">
                                                         {participant
                                                             ? `${participant.first_name} ${participant.last_name}`
                                                             : 'Unknown participant'}
-
                                                     </div>
 
-                                                    <div className="mt-1 text-xs text-gray-500">
-                                                        {
-                                                            participant?.phone ??
-                                                            ''
-                                                        }
-                                                    </div>
+                                                    {participant?.phone && (
+                                                        <div className="mt-1 text-sm text-gray-600">
+                                                            {
+                                                                participant.phone
+                                                            }
+                                                        </div>
+                                                    )}
 
                                                     <div className="mt-1 text-xs text-gray-400">
-                                                        Receipt{' '}
                                                         {
                                                             winner
                                                                 .receipt
                                                                 ?.receipt_number
                                                         }
                                                     </div>
-
                                                 </td>
 
                                                 {/* Prize */}
 
-                                                <td className="px-5 py-4">
-
+                                                <td className="px-5 py-4 align-top">
                                                     <div className="font-medium text-gray-900">
-                                                        {
-                                                            winner
+                                                        {winner
                                                                 .draw_prize
                                                                 ?.prize
                                                                 ?.name ??
-                                                            '-'
-                                                        }
+                                                            '—'}
                                                     </div>
 
-                                                    {winner
-                                                            .draw_prize
-                                                            ?.prize
-                                                            ?.value !==
-                                                        null &&
-                                                        winner
-                                                            .draw_prize
-                                                            ?.prize
-                                                            ?.value !==
-                                                        undefined && (
-
+                                                    {prizeValue !=
+                                                        null && (
                                                             <div className="mt-1 text-xs text-gray-500">
-
-                                                                {winner.draw_prize.prize.value.toLocaleString()}
-
-                                                                {' '}
-
-                                                                {
-                                                                    winner
+                                                                {Number(
+                                                                    prizeValue
+                                                                ).toLocaleString()}{' '}
+                                                                {winner
                                                                         .draw_prize
-                                                                        .prize
-                                                                        .currency ??
-                                                                    ''
-                                                                }
-
+                                                                        ?.prize
+                                                                        ?.currency ??
+                                                                    ''}
                                                             </div>
-
                                                         )}
-
                                                 </td>
 
                                                 {/* Draw */}
 
-                                                <td className="px-5 py-4">
-
+                                                <td className="px-5 py-4 align-top">
                                                     <Link
                                                         to={`/admin/draws/${winner.draw_id}`}
                                                         className="font-medium text-blue-600 hover:text-blue-800"
@@ -788,181 +974,137 @@ export default function Winners() {
                                                     </Link>
 
                                                     <div className="mt-1 text-xs text-gray-400">
-                                                        Entry #
+                                                        Entry
+                                                        #{' '}
                                                         {
                                                             winner.entry_number
                                                         }
                                                     </div>
+                                                </td>
 
+                                                {/* Contact */}
+
+                                                <td className="px-5 py-4 align-top">
+                                                    {contactCount ===
+                                                    0 ? (
+                                                        <div>
+                                                            <div className="text-sm font-medium text-gray-700">
+                                                                No
+                                                                attempts
+                                                            </div>
+
+                                                            <div className="mt-1 text-xs text-gray-400">
+                                                                Contact
+                                                                required
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <div className="text-sm font-medium text-gray-900">
+                                                                {
+                                                                    contactCount
+                                                                }{' '}
+                                                                attempt
+                                                                {contactCount ===
+                                                                1
+                                                                    ? ''
+                                                                    : 's'}
+                                                            </div>
+
+                                                            {latestAttempt && (
+                                                                <>
+                                                                    <div className="mt-1 text-xs font-medium text-gray-600">
+                                                                        Last:{' '}
+                                                                        {formatEnumLabel(
+                                                                            latestAttempt.result
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="mt-0.5 text-[11px] text-gray-400">
+                                                                        {formatDateTime(
+                                                                            latestAttempt.attempted_at
+                                                                        )}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
 
                                                 {/* Status */}
 
-                                                <td className="px-5 py-4">
-
+                                                <td className="px-5 py-4 align-top">
                                                     <StatusBadge
                                                         status={
                                                             winner.status
                                                         }
                                                     />
-
-                                                </td>
-
-                                                {/* Contact */}
-
-                                                <td className="px-5 py-4 text-center">
-
-                                                    <div className="font-medium text-gray-900">
-                                                        {
-                                                            contactCount
-                                                        }
-                                                    </div>
-
-                                                    <div className="mt-1 text-xs text-gray-400">
-                                                        attempt
-                                                        {contactCount ===
-                                                        1
-                                                            ? ''
-                                                            : 's'}
-                                                    </div>
-
                                                 </td>
 
                                                 {/* Selected */}
 
-                                                <td className="whitespace-nowrap px-5 py-4 text-gray-500">
+                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
                                                     {formatDateTime(
                                                         winner.selected_at
                                                     )}
                                                 </td>
 
-                                                {/* Action */}
+                                                {/* Manage */}
 
-                                                <td className="px-5 py-4 text-right">
-
+                                                <td className="px-5 py-4 text-right align-top">
                                                     <Link
                                                         to={`/admin/winners/${winner.id}`}
                                                         state={{
                                                             from:
-                                                                `${location.pathname}${location.search}`,
+                                                            currentListUrl,
                                                         }}
                                                         className="inline-flex rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
                                                     >
                                                         Manage
+                                                        →
                                                     </Link>
-
                                                 </td>
-
                                             </tr>
                                         );
                                     }
                                 )}
-
                                 </tbody>
-
                             </table>
-
                         </div>
 
-                        {/* Pagination */}
+                        <Pagination
+                            currentPage={
+                                pagination.current_page
+                            }
+                            lastPage={
+                                pagination.last_page
+                            }
+                            perPage={
+                                pagination.per_page
+                            }
+                            total={
+                                pagination.total
+                            }
+                            loading={
+                                loading
+                            }
+                            onPageChange={(
+                                nextPage
+                            ) => {
+                                updateUrl({
+                                    nextPage,
+                                });
 
-                        <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                            <div className="text-sm text-gray-500">
-
-                                Showing{' '}
-
-                                {(pagination.current_page -
-                                        1) *
-                                    pagination.per_page +
-                                    1}
-
-                                {' '}to{' '}
-
-                                {Math.min(
-                                    pagination.current_page *
-                                    pagination.per_page,
-                                    pagination.total
-                                )}
-
-                                {' '}of{' '}
-
-                                {
-                                    pagination.total
-                                }
-
-                            </div>
-
-                            <div className="flex items-center gap-2">
-
-                                <button
-                                    type="button"
-                                    disabled={
-                                        pagination.current_page <=
-                                        1 ||
-                                        loading
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            (
-                                                current
-                                            ) =>
-                                                Math.max(
-                                                    1,
-                                                    current -
-                                                    1
-                                                )
-                                        )
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Previous
-                                </button>
-
-                                <span className="px-2 text-sm text-gray-600">
-                                    Page{' '}
-                                    {
-                                        pagination.current_page
-                                    }{' '}
-                                    of{' '}
-                                    {
-                                        pagination.last_page
-                                    }
-                                </span>
-
-                                <button
-                                    type="button"
-                                    disabled={
-                                        pagination.current_page >=
-                                        pagination.last_page ||
-                                        loading
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            (
-                                                current
-                                            ) =>
-                                                Math.min(
-                                                    pagination.last_page,
-                                                    current +
-                                                    1
-                                                )
-                                        )
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Next
-                                </button>
-
-                            </div>
-
-                        </div>
-
+                                window.scrollTo({
+                                    top: 0,
+                                    behavior:
+                                        'smooth',
+                                });
+                            }}
+                        />
                     </>
                 )}
-
             </section>
-
         </div>
     );
 }

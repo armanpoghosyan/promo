@@ -1,15 +1,31 @@
-import { useEffect, useState } from 'react';
+import {
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
+
 import {
     Link,
     useLocation,
     useParams,
 } from 'react-router-dom';
 
-import api from '../../services/api';
+import LoadingState from '../../components/LoadingState';
 import StatusBadge from '../../components/StatusBadge';
-import type { ApiError } from '../../types/api';
-import { formatDateTime } from '../../utils/date';
-import { formatEnumLabel } from '../../utils/format';
+
+import api from '../../services/api';
+
+import type {
+    ApiError,
+} from '../../types/api';
+
+import {
+    formatDateTime,
+} from '../../utils/date';
+
+import {
+    formatEnumLabel,
+} from '../../utils/format';
 
 type Participant = {
     id: number;
@@ -23,14 +39,30 @@ type Receipt = {
     id: number;
     participant_id: number;
     receipt_number: string;
-    receipt_image: string | null;
+
+    receipt_image:
+        | string
+        | null;
+
     status: string;
     is_suspicious: boolean;
-    suspicious_reasons: string[] | null;
-    submitted_at: string | null;
-    verified_at: string | null;
-    rejection_reason: string | null;
-    notes: string | null;
+
+    suspicious_reasons:
+        | string[]
+        | null;
+
+    submitted_at:
+        | string
+        | null;
+
+    verified_at:
+        | string
+        | null;
+
+    rejection_reason:
+        | string
+        | null;
+
     participant: Participant;
 };
 
@@ -38,8 +70,16 @@ type Prize = {
     id: number;
     name: string;
     type: string;
-    value: number | null;
-    currency: string | null;
+
+    value?:
+        | number
+        | string
+        | null;
+
+    currency?:
+        | string
+        | null;
+
     total_quantity: number;
 };
 
@@ -54,44 +94,92 @@ type DrawPrize = {
 type Draw = {
     id: number;
     week_number: number;
-    draw_date: string | null;
+
+    draw_date:
+        | string
+        | null;
+
     status: string;
-    started_at: string | null;
-    completed_at: string | null;
-    snapshot_at: string | null;
-    random_provider: string | null;
-    randomized_at: string | null;
+
+    started_at:
+        | string
+        | null;
+
+    completed_at:
+        | string
+        | null;
+
+    snapshot_at:
+        | string
+        | null;
+
+    random_provider:
+        | string
+        | null;
+
+    randomized_at:
+        | string
+        | null;
 };
 
 type ContactAttempt = {
     id: number;
     draw_winner_id: number;
-    created_by: number | null;
+
+    created_by:
+        | number
+        | null;
+
     attempted_at: string;
     result: string;
-    notes: string | null;
+
+    notes:
+        | string
+        | null;
 };
 
 type Winner = {
     id: number;
+
     draw_id: number;
     draw_prize_id: number;
     receipt_id: number;
     entry_number: number;
+
     status: string;
+
     selected_at: string;
-    confirmed_at: string | null;
-    cancelled_at: string | null;
-    cancellation_reason: string | null;
-    replaced_winner_id: number | null;
+
+    confirmed_at:
+        | string
+        | null;
+
+    cancelled_at:
+        | string
+        | null;
+
+    cancellation_reason:
+        | string
+        | null;
+
+    replaced_winner_id:
+        | number
+        | null;
 
     draw: Draw;
     draw_prize: DrawPrize;
     receipt: Receipt;
-    contact_attempts: ContactAttempt[];
 
-    replaced_winner: Winner | null;
-    replacement_winner: Winner | null;
+    contact_attempts:
+        ContactAttempt[];
+
+    replaced_winner:
+        | Winner
+        | null;
+
+    replacement_winner:
+        | Winner
+        | null;
 };
 
 type WinnerResponse = {
@@ -102,7 +190,6 @@ type ContactAttemptResponse = {
     message?: string;
     data: ContactAttempt;
 };
-
 
 type ContactAttemptResult =
     | 'no_answer'
@@ -147,31 +234,63 @@ const contactAttemptResults: Array<{
     },
 ];
 
-
 function formatContactResult(
     result: string
 ): string {
     return (
         contactAttemptResults.find(
-            (item) =>
-                item.value === result
+            (
+                item
+            ) =>
+                item.value ===
+                result
         )?.label ??
-        formatEnumLabel(result)
+        formatEnumLabel(
+            result
+        )
+    );
+}
+
+function getApiMessage(
+    error: unknown,
+    fallback: string
+): string {
+    const apiError =
+        error as ApiError;
+
+    return (
+        apiError.response?.data
+            ?.message ??
+        fallback
     );
 }
 
 export default function WinnerDetails() {
-    const { id } = useParams();
-    const location = useLocation();
+    const {
+        id,
+    } = useParams();
 
-    const [winner, setWinner] =
-        useState<Winner | null>(null);
+    const location =
+        useLocation();
 
-    const [loading, setLoading] =
-        useState(true);
+    const [
+        winner,
+        setWinner,
+    ] = useState<
+        Winner | null
+    >(null);
 
-    const [error, setError] =
-        useState<string | null>(null);
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         actionLoading,
@@ -181,12 +300,16 @@ export default function WinnerDetails() {
     const [
         actionError,
         setActionError,
-    ] = useState<string | null>(null);
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         actionSuccess,
         setActionSuccess,
-    ] = useState<string | null>(null);
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         showContactForm,
@@ -219,249 +342,345 @@ export default function WinnerDetails() {
             ? location.state.from
             : '/admin/winners';
 
-    const loadWinner = async () => {
-        if (!id) {
-            setError(
-                'Winner ID is missing.'
-            );
-
-            setLoading(false);
-
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response =
-                await api.get<WinnerResponse>(
-                    `/admin/winners/${id}`
+    const loadWinner =
+        async () => {
+            if (!id) {
+                setError(
+                    'Winner ID is missing.'
                 );
 
-            setWinner(
-                response.data.data
+                setLoading(
+                    false
+                );
+
+                return;
+            }
+
+            setLoading(
+                true
             );
-        } catch (err) {
-            console.error(err);
 
             setError(
-                'Unable to load winner.'
+                null
             );
-        } finally {
-            setLoading(false);
-        }
-    };
+
+            try {
+                const response =
+                    await api.get<WinnerResponse>(
+                        `/admin/winners/${id}`
+                    );
+
+                setWinner(
+                    response.data.data
+                );
+            } catch (
+                error: unknown
+                ) {
+                console.error(
+                    error
+                );
+
+                setError(
+                    'Unable to load winner.'
+                );
+            } finally {
+                setLoading(
+                    false
+                );
+            }
+        };
 
     useEffect(() => {
         loadWinner();
-    }, [id]);
+    }, [
+        id,
+    ]);
 
-    const addContactAttempt = async () => {
-        if (
-            !winner ||
-            !contactResult.trim()
-        ) {
-            return;
-        }
+    const addContactAttempt =
+        async () => {
+            if (
+                !winner ||
+                !contactResult
+            ) {
+                return;
+            }
 
-        setActionLoading(true);
-        setActionError(null);
-        setActionSuccess(null);
-
-        try {
-            const response =
-                await api.post<ContactAttemptResponse>(
-                    `/admin/winners/${winner.id}/contact-attempts`,
-                    {
-                        result:
-                            contactResult.trim(),
-
-                        notes:
-                            contactNotes.trim() ||
-                            null,
-                    }
-                );
-
-            setActionSuccess(
-                response.data.message ??
-                'Contact attempt recorded.'
+            setActionLoading(
+                true
             );
-
-            setContactResult('');
-            setContactNotes('');
-            setShowContactForm(false);
-
-            await loadWinner();
-        } catch (err) {
-            console.error(err);
-
-            const apiError =
-                err as ApiError;
 
             setActionError(
-                apiError.response?.data
-                    ?.message ??
-                'Unable to record contact attempt.'
+                null
             );
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const confirmWinner = async () => {
-        if (!winner) {
-            return;
-        }
-
-        const confirmed =
-            window.confirm(
-                'Confirm this winner and prize?'
-            );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setActionLoading(true);
-        setActionError(null);
-        setActionSuccess(null);
-
-        try {
-            const response =
-                await api.post(
-                    `/admin/winners/${winner.id}/confirm`
-                );
 
             setActionSuccess(
-                response.data.message ??
-                'Winner confirmed successfully.'
+                null
             );
 
-            await loadWinner();
-        } catch (err) {
-            console.error(err);
+            try {
+                const response =
+                    await api.post<ContactAttemptResponse>(
+                        `/admin/winners/${winner.id}/contact-attempts`,
+                        {
+                            result:
+                            contactResult,
 
-            const apiError =
-                err as ApiError;
+                            notes:
+                                contactNotes.trim() ||
+                                null,
+                        }
+                    );
 
-            setActionError(
-                apiError.response?.data
-                    ?.message ??
-                'Unable to confirm winner.'
-            );
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const cancelWinner = async () => {
-        if (
-            !winner ||
-            !cancellationReason.trim()
-        ) {
-            return;
-        }
-
-        setActionLoading(true);
-        setActionError(null);
-        setActionSuccess(null);
-
-        try {
-            const response =
-                await api.post(
-                    `/admin/winners/${winner.id}/cancel`,
-                    {
-                        reason:
-                            cancellationReason.trim(),
-                    }
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Contact attempt recorded.'
                 );
 
-            setActionSuccess(
-                response.data.message ??
-                'Winner cancelled successfully.'
-            );
-
-            setCancellationReason('');
-            setShowCancelForm(false);
-
-            await loadWinner();
-        } catch (err) {
-            console.error(err);
-
-            const apiError =
-                err as ApiError;
-
-            setActionError(
-                apiError.response?.data
-                    ?.message ??
-                'Unable to cancel winner.'
-            );
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const replaceWinner = async () => {
-        if (!winner) {
-            return;
-        }
-
-        const confirmed =
-            window.confirm(
-                'Select a replacement winner for this cancelled winner?'
-            );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setActionLoading(true);
-        setActionError(null);
-        setActionSuccess(null);
-
-        try {
-            const response =
-                await api.post(
-                    `/admin/winners/${winner.id}/replace`
+                setContactResult(
+                    ''
                 );
 
-            setActionSuccess(
-                response.data.message ??
-                'Replacement winner selected successfully.'
+                setContactNotes(
+                    ''
+                );
+
+                setShowContactForm(
+                    false
+                );
+
+                await loadWinner();
+            } catch (
+                error: unknown
+                ) {
+                setActionError(
+                    getApiMessage(
+                        error,
+                        'Unable to record contact attempt.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const confirmWinner =
+        async () => {
+            if (!winner) {
+                return;
+            }
+
+            if (
+                !window.confirm(
+                    'Confirm this winner and prize?'
+                )
+            ) {
+                return;
+            }
+
+            setActionLoading(
+                true
             );
-
-            await loadWinner();
-        } catch (err) {
-            console.error(err);
-
-            const apiError =
-                err as ApiError;
 
             setActionError(
-                apiError.response?.data
-                    ?.message ??
-                'Unable to select replacement winner.'
+                null
             );
-        } finally {
-            setActionLoading(false);
-        }
-    };
 
-    if (loading) {
+            setActionSuccess(
+                null
+            );
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/winners/${winner.id}/confirm`
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Winner confirmed successfully.'
+                );
+
+                await loadWinner();
+            } catch (
+                error: unknown
+                ) {
+                setActionError(
+                    getApiMessage(
+                        error,
+                        'Unable to confirm winner.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const cancelWinner =
+        async () => {
+            if (
+                !winner ||
+                !cancellationReason.trim()
+            ) {
+                return;
+            }
+
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/winners/${winner.id}/cancel`,
+                        {
+                            reason:
+                                cancellationReason.trim(),
+                        }
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Winner cancelled successfully.'
+                );
+
+                setCancellationReason(
+                    ''
+                );
+
+                setShowCancelForm(
+                    false
+                );
+
+                await loadWinner();
+            } catch (
+                error: unknown
+                ) {
+                setActionError(
+                    getApiMessage(
+                        error,
+                        'Unable to cancel winner.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const replaceWinner =
+        async () => {
+            if (!winner) {
+                return;
+            }
+
+            if (
+                !window.confirm(
+                    'Select a replacement winner for this cancelled winner?'
+                )
+            ) {
+                return;
+            }
+
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
+
+            try {
+                const response =
+                    await api.post(
+                        `/admin/winners/${winner.id}/replace`
+                    );
+
+                setActionSuccess(
+                    response.data
+                        .message ??
+                    'Replacement winner selected successfully.'
+                );
+
+                await loadWinner();
+            } catch (
+                error: unknown
+                ) {
+                setActionError(
+                    getApiMessage(
+                        error,
+                        'Unable to select replacement winner.'
+                    )
+                );
+            } finally {
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const contactAttempts =
+        useMemo(
+            () =>
+                [
+                    ...(winner?.contact_attempts ??
+                        []),
+                ].sort(
+                    (
+                        first,
+                        second
+                    ) =>
+                        new Date(
+                            second.attempted_at
+                        ).getTime() -
+                        new Date(
+                            first.attempted_at
+                        ).getTime()
+                ),
+            [
+                winner,
+            ]
+        );
+
+    if (
+        loading
+    ) {
         return (
-            <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                Loading winner...
-            </div>
+            <LoadingState
+                message="Loading winner..."
+            />
         );
     }
 
-    if (error || !winner) {
+    if (
+        error ||
+        !winner
+    ) {
         return (
             <div className="space-y-4">
-
                 <Link
-                    to={backToWinners}
+                    to={
+                        backToWinners
+                    }
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
                     ← Back to Winners
@@ -471,434 +690,318 @@ export default function WinnerDetails() {
                     {error ??
                         'Winner not found.'}
                 </div>
-
             </div>
         );
     }
 
     const participant =
-        winner.receipt.participant;
+        winner.receipt
+            .participant;
 
     const canManage =
-        winner.status === 'selected' ||
-        winner.status === 'contacting';
+        winner.status ===
+        'selected' ||
+        winner.status ===
+        'contacting';
 
     const canReplace =
-        winner.status === 'cancelled' &&
+        winner.status ===
+        'cancelled' &&
         !winner.replacement_winner;
+
+    const latestAttempt =
+        contactAttempts[0] ??
+        null;
+
+    const prizeValue =
+        winner.draw_prize
+            .prize.value;
 
     return (
         <div className="space-y-6">
-
             {/* Header */}
 
-            <div>
-
+            <header>
                 <Link
-                    to={backToWinners}
+                    to={
+                        backToWinners
+                    }
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
                     ← Back to Winners
                 </Link>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="mt-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            Winner #
+                            {
+                                winner.id
+                            }
+                        </h1>
 
-                    <div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-
-                            <h2 className="text-2xl font-bold text-gray-900">
-                                Winner #{winner.id}
-                            </h2>
-
-                            <StatusBadge
-                                status={winner.status}
-                            />
-
-                        </div>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            Week{' '}
-                            {winner.draw.week_number}
-                            {' · '}
-                            Entry #
-                            {winner.entry_number}
-                            {' · '}
-                            {winner.draw_prize.prize.name}
-                        </p>
-
+                        <StatusBadge
+                            status={
+                                winner.status
+                            }
+                        />
                     </div>
 
-                </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                        Week{' '}
+                        {
+                            winner.draw
+                                .week_number
+                        }
 
-            </div>
+                        {' · '}
+
+                        Entry #
+                        {
+                            winner.entry_number
+                        }
+
+                        {' · '}
+
+                        {
+                            winner.draw_prize
+                                .prize.name
+                        }
+                    </p>
+                </div>
+            </header>
 
             {/* Feedback */}
 
             {actionSuccess && (
-                <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-
-                    <span>
-                        {actionSuccess}
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setActionSuccess(null)
-                        }
-                        className="ml-4 font-medium hover:text-green-900"
-                    >
-                        ×
-                    </button>
-
-                </div>
+                <FeedbackAlert
+                    type="success"
+                    onClose={() =>
+                        setActionSuccess(
+                            null
+                        )
+                    }
+                >
+                    {
+                        actionSuccess
+                    }
+                </FeedbackAlert>
             )}
 
             {actionError && (
-                <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-
-                    <span>
-                        {actionError}
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setActionError(null)
-                        }
-                        className="ml-4 font-medium hover:text-red-900"
-                    >
-                        ×
-                    </button>
-
-                </div>
+                <FeedbackAlert
+                    type="error"
+                    onClose={() =>
+                        setActionError(
+                            null
+                        )
+                    }
+                >
+                    {
+                        actionError
+                    }
+                </FeedbackAlert>
             )}
 
-            {/* Main workspace */}
+            {/* Main identity */}
 
-            <div className="grid gap-6 xl:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-2">
+                {/* Participant */}
 
-                {/* Left */}
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Participant
+                        </h2>
 
-                <div className="space-y-6 xl:col-span-2">
-
-                    {/* Participant + Prize */}
-
-                    <div className="grid gap-6 md:grid-cols-2">
-
-                        <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-
-                                <h3 className="font-semibold text-gray-900">
-                                    Participant
-                                </h3>
-
-                                <Link
-                                    to={`/admin/participants/${participant.id}`}
-                                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                >
-                                    View profile
-                                </Link>
-
-                            </div>
-
-                            <div className="space-y-4 p-5">
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Name
-                                    </div>
-
-                                    <div className="mt-1 text-lg font-semibold text-gray-900">
-                                        {participant.first_name}{' '}
-                                        {participant.last_name}
-                                    </div>
-
-                                </div>
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Phone
-                                    </div>
-
-                                    <div className="mt-1 text-sm text-gray-700">
-                                        {participant.phone}
-                                    </div>
-
-                                </div>
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Email
-                                    </div>
-
-                                    <div className="mt-1 break-all text-sm text-gray-700">
-                                        {participant.email}
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </section>
-
-                        <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                            <div className="border-b border-gray-200 px-5 py-4">
-
-                                <h3 className="font-semibold text-gray-900">
-                                    Prize
-                                </h3>
-
-                            </div>
-
-                            <div className="space-y-4 p-5">
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Prize
-                                    </div>
-
-                                    <div className="mt-1 text-lg font-semibold text-gray-900">
-                                        {winner.draw_prize.prize.name}
-                                    </div>
-
-                                </div>
-
-                                {winner.draw_prize.prize.value !==
-                                    null && (
-
-                                        <div>
-
-                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Value
-                                            </div>
-
-                                            <div className="mt-1 text-sm font-medium text-gray-900">
-                                                {winner.draw_prize.prize.value.toLocaleString()}
-                                                {' '}
-                                                {winner.draw_prize.prize.currency ??
-                                                    ''}
-                                            </div>
-
-                                        </div>
-                                    )}
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Draw Allocation
-                                    </div>
-
-                                    <div className="mt-1 text-sm text-gray-700">
-                                        {
-                                            winner.draw_prize
-                                                .quantity
-                                        }{' '}
-                                        prize
-                                        {winner.draw_prize.quantity ===
-                                        1
-                                            ? ''
-                                            : 's'}
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </section>
-
+                        <Link
+                            to={`/admin/participants/${participant.id}`}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                            View Participant →
+                        </Link>
                     </div>
 
-                    {/* Receipt + Draw */}
-
-                    <div className="grid gap-6 md:grid-cols-2">
-
-                        <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-
-                                <h3 className="font-semibold text-gray-900">
-                                    Receipt
-                                </h3>
-
-                                <Link
-                                    to={`/admin/receipts/${winner.receipt.id}`}
-                                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                >
-                                    View receipt
-                                </Link>
-
+                    <div className="space-y-4 p-5">
+                        <div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Name
                             </div>
 
-                            <div className="space-y-4 p-5">
+                            <div className="mt-1 text-lg font-semibold text-gray-900">
+                                {
+                                    participant.first_name
+                                }{' '}
+                                {
+                                    participant.last_name
+                                }
+                            </div>
+                        </div>
 
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Receipt Number
-                                    </div>
-
-                                    <div className="mt-1 font-semibold text-gray-900">
-                                        {
-                                            winner.receipt
-                                                .receipt_number
-                                        }
-                                    </div>
-
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                    Phone
                                 </div>
 
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Status
-                                    </div>
-
-                                    <div className="mt-1">
-
-                                        <StatusBadge
-                                            status={
-                                                winner.receipt
-                                                    .status
-                                            }
-                                        />
-
-                                    </div>
-
+                                <div className="mt-1 text-sm font-medium text-gray-800">
+                                    {
+                                        participant.phone
+                                    }
                                 </div>
-
-                                {winner.receipt.is_suspicious && (
-                                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                                        This receipt is marked as suspicious.
-                                    </div>
-                                )}
-
                             </div>
 
-                        </section>
+                            <div>
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                    Email
+                                </div>
 
-                        <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                                <div className="mt-1 break-all text-sm text-gray-700">
+                                    {
+                                        participant.email
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-                            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                {/* Prize */}
 
-                                <h3 className="font-semibold text-gray-900">
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Prize
+                        </h2>
+                    </div>
+
+                    <div className="space-y-4 p-5">
+                        <div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Prize
+                            </div>
+
+                            <div className="mt-1 text-lg font-semibold text-gray-900">
+                                {
+                                    winner.draw_prize
+                                        .prize.name
+                                }
+                            </div>
+                        </div>
+
+                        {prizeValue !=
+                            null && (
+                                <div>
+                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                        Value
+                                    </div>
+
+                                    <div className="mt-1 text-sm font-medium text-gray-800">
+                                        {Number(
+                                            prizeValue
+                                        ).toLocaleString()}{' '}
+                                        {winner
+                                                .draw_prize
+                                                .prize
+                                                .currency ??
+                                            ''}
+                                    </div>
+                                </div>
+                            )}
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                                     Draw
-                                </h3>
+                                </div>
 
                                 <Link
                                     to={`/admin/draws/${winner.draw.id}`}
-                                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                    className="mt-1 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800"
                                 >
-                                    View draw
+                                    Week{' '}
+                                    {
+                                        winner.draw
+                                            .week_number
+                                    }{' '}
+                                    →
                                 </Link>
-
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4 p-5">
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Week
-                                    </div>
-
-                                    <div className="mt-1 font-medium text-gray-900">
-                                        Week{' '}
-                                        {
-                                            winner.draw
-                                                .week_number
-                                        }
-                                    </div>
-
-                                </div>
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Entry
-                                    </div>
-
-                                    <div className="mt-1 font-medium text-gray-900">
-                                        #
-                                        {
-                                            winner.entry_number
-                                        }
-                                    </div>
-
-                                </div>
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Draw Status
-                                    </div>
-
-                                    <div className="mt-1">
-
-                                        <StatusBadge
-                                            status={
-                                                winner.draw.status
-                                            }
-                                        />
-
-                                    </div>
-
-                                </div>
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Selected
-                                    </div>
-
-                                    <div className="mt-1 text-sm text-gray-700">
-                                        {formatDateTime(
-                                            winner.selected_at
-                                        )}
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </section>
-
-                    </div>
-
-                    {/* Contact history */}
-
-                    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
 
                             <div>
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                    Entry
+                                </div>
 
-                                <h3 className="font-semibold text-gray-900">
-                                    Contact History
-                                </h3>
-
-                                <p className="mt-1 text-sm text-gray-500">
+                                <div className="mt-1 text-sm text-gray-700">
+                                    #
                                     {
-                                        winner
-                                            .contact_attempts
-                                            .length
-                                    }{' '}
-                                    attempt
-                                    {winner.contact_attempts.length ===
-                                    1
-                                        ? ''
-                                        : 's'}
-                                </p>
+                                        winner.entry_number
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
 
+            {/* Current Action */}
+
+            {canManage && (
+                <section className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50 shadow-sm">
+                    <div className="p-5 sm:p-6">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                                    Current Action
+                                </div>
+
+                                <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                    Contact and Verify Winner
+                                </h2>
+
+                                {contactAttempts.length ===
+                                0 ? (
+                                    <p className="mt-2 text-sm text-gray-600">
+                                        No contact
+                                        attempts have
+                                        been recorded
+                                        yet.
+                                    </p>
+                                ) : (
+                                    <div className="mt-2">
+                                        <p className="text-sm text-gray-600">
+                                            {
+                                                contactAttempts.length
+                                            }{' '}
+                                            contact
+                                            attempt
+                                            {contactAttempts.length ===
+                                            1
+                                                ? ''
+                                                : 's'}{' '}
+                                            recorded.
+                                        </p>
+
+                                        {latestAttempt && (
+                                            <p className="mt-1 text-sm text-gray-600">
+                                                Last:{' '}
+                                                <strong>
+                                                    {formatContactResult(
+                                                        latestAttempt.result
+                                                    )}
+                                                </strong>{' '}
+                                                ·{' '}
+                                                {formatDateTime(
+                                                    latestAttempt.attempted_at
+                                                )}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
-                            {canManage && (
+                            {!showContactForm && (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -910,21 +1013,17 @@ export default function WinnerDetails() {
                                             false
                                         );
                                     }}
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    className="shrink-0 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
                                 >
-                                    Add Contact Attempt
+                                    + Record Contact Attempt
                                 </button>
                             )}
-
                         </div>
 
                         {showContactForm && (
-                            <div className="border-b border-gray-200 bg-gray-50 p-5">
-
-                                <div className="grid gap-4 md:grid-cols-2">
-
+                            <div className="mt-5 rounded-xl border border-blue-200 bg-white p-4">
+                                <div className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
                                     <div>
-
                                         <label className="mb-1 block text-sm font-medium text-gray-700">
                                             Result
                                         </label>
@@ -942,18 +1041,17 @@ export default function WinnerDetails() {
                                                         .value
                                                 )
                                             }
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                         >
-
                                             <option value="">
-                                                Select result
+                                                Select
+                                                result
                                             </option>
 
                                             {contactAttemptResults.map(
-                                                (item) => (
+                                                (
+                                                    item
+                                                ) => (
                                                     <option
                                                         key={
                                                             item.value
@@ -968,13 +1066,10 @@ export default function WinnerDetails() {
                                                     </option>
                                                 )
                                             )}
-
                                         </select>
-
                                     </div>
 
                                     <div>
-
                                         <label className="mb-1 block text-sm font-medium text-gray-700">
                                             Notes
                                         </label>
@@ -992,37 +1087,16 @@ export default function WinnerDetails() {
                                                         .value
                                                 )
                                             }
-                                            rows={3}
-                                            maxLength={5000}
-                                            disabled={
-                                                actionLoading
+                                            rows={
+                                                3
                                             }
-                                            placeholder="Optional notes..."
-                                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                            placeholder="Optional notes about the call..."
+                                            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                                         />
-
                                     </div>
-
                                 </div>
 
-                                <div className="mt-3 flex gap-2">
-
-                                    <button
-                                        type="button"
-                                        onClick={
-                                            addContactAttempt
-                                        }
-                                        disabled={
-                                            actionLoading ||
-                                            !contactResult
-                                        }
-                                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        {actionLoading
-                                            ? 'Saving...'
-                                            : 'Save Attempt'}
-                                    </button>
-
+                                <div className="mt-3 flex justify-end gap-2">
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -1041,526 +1115,551 @@ export default function WinnerDetails() {
                                         disabled={
                                             actionLoading
                                         }
-                                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                                     >
                                         Cancel
                                     </button>
 
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            addContactAttempt
+                                        }
+                                        disabled={
+                                            actionLoading ||
+                                            !contactResult
+                                        }
+                                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                                    >
+                                        {actionLoading
+                                            ? 'Saving...'
+                                            : 'Save Attempt'}
+                                    </button>
                                 </div>
-
                             </div>
                         )}
 
-                        {winner.contact_attempts.length ===
-                        0 ? (
+                        {!showContactForm &&
+                            !showCancelForm && (
+                                <div className="mt-5 flex flex-wrap gap-3 border-t border-blue-200 pt-5">
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            confirmWinner
+                                        }
+                                        disabled={
+                                            actionLoading
+                                        }
+                                        className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                                    >
+                                        Confirm Winner
+                                    </button>
 
-                            <div className="p-6 text-sm text-gray-400">
-                                No contact attempts recorded.
-                            </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowCancelForm(
+                                                true
+                                            );
 
-                        ) : (
+                                            setShowContactForm(
+                                                false
+                                            );
+                                        }}
+                                        disabled={
+                                            actionLoading
+                                        }
+                                        className="rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                        Cancel Winner
+                                    </button>
+                                </div>
+                            )}
 
-                            <div className="divide-y divide-gray-100">
+                        {showCancelForm && (
+                            <div className="mt-5 rounded-xl border border-red-200 bg-white p-4">
+                                <label className="text-sm font-medium text-red-800">
+                                    Cancellation Reason
+                                </label>
 
-                                {winner.contact_attempts.map(
-                                    (attempt) => (
+                                <textarea
+                                    value={
+                                        cancellationReason
+                                    }
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        setCancellationReason(
+                                            event
+                                                .target
+                                                .value
+                                        )
+                                    }
+                                    rows={
+                                        4
+                                    }
+                                    autoFocus
+                                    placeholder="Why is this winner being cancelled?"
+                                    className="mt-2 w-full resize-none rounded-lg border border-red-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                />
 
-                                        <div
-                                            key={
-                                                attempt.id
-                                            }
-                                            className="p-5"
-                                        >
+                                <div className="mt-3 flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowCancelForm(
+                                                false
+                                            );
 
-                                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                            setCancellationReason(
+                                                ''
+                                            );
+                                        }}
+                                        disabled={
+                                            actionLoading
+                                        }
+                                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
 
-                                                <div>
-
-                                                    <div className="font-medium text-gray-900">
-                                                        {formatContactResult(
-                                                            attempt.result
-                                                        )}
-                                                    </div>
-
-                                                    {attempt.notes && (
-                                                        <p className="mt-2 whitespace-pre-line text-sm text-gray-600">
-                                                            {
-                                                                attempt.notes
-                                                            }
-                                                        </p>
-                                                    )}
-
-                                                </div>
-
-                                                <div className="text-right">
-
-                                                    <div className="text-xs text-gray-400">
-                                                        {formatDateTime(
-                                                            attempt.attempted_at
-                                                        )}
-                                                    </div>
-
-                                                    <div className="mt-1 text-xs text-gray-300">
-                                                        Attempt #
-                                                        {
-                                                            attempt.id
-                                                        }
-                                                    </div>
-
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-
-                                    )
-                                )}
-
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            cancelWinner
+                                        }
+                                        disabled={
+                                            actionLoading ||
+                                            !cancellationReason.trim()
+                                        }
+                                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading
+                                            ? 'Cancelling...'
+                                            : 'Confirm Cancellation'}
+                                    </button>
+                                </div>
                             </div>
                         )}
+                    </div>
+                </section>
+            )}
 
+            {/* Confirmed */}
+
+            {winner.status ===
+                'confirmed' && (
+                    <section className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                            Winner Confirmed
+                        </div>
+
+                        <h2 className="mt-1 text-lg font-semibold text-gray-900">
+                            Prize confirmed
+                        </h2>
+
+                        <p className="mt-2 text-sm text-gray-600">
+                            Confirmed{' '}
+                            {formatDateTime(
+                                winner.confirmed_at
+                            )}
+                        </p>
                     </section>
+                )}
 
-                    {/* Replacement history */}
+            {/* Cancelled */}
 
-                    {(winner.replaced_winner ||
-                        winner.replacement_winner) && (
-
-                        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                            <div className="border-b border-gray-200 px-5 py-4">
-
-                                <h3 className="font-semibold text-gray-900">
-                                    Replacement History
-                                </h3>
-
+            {winner.status ===
+                'cancelled' && (
+                    <section className="overflow-hidden rounded-xl border border-red-200 bg-red-50 shadow-sm">
+                        <div className="p-5">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                                Winner Cancelled
                             </div>
 
-                            <div className="divide-y divide-gray-100">
+                            <h2 className="mt-1 text-lg font-semibold text-gray-900">
+                                Winner is no longer
+                                active
+                            </h2>
 
-                                {winner.replaced_winner && (
-
-                                    <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-
-                                        <div>
-
-                                            <div className="text-sm text-gray-500">
-                                                Replacement for
-                                            </div>
-
-                                            <div className="mt-1 flex items-center gap-2">
-
-                                                <span className="font-medium text-gray-900">
-                                                    Winner #
-                                                    {
-                                                        winner
-                                                            .replaced_winner
-                                                            .id
-                                                    }
-                                                </span>
-
-                                                <StatusBadge
-                                                    status={
-                                                        winner
-                                                            .replaced_winner
-                                                            .status
-                                                    }
-                                                />
-
-                                            </div>
-
-                                        </div>
-
-                                        <Link
-                                            to={`/admin/winners/${winner.replaced_winner.id}`}
-                                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                        >
-                                            View winner →
-                                        </Link>
-
+                            {winner.cancellation_reason && (
+                                <div className="mt-4 rounded-lg border border-red-200 bg-white p-4">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-red-600">
+                                        Cancellation
+                                        Reason
                                     </div>
 
-                                )}
-
-                                {winner.replacement_winner && (
-
-                                    <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-
-                                        <div>
-
-                                            <div className="text-sm text-gray-500">
-                                                Replaced by
-                                            </div>
-
-                                            <div className="mt-1 flex items-center gap-2">
-
-                                                <span className="font-medium text-gray-900">
-                                                    Winner #
-                                                    {
-                                                        winner
-                                                            .replacement_winner
-                                                            .id
-                                                    }
-                                                </span>
-
-                                                <StatusBadge
-                                                    status={
-                                                        winner
-                                                            .replacement_winner
-                                                            .status
-                                                    }
-                                                />
-
-                                            </div>
-
-                                        </div>
-
-                                        <Link
-                                            to={`/admin/winners/${winner.replacement_winner.id}`}
-                                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                        >
-                                            View winner →
-                                        </Link>
-
-                                    </div>
-
-                                )}
-
-                            </div>
-
-                        </section>
-                    )}
-
-                </div>
-
-                {/* Right: Action panel */}
-
-                <div>
-
-                    <div className="xl:sticky xl:top-6">
-
-                        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                            <div className="border-b border-gray-200 px-5 py-4">
-
-                                <div className="flex items-center justify-between gap-3">
-
-                                    <div>
-
-                                        <h3 className="font-semibold text-gray-900">
-                                            Winner Action
-                                        </h3>
-
-                                        <p className="mt-1 text-xs text-gray-500">
-                                            Manage confirmation and replacement.
-                                        </p>
-
-                                    </div>
-
-                                    <StatusBadge
-                                        status={
-                                            winner.status
-                                        }
-                                    />
-
-                                </div>
-
-                            </div>
-
-                            <div className="space-y-5 p-5">
-
-                                {/* Current status */}
-
-                                <div>
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Current Status
-                                    </div>
-
-                                    <div className="mt-2">
-
-                                        <StatusBadge
-                                            status={
-                                                winner.status
-                                            }
-                                        />
-
-                                    </div>
-
-                                </div>
-
-                                {/* Contact summary */}
-
-                                <div className="rounded-lg bg-gray-50 p-4">
-
-                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        Contact Attempts
-                                    </div>
-
-                                    <div className="mt-1 text-2xl font-bold text-gray-900">
+                                    <div className="mt-2 whitespace-pre-wrap text-sm text-red-800">
                                         {
-                                            winner
-                                                .contact_attempts
-                                                .length
+                                            winner.cancellation_reason
                                         }
                                     </div>
-
                                 </div>
+                            )}
 
-                                {/* Selected / contacting */}
-
-                                {canManage && (
-                                    <div className="space-y-3 border-t border-gray-200 pt-5">
-
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowContactForm(
-                                                    true
-                                                );
-
-                                                setShowCancelForm(
-                                                    false
-                                                );
-                                            }}
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                                        >
-                                            Add Contact Attempt
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                confirmWinner
-                                            }
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            {actionLoading
-                                                ? 'Processing...'
-                                                : 'Confirm Winner'}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowCancelForm(
-                                                    !showCancelForm
-                                                );
-
-                                                setShowContactForm(
-                                                    false
-                                                );
-                                            }}
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                                        >
-                                            Cancel Winner
-                                        </button>
-
-                                    </div>
+                            <div className="mt-4 text-xs text-gray-500">
+                                Cancelled{' '}
+                                {formatDateTime(
+                                    winner.cancelled_at
                                 )}
-
-                                {/* Cancellation form */}
-
-                                {showCancelForm && (
-                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-
-                                        <label className="block text-sm font-medium text-red-800">
-                                            Cancellation reason
-                                        </label>
-
-                                        <textarea
-                                            value={
-                                                cancellationReason
-                                            }
-                                            onChange={(
-                                                event
-                                            ) =>
-                                                setCancellationReason(
-                                                    event
-                                                        .target
-                                                        .value
-                                                )
-                                            }
-                                            rows={4}
-                                            autoFocus
-                                            placeholder="Explain why this winner is being cancelled..."
-                                            className="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                        />
-
-                                        <div className="mt-3 flex gap-2">
-
-                                            <button
-                                                type="button"
-                                                onClick={
-                                                    cancelWinner
-                                                }
-                                                disabled={
-                                                    actionLoading ||
-                                                    !cancellationReason.trim()
-                                                }
-                                                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                            >
-                                                Confirm Cancellation
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setShowCancelForm(
-                                                        false
-                                                    );
-
-                                                    setCancellationReason(
-                                                        ''
-                                                    );
-                                                }}
-                                                disabled={
-                                                    actionLoading
-                                                }
-                                                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Cancel
-                                            </button>
-
-                                        </div>
-
-                                    </div>
-                                )}
-
-                                {/* Confirmed */}
-
-                                {winner.status ===
-                                    'confirmed' && (
-
-                                        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-
-                                            <div className="font-medium text-green-800">
-                                                Winner confirmed
-                                            </div>
-
-                                            <div className="mt-1 text-sm text-green-700">
-                                                Confirmed{' '}
-                                                {formatDateTime(
-                                                    winner.confirmed_at
-                                                )}
-                                            </div>
-
-                                        </div>
-                                    )}
-
-                                {/* Cancelled */}
-
-                                {winner.status ===
-                                    'cancelled' && (
-
-                                        <div className="space-y-4">
-
-                                            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-
-                                                <div className="font-medium text-red-800">
-                                                    Winner cancelled
-                                                </div>
-
-                                                <div className="mt-1 text-sm text-red-700">
-                                                    {winner.cancellation_reason ??
-                                                        'No cancellation reason recorded.'}
-                                                </div>
-
-                                                {winner.cancelled_at && (
-                                                    <div className="mt-2 text-xs text-red-500">
-                                                        {formatDateTime(
-                                                            winner.cancelled_at
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                            </div>
-
-                                            {canReplace && (
-                                                <button
-                                                    type="button"
-                                                    onClick={
-                                                        replaceWinner
-                                                    }
-                                                    disabled={
-                                                        actionLoading
-                                                    }
-                                                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    {actionLoading
-                                                        ? 'Selecting...'
-                                                        : 'Select Replacement'}
-                                                </button>
-                                            )}
-
-                                            {winner.replacement_winner && (
-                                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-
-                                                    <div className="text-sm text-blue-700">
-                                                        Replacement selected
-                                                    </div>
-
-                                                    <Link
-                                                        to={`/admin/winners/${winner.replacement_winner.id}`}
-                                                        className="mt-2 inline-flex font-medium text-blue-700 hover:text-blue-900"
-                                                    >
-                                                        Winner #
-                                                        {
-                                                            winner
-                                                                .replacement_winner
-                                                                .id
-                                                        }{' '}
-                                                        →
-                                                    </Link>
-
-                                                </div>
-                                            )}
-
-                                        </div>
-                                    )}
-
-                                {/* Replacement winner */}
-
-                                {winner.replaced_winner && (
-                                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-
-                                        <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
-                                            Replacement
-                                        </div>
-
-                                        <div className="mt-1 text-sm text-blue-800">
-                                            This winner replaces
-                                            Winner #
-                                            {
-                                                winner
-                                                    .replaced_winner
-                                                    .id
-                                            }
-                                            .
-                                        </div>
-
-                                    </div>
-                                )}
-
                             </div>
 
-                        </section>
+                            {canReplace && (
+                                <button
+                                    type="button"
+                                    onClick={
+                                        replaceWinner
+                                    }
+                                    disabled={
+                                        actionLoading
+                                    }
+                                    className="mt-5 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                                >
+                                    {actionLoading
+                                        ? 'Selecting...'
+                                        : 'Select Replacement Winner'}
+                                </button>
+                            )}
+                        </div>
+                    </section>
+                )}
 
+            {/* Replacement */}
+
+            {winner.replacement_winner && (
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Replacement Winner
+                        </h2>
                     </div>
 
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="font-semibold text-gray-900">
+                                Winner #
+                                {
+                                    winner
+                                        .replacement_winner
+                                        .id
+                                }
+                            </div>
+
+                            <div className="mt-1 text-sm text-gray-500">
+                                Receipt{' '}
+                                {
+                                    winner
+                                        .replacement_winner
+                                        .receipt
+                                        ?.receipt_number
+                                }
+                            </div>
+                        </div>
+
+                        <Link
+                            to={`/admin/winners/${winner.replacement_winner.id}`}
+                            state={{
+                                from:
+                                backToWinners,
+                            }}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                            Manage Replacement →
+                        </Link>
+                    </div>
+                </section>
+            )}
+
+            {/* This winner replaced another */}
+
+            {winner.replaced_winner && (
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 px-5 py-4">
+                        <h2 className="font-semibold text-gray-900">
+                            Replacement Context
+                        </h2>
+                    </div>
+
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="text-sm text-gray-600">
+                                This winner replaced
+                                Winner #
+                                {
+                                    winner
+                                        .replaced_winner
+                                        .id
+                                }.
+                            </div>
+                        </div>
+
+                        <Link
+                            to={`/admin/winners/${winner.replaced_winner.id}`}
+                            state={{
+                                from:
+                                backToWinners,
+                            }}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                            View Original Winner →
+                        </Link>
+                    </div>
+                </section>
+            )}
+
+            {/* Contact History */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <div>
+                        <h2 className="font-semibold text-gray-900">
+                            Contact History
+                        </h2>
+
+                        <p className="mt-1 text-xs text-gray-500">
+                            Complete organizer
+                            contact history for
+                            this winner.
+                        </p>
+                    </div>
+
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                        {
+                            contactAttempts.length
+                        }
+                    </span>
                 </div>
 
+                {contactAttempts.length ===
+                0 ? (
+                    <div className="p-6 text-sm text-gray-400">
+                        No contact attempts
+                        recorded.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-100">
+                        {contactAttempts.map(
+                            (
+                                attempt
+                            ) => (
+                                <div
+                                    key={
+                                        attempt.id
+                                    }
+                                    className="grid gap-3 px-5 py-4 md:grid-cols-[180px_180px_minmax(0,1fr)]"
+                                >
+                                    <div className="text-sm text-gray-500">
+                                        {formatDateTime(
+                                            attempt.attempted_at
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                            {formatContactResult(
+                                                attempt.result
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    <div className="whitespace-pre-wrap text-sm text-gray-700">
+                                        {attempt.notes ||
+                                            '—'}
+                                    </div>
+                                </div>
+                            )
+                        )}
+                    </div>
+                )}
+            </section>
+
+            {/* Receipt */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <h2 className="font-semibold text-gray-900">
+                        Winning Receipt
+                    </h2>
+
+                    <Link
+                        to={`/admin/receipts/${winner.receipt.id}`}
+                        state={{
+                            from:
+                                `/admin/winners/${winner.id}`,
+                        }}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                    >
+                        Full Receipt Details →
+                    </Link>
+                </div>
+
+                <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <InfoItem
+                        label="Receipt Number"
+                        value={
+                            winner.receipt
+                                .receipt_number
+                        }
+                    />
+
+                    <InfoItem
+                        label="Receipt ID"
+                        value={`#${winner.receipt.id}`}
+                    />
+
+                    <InfoItem
+                        label="Receipt Status"
+                        value={formatEnumLabel(
+                            winner.receipt
+                                .status
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Submitted"
+                        value={formatDateTime(
+                            winner.receipt
+                                .submitted_at
+                        )}
+                    />
+                </div>
+            </section>
+
+            {/* Technical & Audit */}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-200 px-5 py-4">
+                    <h2 className="font-semibold text-gray-900">
+                        Technical & Audit Details
+                    </h2>
+                </div>
+
+                <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <InfoItem
+                        label="Winner ID"
+                        value={`#${winner.id}`}
+                    />
+
+                    <InfoItem
+                        label="Draw ID"
+                        value={`#${winner.draw_id}`}
+                    />
+
+                    <InfoItem
+                        label="Entry Number"
+                        value={`#${winner.entry_number}`}
+                    />
+
+                    <InfoItem
+                        label="Selected"
+                        value={formatDateTime(
+                            winner.selected_at
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Confirmed"
+                        value={formatDateTime(
+                            winner.confirmed_at
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Cancelled"
+                        value={formatDateTime(
+                            winner.cancelled_at
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Draw Date"
+                        value={formatDateTime(
+                            winner.draw
+                                .draw_date
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Random Provider"
+                        value={
+                            winner.draw
+                                .random_provider ??
+                            '—'
+                        }
+                    />
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function InfoItem({
+                      label,
+                      value,
+                  }: {
+    label: string;
+
+    value:
+        | string
+        | number;
+}) {
+    return (
+        <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                {
+                    label
+                }
             </div>
 
+            <div className="mt-1 break-all text-sm text-gray-700">
+                {
+                    value
+                }
+            </div>
+        </div>
+    );
+}
+
+function FeedbackAlert({
+                           type,
+                           children,
+                           onClose,
+                       }: {
+    type:
+        | 'success'
+        | 'error';
+
+    children:
+        React.ReactNode;
+
+    onClose:
+        () => void;
+}) {
+    const className =
+        type ===
+        'success'
+            ? 'border-green-200 bg-green-50 text-green-700'
+            : 'border-red-200 bg-red-50 text-red-700';
+
+    return (
+        <div
+            className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm ${className}`}
+        >
+            <span>
+                {
+                    children
+                }
+            </span>
+
+            <button
+                type="button"
+                onClick={
+                    onClose
+                }
+                className="ml-4 font-medium"
+            >
+                ×
+            </button>
         </div>
     );
 }
