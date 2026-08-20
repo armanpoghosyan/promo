@@ -1,5 +1,6 @@
 import {
     useEffect,
+    useMemo,
     useState,
 } from 'react';
 
@@ -79,6 +80,23 @@ function suspiciousReasonLabel(
     );
 }
 
+function truncate(
+    value: string,
+    limit: number
+): string {
+    if (
+        value.length <=
+        limit
+    ) {
+        return value;
+    }
+
+    return `${value.slice(
+        0,
+        limit
+    )}...`;
+}
+
 export default function ReceiptQuickReviewModal({
                                                     receiptId,
                                                     backUrl,
@@ -86,11 +104,25 @@ export default function ReceiptQuickReviewModal({
                                                     onChanged,
                                                 }: Props) {
     const [
+        activeReceiptId,
+        setActiveReceiptId,
+    ] = useState(
+        receiptId
+    );
+
+    const [
         receipt,
         setReceipt,
     ] = useState<Receipt | null>(
         null
     );
+
+    const [
+        receiptHistory,
+        setReceiptHistory,
+    ] = useState<number[]>([
+        receiptId,
+    ]);
 
     const [
         loading,
@@ -132,15 +164,34 @@ export default function ReceiptQuickReviewModal({
     ] = useState(false);
 
     useEffect(() => {
+        setActiveReceiptId(
+            receiptId
+        );
+
+        setReceiptHistory([
+            receiptId,
+        ]);
+    }, [receiptId]);
+
+    useEffect(() => {
         const loadReceipt =
             async () => {
                 setLoading(true);
                 setError(null);
+                setActionError(null);
+
+                setShowReject(
+                    false
+                );
+
+                setRejectionReason(
+                    ''
+                );
 
                 try {
                     const response =
                         await api.get<ReceiptResponse>(
-                            `/admin/receipts/${receiptId}`
+                            `/admin/receipts/${activeReceiptId}`
                         );
 
                     setReceipt(
@@ -149,6 +200,10 @@ export default function ReceiptQuickReviewModal({
                 } catch (
                     error: unknown
                     ) {
+                    setReceipt(
+                        null
+                    );
+
                     setError(
                         getApiErrorMessage(
                             error,
@@ -161,7 +216,7 @@ export default function ReceiptQuickReviewModal({
             };
 
         loadReceipt();
-    }, [receiptId]);
+    }, [activeReceiptId]);
 
     useEffect(() => {
         const handleKeyDown = (
@@ -213,6 +268,58 @@ export default function ReceiptQuickReviewModal({
         };
     }, []);
 
+    const openRelatedReceipt = (
+        nextReceiptId: number
+    ) => {
+        if (
+            nextReceiptId ===
+            activeReceiptId
+        ) {
+            return;
+        }
+
+        setReceiptHistory(
+            (current) => [
+                ...current,
+                nextReceiptId,
+            ]
+        );
+
+        setActiveReceiptId(
+            nextReceiptId
+        );
+    };
+
+    const goBackReceipt =
+        () => {
+            if (
+                receiptHistory.length <=
+                1
+            ) {
+                return;
+            }
+
+            const nextHistory =
+                receiptHistory.slice(
+                    0,
+                    -1
+                );
+
+            const previousReceiptId =
+                nextHistory[
+                nextHistory.length -
+                1
+                    ];
+
+            setReceiptHistory(
+                nextHistory
+            );
+
+            setActiveReceiptId(
+                previousReceiptId
+            );
+        };
+
     const approveReceipt =
         async () => {
             if (!receipt) {
@@ -239,7 +346,21 @@ export default function ReceiptQuickReviewModal({
                     updatedReceipt
                 );
 
-                onClose();
+                /*
+                 * If reviewing the originally
+                 * selected receipt, close.
+                 *
+                 * If reviewing participant
+                 * history, keep the modal open
+                 * so the admin can continue
+                 * investigating.
+                 */
+                if (
+                    receipt.id ===
+                    receiptId
+                ) {
+                    onClose();
+                }
             } catch (
                 error: unknown
                 ) {
@@ -287,7 +408,20 @@ export default function ReceiptQuickReviewModal({
                     updatedReceipt
                 );
 
-                onClose();
+                setShowReject(
+                    false
+                );
+
+                setRejectionReason(
+                    ''
+                );
+
+                if (
+                    receipt.id ===
+                    receiptId
+                ) {
+                    onClose();
+                }
             } catch (
                 error: unknown
                 ) {
@@ -306,6 +440,26 @@ export default function ReceiptQuickReviewModal({
         receipt?.participant;
 
     const otherReceipts =
+        useMemo(
+            () =>
+                (
+                    participant
+                        ?.receipts ??
+                    []
+                ).filter(
+                    (
+                        participantReceipt
+                    ) =>
+                        participantReceipt.id !==
+                        receipt?.id
+                ),
+            [
+                participant,
+                receipt?.id,
+            ]
+        );
+
+    const participantOtherReceiptCount =
         Math.max(
             (
                 participant
@@ -323,6 +477,10 @@ export default function ReceiptQuickReviewModal({
         Boolean(
             receipt?.is_suspicious
         );
+
+    const isRelatedReceipt =
+        activeReceiptId !==
+        receiptId;
 
     return (
         <>
@@ -344,6 +502,19 @@ export default function ReceiptQuickReviewModal({
 
                     <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
                         <div>
+                            {isRelatedReceipt && (
+                                <button
+                                    type="button"
+                                    onClick={
+                                        goBackReceipt
+                                    }
+                                    className="mb-2 inline-flex text-xs font-medium text-blue-600 hover:text-blue-800"
+                                >
+                                    ← Back to previous
+                                    receipt
+                                </button>
+                            )}
+
                             <div className="flex flex-wrap items-center gap-3">
                                 <h2 className="text-lg font-semibold text-gray-900">
                                     {receipt
@@ -409,8 +580,8 @@ export default function ReceiptQuickReviewModal({
                     ) : (
                         <>
                             <div className="min-h-0 flex-1 overflow-y-auto">
-                                <div className="grid min-h-full grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-                                    {/* Image */}
+                                <div className="grid min-h-full grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+                                    {/* Receipt image */}
 
                                     <div className="border-b border-gray-200 bg-gray-50 p-5 xl:border-b-0 xl:border-r">
                                         <button
@@ -430,18 +601,17 @@ export default function ReceiptQuickReviewModal({
                                         </button>
 
                                         <div className="mt-2 text-center text-xs text-gray-400">
-                                            Click image
-                                            to enlarge
+                                            Click image to
+                                            enlarge
                                         </div>
                                     </div>
 
-                                    {/* Review information */}
+                                    {/* Review context */}
 
                                     <div className="space-y-5 p-5">
                                         <section>
                                             <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                Receipt
-                                                Number
+                                                Receipt Number
                                             </div>
 
                                             <div className="mt-1 break-all text-xl font-semibold text-gray-900">
@@ -451,76 +621,203 @@ export default function ReceiptQuickReviewModal({
                                             </div>
                                         </section>
 
+                                        {/* Participant */}
+
                                         {participant && (
-                                            <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                            Participant
+                                            <section className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                                                <div className="p-4">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                                Participant
+                                                            </div>
+
+                                                            <div className="mt-2 font-semibold text-gray-900">
+                                                                {
+                                                                    participant.first_name
+                                                                }{' '}
+                                                                {
+                                                                    participant.last_name
+                                                                }
+                                                            </div>
                                                         </div>
 
-                                                        <div className="mt-2 font-semibold text-gray-900">
+                                                        {participantOtherReceiptCount >
+                                                            0 && (
+                                                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                                                +
+                                                                    {
+                                                                        participantOtherReceiptCount
+                                                                    }{' '}
+                                                                    other
+                                                                receipt
+                                                                    {participantOtherReceiptCount ===
+                                                                    1
+                                                                        ? ''
+                                                                        : 's'}
+                                                            </span>
+                                                            )}
+                                                    </div>
+
+                                                    <div className="mt-3 space-y-1 text-sm text-gray-600">
+                                                        <div>
                                                             {
-                                                                participant.first_name
-                                                            }{' '}
+                                                                participant.phone
+                                                            }
+                                                        </div>
+
+                                                        <div className="break-all">
                                                             {
-                                                                participant.last_name
+                                                                participant.email
                                                             }
                                                         </div>
                                                     </div>
-
-                                                    {otherReceipts >
-                                                        0 && (
-                                                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                                            +
-                                                                {
-                                                                    otherReceipts
-                                                                }{' '}
-                                                                other
-                                                            receipt
-                                                                {otherReceipts ===
-                                                                1
-                                                                    ? ''
-                                                                    : 's'}
-                                                        </span>
-                                                        )}
                                                 </div>
 
-                                                <div className="mt-3 space-y-1 text-sm text-gray-600">
-                                                    <div>
-                                                        {
-                                                            participant.phone
-                                                        }
-                                                    </div>
+                                                {/* Other receipt history */}
 
-                                                    <div className="break-all">
-                                                        {
-                                                            participant.email
-                                                        }
-                                                    </div>
+                                                {otherReceipts.length >
+                                                    0 && (
+                                                        <div className="border-t border-gray-200 bg-white">
+                                                            <div className="flex items-center justify-between px-4 py-3">
+                                                                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                    Other
+                                                                    Receipts
+                                                                </div>
+
+                                                                <span className="text-[11px] text-gray-400">
+                                                                Showing{' '}
+                                                                    {
+                                                                        otherReceipts.length
+                                                                    }{' '}
+                                                                    of{' '}
+                                                                    {
+                                                                        participantOtherReceiptCount
+                                                                    }
+                                                            </span>
+                                                            </div>
+
+                                                            <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
+                                                                {otherReceipts.map(
+                                                                    (
+                                                                        participantReceipt
+                                                                    ) => {
+                                                                        const reasons =
+                                                                            participantReceipt.suspicious_reasons ??
+                                                                            [];
+
+                                                                        return (
+                                                                            <button
+                                                                                key={
+                                                                                    participantReceipt.id
+                                                                                }
+                                                                                type="button"
+                                                                                onClick={() =>
+                                                                                    openRelatedReceipt(
+                                                                                        participantReceipt.id
+                                                                                    )
+                                                                                }
+                                                                                className="block w-full px-4 py-3 text-left transition hover:bg-gray-50"
+                                                                            >
+                                                                                <div className="flex items-start justify-between gap-3">
+                                                                                    <div className="min-w-0">
+                                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                                        <span className="text-sm font-medium text-gray-900">
+                                                                                            {
+                                                                                                participantReceipt.receipt_number
+                                                                                            }
+                                                                                        </span>
+
+                                                                                            <StatusBadge
+                                                                                                status={
+                                                                                                    participantReceipt.status
+                                                                                                }
+                                                                                            />
+                                                                                        </div>
+
+                                                                                        <div className="mt-1 text-[11px] text-gray-400">
+                                                                                            Receipt
+                                                                                            ID
+                                                                                            #{' '}
+                                                                                            {
+                                                                                                participantReceipt.id
+                                                                                            }
+
+                                                                                            {' · '}
+
+                                                                                            {formatDateTime(
+                                                                                                participantReceipt.submitted_at ??
+                                                                                                participantReceipt.created_at
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        {participantReceipt.status ===
+                                                                                            'rejected' &&
+                                                                                            participantReceipt.rejection_reason && (
+                                                                                                <div className="mt-2 text-xs text-red-700">
+                                                                                                    {truncate(
+                                                                                                        participantReceipt.rejection_reason,
+                                                                                                        65
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            )}
+
+                                                                                        {participantReceipt.is_suspicious &&
+                                                                                            reasons.length >
+                                                                                            0 && (
+                                                                                                <div className="mt-2 text-xs font-medium text-amber-700">
+                                                                                                    ⚠{' '}
+                                                                                                    {suspiciousReasonLabel(
+                                                                                                        reasons[0]
+                                                                                                    )}
+
+                                                                                                    {reasons.length >
+                                                                                                        1 && (
+                                                                                                            <>
+                                                                                                                {' '}
+                                                                                                                +
+                                                                                                                {reasons.length -
+                                                                                                                    1}
+                                                                                                            </>
+                                                                                                        )}
+                                                                                                </div>
+                                                                                            )}
+                                                                                    </div>
+
+                                                                                    <span className="shrink-0 text-xs font-medium text-blue-600">
+                                                                                    Review →
+                                                                                </span>
+                                                                                </div>
+                                                                            </button>
+                                                                        );
+                                                                    }
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                <div className="border-t border-gray-200 px-4 py-3">
+                                                    <Link
+                                                        to={`/admin/participants/${participant.id}`}
+                                                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        View Participant
+                                                        →
+                                                    </Link>
                                                 </div>
-
-                                                <Link
-                                                    to={`/admin/participants/${participant.id}`}
-                                                    className="mt-3 inline-flex text-xs font-medium text-blue-600 hover:text-blue-800"
-                                                >
-                                                    View
-                                                    participant
-                                                    →
-                                                </Link>
                                             </section>
                                         )}
+
+                                        {/* Suspicious reasons */}
 
                                         {suspicious && (
                                             <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                                                 <div className="font-semibold text-amber-900">
-                                                    Review
-                                                    flags
+                                                    Review flags
                                                 </div>
 
                                                 <div className="mt-1 text-xs text-amber-700">
-                                                    This receipt
-                                                    was
+                                                    This receipt was
                                                     automatically
                                                     flagged for
                                                     additional
@@ -576,9 +873,7 @@ export default function ReceiptQuickReviewModal({
                                                 .notes
                                                 ?.length ? (
                                                 <div className="mt-3 rounded-lg border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                                                    No
-                                                    notes
-                                                    yet.
+                                                    No notes yet.
                                                 </div>
                                             ) : (
                                                 <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
@@ -619,11 +914,12 @@ export default function ReceiptQuickReviewModal({
                                             )}
                                         </section>
 
+                                        {/* Rejection reason */}
+
                                         {receipt.rejection_reason && (
                                             <section className="rounded-xl border border-red-200 bg-red-50 p-4">
                                                 <div className="text-xs font-semibold uppercase tracking-wide text-red-600">
-                                                    Rejection
-                                                    Reason
+                                                    Rejection Reason
                                                 </div>
 
                                                 <div className="mt-2 whitespace-pre-wrap text-sm text-red-800">
@@ -649,14 +945,15 @@ export default function ReceiptQuickReviewModal({
                                             </Alert>
                                         )}
 
+                                        {/* Reject form */}
+
                                         {showReject && (
                                             <section className="rounded-xl border border-red-200 bg-red-50 p-4">
                                                 <label
                                                     htmlFor="quick-review-rejection-reason"
                                                     className="text-sm font-medium text-red-800"
                                                 >
-                                                    Rejection
-                                                    reason
+                                                    Rejection reason
                                                 </label>
 
                                                 <textarea
@@ -723,7 +1020,7 @@ export default function ReceiptQuickReviewModal({
                                 </div>
                             </div>
 
-                            {/* Actions */}
+                            {/* Footer actions */}
 
                             <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                                 <Link
@@ -734,8 +1031,7 @@ export default function ReceiptQuickReviewModal({
                                     }}
                                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                                 >
-                                    Full
-                                    Details →
+                                    Full Details →
                                 </Link>
 
                                 <div className="flex flex-wrap justify-end gap-2">
@@ -746,8 +1042,7 @@ export default function ReceiptQuickReviewModal({
                                         }
                                         className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
                                     >
-                                        Leave
-                                        for Later
+                                        Leave for Later
                                     </button>
 
                                     {canReview && (
@@ -800,7 +1095,7 @@ export default function ReceiptQuickReviewModal({
                 </div>
             </div>
 
-            {/* Enlarged receipt */}
+            {/* Enlarged image */}
 
             {imageOpen &&
                 receipt && (
