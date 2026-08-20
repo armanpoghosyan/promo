@@ -135,10 +135,6 @@ export interface ReceiptListMeta {
     counts: ReceiptListCounts;
 
     filters: {
-        search:
-            | string
-            | null;
-
         status:
             | ReceiptStatus
             | null;
@@ -146,22 +142,6 @@ export interface ReceiptListMeta {
         suspicious:
             | boolean
             | null;
-
-        suspicious_reason:
-            | string
-            | null;
-
-        date_from:
-            | string
-            | null;
-
-        date_to:
-            | string
-            | null;
-
-        direction:
-            | 'asc'
-            | 'desc';
     };
 }
 

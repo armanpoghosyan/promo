@@ -6,8 +6,6 @@ use App\Enums\ReceiptStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Receipt;
-use App\Services\ParticipantIdentityService;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,19 +14,9 @@ use Illuminate\Validation\Rule;
 
 class ReceiptController extends Controller
 {
-    public function __construct(
-        private ParticipantIdentityService $participantIdentity
-    ) {}
-
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
-            'search' => [
-                'nullable',
-                'string',
-                'max:255',
-            ],
-
             'status' => [
                 'nullable',
                 Rule::enum(
@@ -41,30 +29,6 @@ class ReceiptController extends Controller
                 'boolean',
             ],
 
-            'suspicious_reason' => [
-                'nullable',
-                'string',
-                'max:100',
-            ],
-
-            'date_from' => [
-                'nullable',
-                'date',
-            ],
-
-            'date_to' => [
-                'nullable',
-                'date',
-            ],
-
-            'direction' => [
-                'nullable',
-                Rule::in([
-                    'asc',
-                    'desc',
-                ]),
-            ],
-
             'per_page' => [
                 'nullable',
                 'integer',
@@ -72,46 +36,6 @@ class ReceiptController extends Controller
                 'max:100',
             ],
         ]);
-
-        if (
-            ! empty(
-                $filters['date_from']
-            ) &&
-            ! empty(
-                $filters['date_to']
-            ) &&
-            strtotime(
-                $filters['date_to']
-            ) <
-            strtotime(
-                $filters['date_from']
-            )
-        ) {
-            return response()->json([
-                'message' =>
-                    'The date to must be after or equal to date from.',
-
-                'errors' => [
-                    'date_to' => [
-                        'The date to must be after or equal to date from.',
-                    ],
-                ],
-            ], 422);
-        }
-
-        $baseQuery =
-            Receipt::query();
-
-        $this->applySearch(
-            $baseQuery,
-            $filters['search'] ?? null
-        );
-
-        $this->applyDateFilters(
-            $baseQuery,
-            $filters['date_from'] ?? null,
-            $filters['date_to'] ?? null
-        );
 
         /*
          * Main lifecycle counts.
@@ -121,11 +45,11 @@ class ReceiptController extends Controller
          */
         $counts = [
             'all' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->count(),
 
             'submitted' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->where(
                         'status',
                         ReceiptStatus::SUBMITTED
@@ -133,7 +57,7 @@ class ReceiptController extends Controller
                     ->count(),
 
             'submitted_suspicious' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->where(
                         'status',
                         ReceiptStatus::SUBMITTED
@@ -145,7 +69,7 @@ class ReceiptController extends Controller
                     ->count(),
 
             'submitted_normal' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->where(
                         'status',
                         ReceiptStatus::SUBMITTED
@@ -157,7 +81,7 @@ class ReceiptController extends Controller
                     ->count(),
 
             'approved' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->where(
                         'status',
                         ReceiptStatus::APPROVED
@@ -165,7 +89,7 @@ class ReceiptController extends Controller
                     ->count(),
 
             'rejected' =>
-                (clone $baseQuery)
+                Receipt::query()
                     ->where(
                         'status',
                         ReceiptStatus::REJECTED
@@ -174,7 +98,7 @@ class ReceiptController extends Controller
         ];
 
         $query =
-            clone $baseQuery;
+            Receipt::query();
 
         if (
             ! empty(
@@ -188,8 +112,10 @@ class ReceiptController extends Controller
         }
 
         /*
-         * false is meaningful here,
-         * so we check parameter existence.
+         * false is meaningful here.
+         *
+         * suspicious=true
+         * suspicious=false
          */
         if (
             array_key_exists(
@@ -205,17 +131,12 @@ class ReceiptController extends Controller
             );
         }
 
-        $this->applySuspiciousReasonFilter(
-            $query,
-            $filters['suspicious_reason'] ?? null
-        );
-
         /*
          * Efficient list context:
          *
          * - participant receipt count
          * - latest note
-         * - note count
+         * - total note count
          */
         $query
             ->with([
@@ -232,18 +153,18 @@ class ReceiptController extends Controller
                 'notes'
             );
 
-        $direction =
-            $filters['direction'] ??
-            'desc';
-
+        /*
+         * Fixed ordering.
+         *
+         * Most recently submitted receipts
+         * are always shown first.
+         */
         $query
-            ->orderBy(
-                'submitted_at',
-                $direction
+            ->orderByDesc(
+                'submitted_at'
             )
-            ->orderBy(
-                'id',
-                $direction
+            ->orderByDesc(
+                'id'
             );
 
         $perPage =
@@ -282,10 +203,6 @@ class ReceiptController extends Controller
                     $counts,
 
                 'filters' => [
-                    'search' =>
-                        $filters['search'] ??
-                        null,
-
                     'status' =>
                         $filters['status'] ??
                         null,
@@ -299,186 +216,9 @@ class ReceiptController extends Controller
                                 'suspicious'
                             )
                             : null,
-
-                    'suspicious_reason' =>
-                        $filters[
-                            'suspicious_reason'
-                        ] ?? null,
-
-                    'date_from' =>
-                        $filters[
-                            'date_from'
-                        ] ?? null,
-
-                    'date_to' =>
-                        $filters[
-                            'date_to'
-                        ] ?? null,
-
-                    'direction' =>
-                        $direction,
                 ],
             ],
         ]);
-    }
-
-    private function applySearch(
-        Builder $query,
-        ?string $search
-    ): void {
-        $search =
-            trim(
-                (string) $search
-            );
-
-        if ($search === '') {
-            return;
-        }
-
-        $like =
-            '%'.$search.'%';
-
-        $normalizedPhone =
-            $this
-                ->participantIdentity
-                ->normalizePhone(
-                    $search
-                );
-
-        $normalizedEmail =
-            $this
-                ->participantIdentity
-                ->normalizeEmail(
-                    $search
-                );
-
-        $query->where(
-            function (
-                Builder $query
-            ) use (
-                $search,
-                $like,
-                $normalizedPhone,
-                $normalizedEmail
-            ) {
-                if (
-                    ctype_digit(
-                        $search
-                    )
-                ) {
-                    $query->orWhere(
-                        'id',
-                        (int) $search
-                    );
-                }
-
-                $query->orWhere(
-                    'receipt_number',
-                    'like',
-                    $like
-                );
-
-                $query->orWhereHas(
-                    'participant',
-                    function (
-                        Builder $query
-                    ) use (
-                        $like,
-                        $normalizedPhone,
-                        $normalizedEmail
-                    ) {
-                        $query
-                            ->where(
-                                'first_name',
-                                'like',
-                                $like
-                            )
-                            ->orWhere(
-                                'last_name',
-                                'like',
-                                $like
-                            )
-                            ->orWhere(
-                                'phone',
-                                'like',
-                                $like
-                            )
-                            ->orWhere(
-                                'email',
-                                'like',
-                                $like
-                            );
-
-                        if (
-                            $normalizedPhone !==
-                            ''
-                        ) {
-                            $query->orWhere(
-                                'phone_normalized',
-                                'like',
-                                '%'.
-                                $normalizedPhone.
-                                '%'
-                            );
-                        }
-
-                        if (
-                            $normalizedEmail !==
-                            ''
-                        ) {
-                            $query->orWhere(
-                                'email_normalized',
-                                'like',
-                                '%'.
-                                $normalizedEmail.
-                                '%'
-                            );
-                        }
-                    }
-                );
-            }
-        );
-    }
-
-    private function applyDateFilters(
-        Builder $query,
-        ?string $dateFrom,
-        ?string $dateTo
-    ): void {
-        if ($dateFrom) {
-            $query->whereDate(
-                'submitted_at',
-                '>=',
-                $dateFrom
-            );
-        }
-
-        if ($dateTo) {
-            $query->whereDate(
-                'submitted_at',
-                '<=',
-                $dateTo
-            );
-        }
-    }
-
-    private function applySuspiciousReasonFilter(
-        Builder $query,
-        ?string $reason
-    ): void {
-        $reason =
-            trim(
-                (string) $reason
-            );
-
-        if ($reason === '') {
-            return;
-        }
-
-        $query->whereJsonContains(
-            'suspicious_reasons',
-            $reason
-        );
     }
 
     public function show(

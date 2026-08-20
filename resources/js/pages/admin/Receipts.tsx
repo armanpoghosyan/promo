@@ -49,10 +49,6 @@ type ReviewFilter =
     | 'suspicious'
     | 'normal';
 
-type SortDirection =
-    | 'asc'
-    | 'desc';
-
 const emptyCounts: ReceiptListCounts = {
     all: 0,
 
@@ -84,44 +80,6 @@ const suspiciousReasonLabels: Record<
     receipt_number_non_numeric:
         'Receipt number contains unexpected characters',
 };
-
-const suspiciousReasonOptions = [
-    {
-        value: '',
-        label:
-            'All suspicious reasons',
-    },
-    {
-        value:
-            'duplicate_receipt_number',
-        label:
-            'Duplicate receipt number',
-    },
-    {
-        value:
-            'duplicate_receipt_image',
-        label:
-            'Duplicate receipt image',
-    },
-    {
-        value:
-            'phone_used_by_another_participant',
-        label:
-            'Phone used by another participant',
-    },
-    {
-        value:
-            'email_used_by_another_participant',
-        label:
-            'Email used by another participant',
-    },
-    {
-        value:
-            'receipt_number_non_numeric',
-        label:
-            'Unexpected receipt number format',
-    },
-];
 
 function suspiciousReasonLabel(
     reason: SuspiciousReason
@@ -190,33 +148,6 @@ export default function Receipts() {
             ) as ReviewFilter | null
         ) ?? 'all';
 
-    const initialSearch =
-        searchParams.get(
-            'search'
-        ) ?? '';
-
-    const initialDateFrom =
-        searchParams.get(
-            'date_from'
-        ) ?? '';
-
-    const initialDateTo =
-        searchParams.get(
-            'date_to'
-        ) ?? '';
-
-    const initialReason =
-        searchParams.get(
-            'suspicious_reason'
-        ) ?? '';
-
-    const initialDirection =
-        (
-            searchParams.get(
-                'direction'
-            ) as SortDirection | null
-        ) ?? 'desc';
-
     const [
         receipts,
         setReceipts,
@@ -264,48 +195,6 @@ export default function Receipts() {
     );
 
     const [
-        search,
-        setSearch,
-    ] = useState(
-        initialSearch
-    );
-
-    const [
-        searchInput,
-        setSearchInput,
-    ] = useState(
-        initialSearch
-    );
-
-    const [
-        dateFrom,
-        setDateFrom,
-    ] = useState(
-        initialDateFrom
-    );
-
-    const [
-        dateTo,
-        setDateTo,
-    ] = useState(
-        initialDateTo
-    );
-
-    const [
-        suspiciousReason,
-        setSuspiciousReason,
-    ] = useState(
-        initialReason
-    );
-
-    const [
-        direction,
-        setDirection,
-    ] = useState<SortDirection>(
-        initialDirection
-    );
-
-    const [
         quickReviewReceiptId,
         setQuickReviewReceiptId,
     ] = useState<
@@ -336,7 +225,6 @@ export default function Receipts() {
                         | boolean
                     > = {
                         page,
-                        direction,
                     };
 
                     if (
@@ -377,34 +265,6 @@ export default function Receipts() {
                     ) {
                         params.status =
                             'rejected';
-                    }
-
-                    if (
-                        search.trim()
-                    ) {
-                        params.search =
-                            search.trim();
-                    }
-
-                    if (dateFrom) {
-                        params.date_from =
-                            dateFrom;
-                    }
-
-                    if (dateTo) {
-                        params.date_to =
-                            dateTo;
-                    }
-
-                    if (
-                        tab ===
-                        'submitted' &&
-                        reviewFilter ===
-                        'suspicious' &&
-                        suspiciousReason
-                    ) {
-                        params.suspicious_reason =
-                            suspiciousReason;
                     }
 
                     const response =
@@ -460,76 +320,11 @@ export default function Receipts() {
                 page,
                 tab,
                 reviewFilter,
-                search,
-                dateFrom,
-                dateTo,
-                suspiciousReason,
-                direction,
             ]
         );
 
     /*
-     * Global live search.
-     *
-     * Numeric input may be
-     * an exact receipt ID.
-     *
-     * Text search starts at
-     * three characters.
-     */
-    useEffect(() => {
-        const value =
-            searchInput.trim();
-
-        if (
-            value === ''
-        ) {
-            if (
-                search !== ''
-            ) {
-                setPage(1);
-                setSearch('');
-            }
-
-            return;
-        }
-
-        const numeric =
-            /^\d+$/.test(
-                value
-            );
-
-        if (
-            !numeric &&
-            value.length < 3
-        ) {
-            return;
-        }
-
-        const timeout =
-            window.setTimeout(
-                () => {
-                    setPage(1);
-
-                    setSearch(
-                        value
-                    );
-                },
-                350
-            );
-
-        return () => {
-            window.clearTimeout(
-                timeout
-            );
-        };
-    }, [
-        searchInput,
-        search,
-    ]);
-
-    /*
-     * Keep complete workspace
+     * Keep only navigation state
      * represented in the URL.
      */
     useEffect(() => {
@@ -567,50 +362,6 @@ export default function Receipts() {
             );
         }
 
-        if (search) {
-            params.set(
-                'search',
-                search
-            );
-        }
-
-        if (dateFrom) {
-            params.set(
-                'date_from',
-                dateFrom
-            );
-        }
-
-        if (dateTo) {
-            params.set(
-                'date_to',
-                dateTo
-            );
-        }
-
-        if (
-            tab ===
-            'submitted' &&
-            reviewFilter ===
-            'suspicious' &&
-            suspiciousReason
-        ) {
-            params.set(
-                'suspicious_reason',
-                suspiciousReason
-            );
-        }
-
-        if (
-            direction !==
-            'desc'
-        ) {
-            params.set(
-                'direction',
-                direction
-            );
-        }
-
         setSearchParams(
             params,
             {
@@ -621,46 +372,12 @@ export default function Receipts() {
         page,
         tab,
         reviewFilter,
-        search,
-        dateFrom,
-        dateTo,
-        suspiciousReason,
-        direction,
         setSearchParams,
     ]);
 
     useEffect(() => {
         loadReceipts();
     }, [loadReceipts]);
-
-    const hasFilters =
-        Boolean(
-            search ||
-            dateFrom ||
-            dateTo ||
-            (
-                tab ===
-                'submitted' &&
-                reviewFilter ===
-                'suspicious' &&
-                suspiciousReason
-            )
-        );
-
-    const resetFilters =
-        () => {
-            setPage(1);
-
-            setSearch('');
-            setSearchInput('');
-
-            setDateFrom('');
-            setDateTo('');
-
-            setSuspiciousReason(
-                ''
-            );
-        };
 
     const changeTab = (
         nextTab: ReceiptTab
@@ -671,20 +388,12 @@ export default function Receipts() {
 
         setPage(1);
 
-        /*
-         * Review subtype belongs only
-         * to the submitted queue.
-         */
         if (
             nextTab !==
             'submitted'
         ) {
             setReviewFilter(
                 'all'
-            );
-
-            setSuspiciousReason(
-                ''
             );
         }
     };
@@ -697,29 +406,7 @@ export default function Receipts() {
         );
 
         setPage(1);
-
-        if (
-            nextFilter !==
-            'suspicious'
-        ) {
-            setSuspiciousReason(
-                ''
-            );
-        }
     };
-
-    const toggleSubmittedSort =
-        () => {
-            setDirection(
-                (current) =>
-                    current ===
-                    'desc'
-                        ? 'asc'
-                        : 'desc'
-            );
-
-            setPage(1);
-        };
 
     const tabs: Array<{
         value: ReceiptTab;
@@ -829,7 +516,7 @@ export default function Receipts() {
                 </nav>
             </div>
 
-            {/* Review queue subtype */}
+            {/* Review queue */}
 
             {tab ===
                 'submitted' && (
@@ -842,7 +529,7 @@ export default function Receipts() {
                             <div className="mt-0.5 text-xs text-gray-500">
                                 Separate normal
                                 submissions from
-                                receipts that require
+                                receipts requiring
                                 deeper review.
                             </div>
                         </div>
@@ -911,178 +598,6 @@ export default function Receipts() {
                     </section>
                 )}
 
-            {/* Search */}
-
-            <div>
-                <input
-                    type="search"
-                    value={
-                        searchInput
-                    }
-                    onChange={(
-                        event
-                    ) =>
-                        setSearchInput(
-                            event
-                                .target
-                                .value
-                        )
-                    }
-                    placeholder="Search receipt ID, receipt number, participant name, phone or email..."
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                />
-
-                {searchInput.trim() &&
-                    !/^\d+$/.test(
-                        searchInput.trim()
-                    ) &&
-                    searchInput
-                        .trim()
-                        .length <
-                    3 && (
-                        <div className="mt-1.5 text-xs text-gray-400">
-                            Enter at least
-                            3 characters to
-                            search.
-                        </div>
-                    )}
-            </div>
-
-            {/* Filters */}
-
-            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
-                    <div>
-                        <label
-                            htmlFor="date-from"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Submitted from
-                        </label>
-
-                        <input
-                            id="date-from"
-                            type="date"
-                            value={
-                                dateFrom
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setDateFrom(
-                                    event
-                                        .target
-                                        .value
-                                );
-
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
-                        />
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="date-to"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Submitted to
-                        </label>
-
-                        <input
-                            id="date-to"
-                            type="date"
-                            value={
-                                dateTo
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setDateTo(
-                                    event
-                                        .target
-                                        .value
-                                );
-
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
-                        />
-                    </div>
-
-                    {tab ===
-                        'submitted' &&
-                        reviewFilter ===
-                        'suspicious' && (
-                            <div className="min-w-0 flex-1">
-                                <label
-                                    htmlFor="suspicious-reason"
-                                    className="mb-1.5 block text-xs font-medium text-gray-500"
-                                >
-                                    Suspicious
-                                    reason
-                                </label>
-
-                                <select
-                                    id="suspicious-reason"
-                                    value={
-                                        suspiciousReason
-                                    }
-                                    onChange={(
-                                        event
-                                    ) => {
-                                        setSuspiciousReason(
-                                            event
-                                                .target
-                                                .value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-                                    }}
-                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                                >
-                                    {suspiciousReasonOptions.map(
-                                        (
-                                            option
-                                        ) => (
-                                            <option
-                                                key={
-                                                    option.value
-                                                }
-                                                value={
-                                                    option.value
-                                                }
-                                            >
-                                                {
-                                                    option.label
-                                                }
-                                            </option>
-                                        )
-                                    )}
-                                </select>
-                            </div>
-                        )}
-
-                    {hasFilters && (
-                        <button
-                            type="button"
-                            onClick={
-                                resetFilters
-                            }
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                        >
-                            Reset filters
-                        </button>
-                    )}
-                </div>
-            </section>
-
             {error && (
                 <Alert
                     variant="error"
@@ -1106,12 +621,10 @@ export default function Receipts() {
                     <EmptyState
                         title="No receipts found."
                         description={
-                            hasFilters
-                                ? 'Try changing the search or filters.'
-                                : tab ===
-                                'submitted'
-                                    ? 'There are no receipts waiting for review in this queue.'
-                                    : 'There are no receipts in this section.'
+                            tab ===
+                            'submitted'
+                                ? 'There are no receipts waiting for review in this queue.'
+                                : 'There are no receipts in this section.'
                         }
                     />
                 ) : (
@@ -1140,23 +653,8 @@ export default function Receipts() {
                                         Latest Note
                                     </th>
 
-                                    <th className="px-5 py-3">
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                toggleSubmittedSort
-                                            }
-                                            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-900"
-                                        >
-                                            Submitted
-
-                                            <span>
-                                                    {direction ===
-                                                    'desc'
-                                                        ? '↓'
-                                                        : '↑'}
-                                                </span>
-                                        </button>
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Submitted
                                     </th>
                                 </tr>
                                 </thead>
