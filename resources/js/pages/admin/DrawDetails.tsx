@@ -9,8 +9,9 @@ import {
     useParams,
 } from 'react-router-dom';
 
-import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
+
+import api from '../../services/api';
 
 import type {
     ApiError,
@@ -129,7 +130,11 @@ type AvailablePrize = {
     currency: string | null;
 
     total_quantity: number;
-    allocated_quantity: number | string;
+
+    allocated_quantity:
+        | number
+        | string;
+
     available_quantity: number;
 };
 
@@ -141,27 +146,42 @@ function getApiMessage(
         error as ApiError;
 
     return (
-        apiError.response?.data?.message ??
+        apiError.response?.data
+            ?.message ??
         fallback
     );
 }
 
 export default function DrawDetails() {
-    const { id } = useParams();
+    const {
+        id,
+    } = useParams();
 
-    const [draw, setDraw] =
-        useState<Draw | null>(null);
+    const [
+        draw,
+        setDraw,
+    ] = useState<Draw | null>(
+        null
+    );
 
     const [
         availablePrizes,
         setAvailablePrizes,
-    ] = useState<AvailablePrize[]>([]);
+    ] = useState<
+        AvailablePrize[]
+    >([]);
 
-    const [loading, setLoading] =
-        useState(true);
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
 
-    const [error, setError] =
-        useState<string | null>(null);
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         actionLoading,
@@ -171,16 +191,16 @@ export default function DrawDetails() {
     const [
         actionError,
         setActionError,
-    ] = useState<string | null>(
-        null
-    );
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         actionSuccess,
         setActionSuccess,
-    ] = useState<string | null>(
-        null
-    );
+    ] = useState<
+        string | null
+    >(null);
 
     /*
      * Settings
@@ -215,21 +235,14 @@ export default function DrawDetails() {
     const [
         selectedPrizeId,
         setSelectedPrizeId,
-    ] = useState<number | ''>('');
+    ] = useState<
+        number | ''
+    >('');
 
     const [
         prizeQuantity,
         setPrizeQuantity,
     ] = useState(1);
-
-    /*
-     * Audit
-     */
-
-    const [
-        auditOpen,
-        setAuditOpen,
-    ] = useState(false);
 
     /*
      * Permissions / lifecycle
@@ -238,8 +251,10 @@ export default function DrawDetails() {
     const isEditableDraw =
         draw !== null &&
         (
-            draw.status === 'draft' ||
-            draw.status === 'scheduled'
+            draw.status ===
+            'draft' ||
+            draw.status ===
+            'scheduled'
         ) &&
         !draw.snapshot_at;
 
@@ -249,12 +264,15 @@ export default function DrawDetails() {
 
     const canExecute =
         draw !== null &&
-        draw.status === 'running' &&
-        Boolean(draw.snapshot_at) &&
+        draw.status ===
+        'running' &&
+        Boolean(
+            draw.snapshot_at
+        ) &&
         !draw.randomized_at;
 
     /*
-     * Load data
+     * Load
      */
 
     const loadDraw =
@@ -264,7 +282,9 @@ export default function DrawDetails() {
                     'Draw ID is missing.'
                 );
 
-                setLoading(false);
+                setLoading(
+                    false
+                );
 
                 return;
             }
@@ -298,8 +318,12 @@ export default function DrawDetails() {
                         loadedDraw.status
                     );
                 }
-            } catch (err) {
-                console.error(err);
+            } catch (
+                error: unknown
+                ) {
+                console.error(
+                    error
+                );
 
                 setError(
                     'Unable to load draw.'
@@ -328,14 +352,12 @@ export default function DrawDetails() {
 
                             allocated_quantity:
                                 Number(
-                                    prize
-                                        .allocated_quantity
+                                    prize.allocated_quantity
                                 ),
 
                             available_quantity:
                                 Number(
-                                    prize
-                                        .available_quantity
+                                    prize.available_quantity
                                 ),
                         })
                     );
@@ -343,10 +365,12 @@ export default function DrawDetails() {
                 setAvailablePrizes(
                     prizes
                 );
-            } catch (err) {
+            } catch (
+                error: unknown
+                ) {
                 console.error(
                     'Unable to load prizes:',
-                    err
+                    error
                 );
             }
         };
@@ -362,19 +386,28 @@ export default function DrawDetails() {
     useEffect(() => {
         const load =
             async () => {
-                setLoading(true);
-                setError(null);
+                setLoading(
+                    true
+                );
+
+                setError(
+                    null
+                );
 
                 await reloadAll();
 
-                setLoading(false);
+                setLoading(
+                    false
+                );
             };
 
         load();
-    }, [id]);
+    }, [
+        id,
+    ]);
 
     /*
-     * Draw settings
+     * Settings
      */
 
     const saveSettings =
@@ -387,9 +420,17 @@ export default function DrawDetails() {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
-            setActionSuccess(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
 
             try {
                 const response =
@@ -415,12 +456,12 @@ export default function DrawDetails() {
                 );
 
                 await loadDraw();
-            } catch (err) {
-                console.error(err);
-
+            } catch (
+                error: unknown
+                ) {
                 setActionError(
                     getApiMessage(
-                        err,
+                        error,
                         'Unable to update draw.'
                     )
                 );
@@ -432,7 +473,7 @@ export default function DrawDetails() {
         };
 
     /*
-     * Prize management
+     * Prizes
      */
 
     const addPrize =
@@ -440,14 +481,17 @@ export default function DrawDetails() {
             if (
                 !draw ||
                 !isEditableDraw ||
-                selectedPrizeId === ''
+                selectedPrizeId ===
+                ''
             ) {
                 return;
             }
 
             const prize =
                 availablePrizes.find(
-                    (item) =>
+                    (
+                        item
+                    ) =>
                         item.id ===
                         selectedPrizeId
                 );
@@ -480,9 +524,17 @@ export default function DrawDetails() {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
-            setActionSuccess(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
 
             try {
                 const response =
@@ -516,12 +568,12 @@ export default function DrawDetails() {
                 );
 
                 await reloadAll();
-            } catch (err) {
-                console.error(err);
-
+            } catch (
+                error: unknown
+                ) {
                 setActionError(
                     getApiMessage(
-                        err,
+                        error,
                         'Unable to add prize.'
                     )
                 );
@@ -551,9 +603,17 @@ export default function DrawDetails() {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
-            setActionSuccess(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
 
             try {
                 const response =
@@ -568,12 +628,12 @@ export default function DrawDetails() {
                 );
 
                 await reloadAll();
-            } catch (err) {
-                console.error(err);
-
+            } catch (
+                error: unknown
+                ) {
                 setActionError(
                     getApiMessage(
-                        err,
+                        error,
                         'Unable to remove prize.'
                     )
                 );
@@ -608,9 +668,17 @@ export default function DrawDetails() {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
-            setActionSuccess(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
 
             try {
                 const response =
@@ -633,12 +701,12 @@ export default function DrawDetails() {
                 );
 
                 await loadDraw();
-            } catch (err) {
-                console.error(err);
-
+            } catch (
+                error: unknown
+                ) {
                 setActionError(
                     getApiMessage(
-                        err,
+                        error,
                         'Unable to prepare draw.'
                     )
                 );
@@ -673,9 +741,17 @@ export default function DrawDetails() {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
-            setActionSuccess(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
+
+            setActionSuccess(
+                null
+            );
 
             try {
                 const response =
@@ -690,12 +766,12 @@ export default function DrawDetails() {
                 );
 
                 await loadDraw();
-            } catch (err) {
-                console.error(err);
-
+            } catch (
+                error: unknown
+                ) {
                 setActionError(
                     getApiMessage(
-                        err,
+                        error,
                         'Unable to execute draw.'
                     )
                 );
@@ -707,7 +783,7 @@ export default function DrawDetails() {
         };
 
     /*
-     * Winner statistics
+     * Winner stats
      */
 
     const winnerStats =
@@ -727,7 +803,9 @@ export default function DrawDetails() {
 
                 needsAction:
                 draw.winners.filter(
-                    (winner) =>
+                    (
+                        winner
+                    ) =>
                         winner.status ===
                         'selected' ||
                         winner.status ===
@@ -736,25 +814,29 @@ export default function DrawDetails() {
 
                 confirmed:
                 draw.winners.filter(
-                    (winner) =>
+                    (
+                        winner
+                    ) =>
                         winner.status ===
                         'confirmed'
                 ).length,
 
                 cancelled:
                 draw.winners.filter(
-                    (winner) =>
+                    (
+                        winner
+                    ) =>
                         winner.status ===
                         'cancelled'
                 ).length,
             };
-        }, [draw]);
+        }, [
+            draw,
+        ]);
 
-    /*
-     * Loading / errors
-     */
-
-    if (loading) {
+    if (
+        loading
+    ) {
         return (
             <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
                 Loading draw...
@@ -768,7 +850,6 @@ export default function DrawDetails() {
     ) {
         return (
             <div className="space-y-4">
-
                 <Link
                     to="/admin/draws"
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
@@ -780,7 +861,6 @@ export default function DrawDetails() {
                     {error ??
                         'Draw not found.'}
                 </div>
-
             </div>
         );
     }
@@ -801,9 +881,12 @@ export default function DrawDetails() {
         );
 
     const selectedPrize =
-        selectedPrizeId !== ''
+        selectedPrizeId !==
+        ''
             ? availablePrizes.find(
-                (prize) =>
+                (
+                    prize
+                ) =>
                     prize.id ===
                     selectedPrizeId
             )
@@ -836,13 +919,20 @@ export default function DrawDetails() {
             )
             : 0;
 
+    const currentStep =
+        !configureComplete
+            ? 'configure'
+            : !prepareComplete
+                ? 'prepare'
+                : !executionComplete
+                    ? 'execute'
+                    : 'winners';
+
     return (
         <div className="space-y-6">
-
             {/* Header */}
 
-            <div>
-
+            <header>
                 <Link
                     to="/admin/draws"
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
@@ -851,23 +941,21 @@ export default function DrawDetails() {
                 </Link>
 
                 <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
                     <div>
-
                         <div className="flex flex-wrap items-center gap-3">
-
-                            <h2 className="text-2xl font-bold text-gray-900">
+                            <h1 className="text-2xl font-bold text-gray-900">
                                 Week{' '}
-                                {draw.week_number}{' '}
+                                {
+                                    draw.week_number
+                                }{' '}
                                 Draw
-                            </h2>
+                            </h1>
 
                             <StatusBadge
                                 status={
                                     draw.status
                                 }
                             />
-
                         </div>
 
                         <p className="mt-1 text-sm text-gray-500">
@@ -877,9 +965,11 @@ export default function DrawDetails() {
 
                             {' · '}
 
-                            Draw #{draw.id}
+                            Draw #
+                            {
+                                draw.id
+                            }
                         </p>
-
                     </div>
 
                     {isEditableDraw && (
@@ -887,7 +977,9 @@ export default function DrawDetails() {
                             type="button"
                             onClick={() =>
                                 setEditingSettings(
-                                    (current) =>
+                                    (
+                                        current
+                                    ) =>
                                         !current
                                 )
                             }
@@ -898,15 +990,13 @@ export default function DrawDetails() {
                                 : 'Edit Draw'}
                         </button>
                     )}
-
                 </div>
-
-            </div>
+            </header>
 
             {/* Feedback */}
 
             {actionSuccess && (
-                <Alert
+                <FeedbackAlert
                     type="success"
                     onClose={() =>
                         setActionSuccess(
@@ -914,12 +1004,14 @@ export default function DrawDetails() {
                         )
                     }
                 >
-                    {actionSuccess}
-                </Alert>
+                    {
+                        actionSuccess
+                    }
+                </FeedbackAlert>
             )}
 
             {actionError && (
-                <Alert
+                <FeedbackAlert
                     type="error"
                     onClose={() =>
                         setActionError(
@@ -927,26 +1019,369 @@ export default function DrawDetails() {
                         )
                     }
                 >
-                    {actionError}
-                </Alert>
+                    {
+                        actionError
+                    }
+                </FeedbackAlert>
             )}
+
+            {/* Summary */}
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <SummaryCard
+                    label="Prize Quantity"
+                    value={
+                        totalPrizeQuantity
+                    }
+                />
+
+                <SummaryCard
+                    label={
+                        prepareComplete
+                            ? 'Frozen Entries'
+                            : 'Eligible Entries'
+                    }
+                    value={
+                        prepareComplete
+                            ? draw.entries
+                                .length
+                            : draw.eligible_entries_count
+                    }
+                />
+
+                <SummaryCard
+                    label="Required Winners"
+                    value={
+                        draw.required_winners
+                    }
+                />
+
+                <SummaryCard
+                    label={
+                        executionComplete
+                            ? 'Selected Winners'
+                            : 'Winner Selection'
+                    }
+                    value={
+                        executionComplete
+                            ? winnerStats.total
+                            : 'Pending'
+                    }
+                />
+            </div>
+
+            {/* Current Step */}
+
+            <section
+                className={[
+                    'overflow-hidden rounded-xl border shadow-sm',
+                    currentStep ===
+                    'winners'
+                        ? 'border-green-200 bg-green-50'
+                        : currentStep ===
+                        'execute'
+                            ? 'border-red-200 bg-red-50'
+                            : 'border-blue-200 bg-blue-50',
+                ].join(
+                    ' '
+                )}
+            >
+                <div className="p-5 sm:p-6">
+                    {currentStep ===
+                        'configure' && (
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                                        Current Step
+                                    </div>
+
+                                    <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                        Configure Prizes
+                                    </h2>
+
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                                        Add the prizes and
+                                        quantities that will
+                                        be awarded in this
+                                        weekly draw.
+                                    </p>
+                                </div>
+
+                                {isEditableDraw && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowPrizeForm(
+                                                true
+                                            )
+                                        }
+                                        className="shrink-0 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                                    >
+                                        Add Prize
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                    {currentStep ===
+                        'prepare' && (
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                                        Ready to Prepare
+                                    </div>
+
+                                    <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                        Freeze Eligible Entries
+                                    </h2>
+
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                                        {
+                                            draw.eligible_entries_count
+                                        }{' '}
+                                        approved receipts
+                                        are currently
+                                        eligible.{' '}
+                                        {
+                                            totalPrizeQuantity
+                                        }{' '}
+                                        winners are
+                                        required.
+                                    </p>
+
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                                        Preparing the draw
+                                        freezes the current
+                                        eligible receipt list
+                                        and locks draw
+                                        settings and prize
+                                        allocation.
+                                    </p>
+
+                                    {!canPrepare && (
+                                        <div className="mt-4 rounded-lg border border-red-200 bg-white/70 p-3 text-sm text-red-700">
+                                            Not enough
+                                            eligible receipts
+                                            to prepare this
+                                            draw.
+                                        </div>
+                                    )}
+                                </div>
+
+                                {canPrepare && (
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            prepareDraw
+                                        }
+                                        disabled={
+                                            actionLoading
+                                        }
+                                        className="shrink-0 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                                    >
+                                        {actionLoading
+                                            ? 'Preparing...'
+                                            : 'Prepare Draw'}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                    {currentStep ===
+                        'execute' && (
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                                        Ready to Execute
+                                    </div>
+
+                                    <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                        Execute Winner Selection
+                                    </h2>
+
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                                        {
+                                            draw.entries
+                                                .length
+                                        }{' '}
+                                        frozen entries will
+                                        participate and{' '}
+                                        {
+                                            totalPrizeQuantity
+                                        }{' '}
+                                        winner
+                                        {totalPrizeQuantity ===
+                                        1
+                                            ? ''
+                                            : 's'}{' '}
+                                        will be selected.
+                                    </p>
+
+                                    <p className="mt-2 max-w-2xl text-sm font-medium text-red-700">
+                                        Execution is
+                                        irreversible.
+                                    </p>
+                                </div>
+
+                                {canExecute && (
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            executeDraw
+                                        }
+                                        disabled={
+                                            actionLoading
+                                        }
+                                        className="shrink-0 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading
+                                            ? 'Executing...'
+                                            : 'Execute Draw'}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                    {currentStep ===
+                        'winners' && (
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                                        Draw Executed
+                                    </div>
+
+                                    <h2 className="mt-1 text-xl font-semibold text-gray-900">
+                                        Winner Selection Complete
+                                    </h2>
+
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                                        {
+                                            winnerStats.total
+                                        }{' '}
+                                        winners were
+                                        selected.{' '}
+                                        {
+                                            winnerStats.needsAction
+                                        }{' '}
+                                        currently require
+                                        organizer follow-up.
+                                    </p>
+                                </div>
+
+                                <Link
+                                    to={`/admin/winners?draw_id=${draw.id}`}
+                                    className="shrink-0 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                                >
+                                    Manage Winners →
+                                </Link>
+                            </div>
+                        )}
+                </div>
+            </section>
+
+            {/* Workflow */}
+
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 className="font-semibold text-gray-900">
+                    Draw Progress
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                    Configure prizes, freeze
+                    eligible receipts, execute
+                    winner selection, then manage
+                    winners.
+                </p>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                    <WorkflowStep
+                        number={
+                            1
+                        }
+                        title="Configure"
+                        complete={
+                            configureComplete
+                        }
+                        active={
+                            currentStep ===
+                            'configure'
+                        }
+                    >
+                        {configureComplete
+                            ? `${totalPrizeQuantity} winner${totalPrizeQuantity === 1 ? '' : 's'} configured`
+                            : 'Configure prize allocation'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={
+                            2
+                        }
+                        title="Prepare"
+                        complete={
+                            prepareComplete
+                        }
+                        active={
+                            currentStep ===
+                            'prepare'
+                        }
+                    >
+                        {prepareComplete
+                            ? `${draw.entries.length} entries frozen`
+                            : 'Freeze eligible receipts'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={
+                            3
+                        }
+                        title="Execute"
+                        complete={
+                            executionComplete
+                        }
+                        active={
+                            currentStep ===
+                            'execute'
+                        }
+                    >
+                        {executionComplete
+                            ? `${winnerStats.total} winners selected`
+                            : 'Run winner selection'}
+                    </WorkflowStep>
+
+                    <WorkflowStep
+                        number={
+                            4
+                        }
+                        title="Winners"
+                        complete={
+                            executionComplete &&
+                            winnerStats.needsAction ===
+                            0
+                        }
+                        active={
+                            currentStep ===
+                            'winners'
+                        }
+                    >
+                        {executionComplete
+                            ? `${winnerStats.needsAction} need action`
+                            : 'Available after execution'}
+                    </WorkflowStep>
+                </div>
+            </section>
 
             {/* Settings */}
 
             {editingSettings &&
                 isEditableDraw && (
-
                     <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
                         <SectionHeader
                             title="Draw Settings"
                             description="Change the draw date or planning status before the participant snapshot is created."
                         />
 
                         <div className="grid gap-4 p-5 md:grid-cols-[280px_200px_auto] md:items-end">
-
                             <div>
-
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Draw Date
                                 </label>
@@ -967,11 +1402,9 @@ export default function DrawDetails() {
                                     }
                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                                 />
-
                             </div>
 
                             <div>
-
                                 <label className="mb-1 block text-sm font-medium text-gray-700">
                                     Status
                                 </label>
@@ -984,7 +1417,8 @@ export default function DrawDetails() {
                                         event
                                     ) =>
                                         setDrawStatus(
-                                            event.target
+                                            event
+                                                .target
                                                 .value as
                                                 | 'draft'
                                                 | 'scheduled'
@@ -1000,11 +1434,9 @@ export default function DrawDetails() {
                                         Scheduled
                                     </option>
                                 </select>
-
                             </div>
 
                             <div className="flex gap-2">
-
                                 <button
                                     type="button"
                                     onClick={
@@ -1033,305 +1465,34 @@ export default function DrawDetails() {
                                 >
                                     Cancel
                                 </button>
-
                             </div>
-
                         </div>
-
                     </section>
                 )}
 
-            {/* Workflow */}
-
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                <h3 className="font-semibold text-gray-900">
-                    Draw Progress
-                </h3>
-
-                <p className="mt-1 text-sm text-gray-500">
-                    Configure prizes, freeze eligible receipts, execute the draw, then manage selected winners.
-                </p>
-
-                <div className="mt-6 grid gap-3 md:grid-cols-4">
-
-                    <WorkflowStep
-                        number={1}
-                        title="Configure"
-                        complete={
-                            configureComplete
-                        }
-                        active={
-                            !configureComplete
-                        }
-                    >
-                        {configureComplete
-                            ? `${totalPrizeQuantity} winner${totalPrizeQuantity === 1 ? '' : 's'} configured`
-                            : 'Configure prize allocation'}
-                    </WorkflowStep>
-
-                    <WorkflowStep
-                        number={2}
-                        title="Prepare"
-                        complete={
-                            prepareComplete
-                        }
-                        active={
-                            configureComplete &&
-                            !prepareComplete
-                        }
-                    >
-                        {prepareComplete
-                            ? `${draw.entries.length} entries frozen`
-                            : 'Freeze eligible receipts'}
-                    </WorkflowStep>
-
-                    <WorkflowStep
-                        number={3}
-                        title="Execute"
-                        complete={
-                            executionComplete
-                        }
-                        active={
-                            prepareComplete &&
-                            !executionComplete
-                        }
-                    >
-                        {executionComplete
-                            ? `${winnerStats.total} winners selected`
-                            : 'Run winner selection'}
-                    </WorkflowStep>
-
-                    <WorkflowStep
-                        number={4}
-                        title="Winners"
-                        complete={false}
-                        active={
-                            executionComplete
-                        }
-                    >
-                        {executionComplete
-                            ? `${winnerStats.needsAction} need action`
-                            : 'Available after execution'}
-                    </WorkflowStep>
-
-                </div>
-
-            </section>
-
-            {/* Summary */}
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-                <SummaryCard
-                    label={
-                        prepareComplete
-                            ? 'Frozen Entries'
-                            : 'Eligible Entries'
-                    }
-                    value={
-                        prepareComplete
-                            ? draw.entries.length
-                            : draw.eligible_entries_count
-                    }
-                />
-
-                <SummaryCard
-                    label="Prize Quantity"
-                    value={
-                        totalPrizeQuantity
-                    }
-                />
-
-                <SummaryCard
-                    label="Selected Winners"
-                    value={
-                        winnerStats.total
-                    }
-                />
-
-                <SummaryCard
-                    label="Confirmed Winners"
-                    value={
-                        winnerStats.confirmed
-                    }
-                    valueClassName="text-green-700"
-                />
-
-            </div>
-
-            {/* Next action */}
-
-            {!executionComplete && (
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                    <SectionHeader
-                        title="Next Action"
-                    />
-
-                    <div className="p-5">
-
-                        {!configureComplete && (
-
-                            <div>
-
-                                <h4 className="font-medium text-gray-900">
-                                    Configure prizes
-                                </h4>
-
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Add at least one prize allocation before preparing the draw.
-                                </p>
-
-                                {isEditableDraw && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setShowPrizeForm(
-                                                true
-                                            )
-                                        }
-                                        className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                                    >
-                                        Add Prize
-                                    </button>
-                                )}
-
-                            </div>
-                        )}
-
-                        {configureComplete &&
-                            !prepareComplete && (
-
-                                <div>
-
-                                    <h4 className="font-medium text-gray-900">
-                                        Prepare Draw
-                                    </h4>
-
-                                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
-                                        Preparing creates the participant snapshot. All currently eligible receipts will be frozen for this draw. Receipts approved afterward will not be added.
-                                    </p>
-
-                                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                                        After preparation, the draw date and prize allocation are locked.
-                                    </div>
-
-                                    {canPrepare && (
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                prepareDraw
-                                            }
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-                                        >
-                                            {actionLoading
-                                                ? 'Preparing...'
-                                                : 'Prepare Draw'}
-                                        </button>
-                                    )}
-
-                                </div>
-                            )}
-
-                        {prepareComplete &&
-                            !executionComplete && (
-
-                                <div>
-
-                                    <h4 className="font-medium text-gray-900">
-                                        Ready to Execute
-                                    </h4>
-
-                                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
-                                        {draw.entries.length}{' '}
-                                        frozen entries will participate and{' '}
-                                        {totalPrizeQuantity}{' '}
-                                        winner
-                                        {totalPrizeQuantity === 1
-                                            ? ''
-                                            : 's'}{' '}
-                                        will be selected.
-                                    </p>
-
-                                    {draw.eligible_entries_count <
-                                        draw.required_winners && (
-
-                                            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-
-                                                <div className="font-medium">
-                                                    Not enough eligible receipts
-                                                </div>
-
-                                                <p className="mt-1">
-                                                    At least{' '}
-                                                    {draw.required_winners}{' '}
-                                                    eligible receipts are required,
-                                                    but only{' '}
-                                                    {draw.eligible_entries_count}{' '}
-                                                    are currently available.
-                                                </p>
-
-                                            </div>
-                                        )}
-
-                                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                                        Executing the draw is irreversible. The complete randomized order will be stored for winner selection and future replacements.
-                                    </div>
-
-                                    {canExecute && (
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                executeDraw
-                                            }
-                                            disabled={
-                                                actionLoading
-                                            }
-                                            className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                                        >
-                                            {actionLoading
-                                                ? 'Executing...'
-                                                : 'Execute Draw'}
-                                        </button>
-                                    )}
-
-                                </div>
-                            )}
-
-                    </div>
-
-                </section>
-            )}
-
-            {/* Prize allocation */}
+            {/* Prize Allocation */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
                 <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
                     <div>
-
-                        <h3 className="font-semibold text-gray-900">
+                        <h2 className="font-semibold text-gray-900">
                             Prize Allocation
-                        </h3>
+                        </h2>
 
                         <p className="mt-1 text-sm text-gray-500">
-                            Configure the prizes that will be awarded in this draw.
+                            Configure the prizes
+                            awarded in this draw.
                         </p>
-
                     </div>
 
                     {isEditableDraw ? (
-
                         <button
                             type="button"
                             onClick={() =>
                                 setShowPrizeForm(
-                                    (current) =>
+                                    (
+                                        current
+                                    ) =>
                                         !current
                                 )
                             }
@@ -1341,25 +1502,18 @@ export default function DrawDetails() {
                                 ? 'Close'
                                 : 'Add Prize'}
                         </button>
-
                     ) : (
-
                         <span className="self-start rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
                             Allocation locked
                         </span>
                     )}
-
                 </div>
 
                 {showPrizeForm &&
                     isEditableDraw && (
-
                         <div className="border-b border-gray-200 bg-gray-50 p-5">
-
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-
                                 <div className="flex-1">
-
                                     <label className="mb-1 block text-sm font-medium text-gray-700">
                                         Prize
                                     </label>
@@ -1386,11 +1540,14 @@ export default function DrawDetails() {
                                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                     >
                                         <option value="">
-                                            Select prize
+                                            Select
+                                            prize
                                         </option>
 
                                         {availablePrizes.map(
-                                            (prize) => (
+                                            (
+                                                prize
+                                            ) => (
                                                 <option
                                                     key={
                                                         prize.id
@@ -1403,26 +1560,30 @@ export default function DrawDetails() {
                                                         0
                                                     }
                                                 >
-                                                    {prize.name}
-                                                    {' — '}
+                                                    {
+                                                        prize.name
+                                                    }{' '}
+                                                    —
                                                     available:{' '}
-                                                    {prize.available_quantity}
+                                                    {
+                                                        prize.available_quantity
+                                                    }
                                                 </option>
                                             )
                                         )}
                                     </select>
-
                                 </div>
 
                                 <div className="w-full lg:w-32">
-
                                     <label className="mb-1 block text-sm font-medium text-gray-700">
                                         Quantity
                                     </label>
 
                                     <input
                                         type="number"
-                                        min={1}
+                                        min={
+                                            1
+                                        }
                                         value={
                                             prizeQuantity
                                         }
@@ -1439,11 +1600,9 @@ export default function DrawDetails() {
                                         }
                                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                                     />
-
                                 </div>
 
                                 <div className="flex gap-2">
-
                                     <button
                                         type="button"
                                         onClick={
@@ -1478,83 +1637,83 @@ export default function DrawDetails() {
                                     >
                                         Cancel
                                     </button>
-
                                 </div>
-
                             </div>
 
                             {selectedPrize && (
                                 <div className="mt-3 text-xs text-gray-500">
                                     Total:{' '}
                                     <strong>
-                                        {selectedPrize.total_quantity}
+                                        {
+                                            selectedPrize.total_quantity
+                                        }
                                     </strong>
 
                                     {' · '}
 
                                     Allocated:{' '}
                                     <strong>
-                                        {selectedPrize.allocated_quantity}
+                                        {
+                                            selectedPrize.allocated_quantity
+                                        }
                                     </strong>
 
                                     {' · '}
 
                                     Available:{' '}
                                     <strong>
-                                        {selectedPrize.available_quantity}
+                                        {
+                                            selectedPrize.available_quantity
+                                        }
                                     </strong>
                                 </div>
                             )}
-
                         </div>
                     )}
 
-                {draw.draw_prizes.length ===
+                {draw.draw_prizes
+                    .length ===
                 0 ? (
-
                     <div className="p-6 text-sm text-gray-400">
-                        No prizes configured.
+                        No prizes
+                        configured.
                     </div>
-
                 ) : (
-
                     <div className="divide-y divide-gray-100">
-
                         {draw.draw_prizes.map(
-                            (drawPrize) => (
-
+                            (
+                                drawPrize
+                            ) => (
                                 <div
                                     key={
                                         drawPrize.id
                                     }
                                     className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                                 >
-
                                     <div>
-
                                         <div className="font-medium text-gray-900">
-                                            {drawPrize.prize.name}
+                                            {
+                                                drawPrize
+                                                    .prize
+                                                    .name
+                                            }
                                         </div>
 
-                                        {drawPrize.prize.value !==
-                                            null && (
-                                                <div className="mt-1 text-xs text-gray-500">
-                                                    {drawPrize.prize.value.toLocaleString()}
-                                                    {' '}
-                                                    {drawPrize.prize.currency ??
-                                                        ''}
-                                                </div>
-                                            )}
-
+                                        {drawPrize.prize.value != null && (
+                                            <div className="mt-1 text-xs text-gray-500">
+                                                {Number(drawPrize.prize.value).toLocaleString()}{' '}
+                                                {drawPrize.prize.currency ?? ''}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-5">
-
                                         <div className="text-right">
-
                                             <div className="text-lg font-semibold text-gray-900">
                                                 ×{' '}
-                                                {drawPrize.quantity}
+                                                {
+                                                    drawPrize.quantity
+                                                }
                                             </div>
 
                                             <div className="text-xs text-gray-400">
@@ -1564,7 +1723,6 @@ export default function DrawDetails() {
                                                     ? ''
                                                     : 's'}
                                             </div>
-
                                         </div>
 
                                         {isEditableDraw && (
@@ -1583,56 +1741,50 @@ export default function DrawDetails() {
                                                 Remove
                                             </button>
                                         )}
-
                                     </div>
-
                                 </div>
                             )
                         )}
 
                         <div className="flex items-center justify-between bg-gray-50 px-5 py-4">
-
                             <span className="text-sm font-medium text-gray-700">
-                                Total winners
+                                Total
+                                winners
                             </span>
 
                             <span className="text-lg font-bold text-gray-900">
-                                {totalPrizeQuantity}
+                                {
+                                    totalPrizeQuantity
+                                }
                             </span>
-
                         </div>
-
                     </div>
                 )}
-
             </section>
 
             {/* Snapshot */}
 
             {prepareComplete && (
                 <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
                     <SectionHeader
                         title="Participant Snapshot"
                         description="The eligible receipt list for this draw is frozen and cannot change."
                     />
 
                     <div className="grid gap-5 p-5 sm:grid-cols-3">
-
                         <InfoItem
                             label="Frozen Entries"
                             value={
-                                draw.entries.length
+                                draw.entries
+                                    .length
                             }
                         />
 
                         <InfoItem
                             label="Prepared At"
-                            value={
-                                formatDateTime(
-                                    draw.snapshot_at
-                                )
-                            }
+                            value={formatDateTime(
+                                draw.snapshot_at
+                            )}
                         />
 
                         <InfoItem
@@ -1641,9 +1793,7 @@ export default function DrawDetails() {
                                 totalPrizeQuantity
                             }
                         />
-
                     </div>
-
                 </section>
             )}
 
@@ -1651,19 +1801,17 @@ export default function DrawDetails() {
 
             {executionComplete && (
                 <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
                     <div className="flex flex-col gap-4 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
                         <div>
-
-                            <h3 className="font-semibold text-gray-900">
+                            <h2 className="font-semibold text-gray-900">
                                 Draw Results
-                            </h3>
+                            </h2>
 
                             <p className="mt-1 text-sm text-gray-500">
-                                Winner follow-up is handled in the Winners workspace.
+                                Winner follow-up is
+                                handled in the
+                                Winners workspace.
                             </p>
-
                         </div>
 
                         <Link
@@ -1672,11 +1820,9 @@ export default function DrawDetails() {
                         >
                             Manage Winners
                         </Link>
-
                     </div>
 
                     <div className="grid grid-cols-2 gap-px bg-gray-200 md:grid-cols-5">
-
                         <ResultStat
                             label="Selected"
                             value={
@@ -1714,18 +1860,13 @@ export default function DrawDetails() {
                                 reserveCount
                             }
                         />
-
                     </div>
 
                     {draw.winners.length >
                         0 && (
-
                             <div className="overflow-x-auto">
-
                                 <table className="min-w-full text-left text-sm">
-
                                     <thead className="bg-gray-50">
-
                                     <tr>
                                         <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                             Winner
@@ -1745,11 +1886,9 @@ export default function DrawDetails() {
 
                                         <th className="px-5 py-3" />
                                     </tr>
-
                                     </thead>
 
                                     <tbody className="divide-y divide-gray-100">
-
                                     {draw.winners
                                         .slice(
                                             0,
@@ -1778,10 +1917,9 @@ export default function DrawDetails() {
                                                         key={
                                                             winner.id
                                                         }
+                                                        className="hover:bg-gray-50"
                                                     >
-
                                                         <td className="px-5 py-4">
-
                                                             <div className="font-medium text-gray-900">
                                                                 {participant
                                                                     ? `${participant.first_name} ${participant.last_name}`
@@ -1790,33 +1928,36 @@ export default function DrawDetails() {
 
                                                             <div className="mt-1 text-xs text-gray-500">
                                                                 Receipt{' '}
-                                                                {winner.receipt?.receipt_number ??
+                                                                {winner
+                                                                        .receipt
+                                                                        ?.receipt_number ??
                                                                     '-'}
                                                             </div>
-
                                                         </td>
 
                                                         <td className="px-5 py-4 text-gray-700">
-                                                            {drawPrize?.prize.name ??
+                                                            {drawPrize
+                                                                    ?.prize
+                                                                    .name ??
                                                                 '-'}
                                                         </td>
 
                                                         <td className="px-5 py-4 text-gray-700">
-                                                            #{winner.entry_number}
+                                                            #
+                                                            {
+                                                                winner.entry_number
+                                                            }
                                                         </td>
 
                                                         <td className="px-5 py-4">
-
                                                             <StatusBadge
                                                                 status={
                                                                     winner.status
                                                                 }
                                                             />
-
                                                         </td>
 
                                                         <td className="px-5 py-4 text-right">
-
                                                             <Link
                                                                 to={`/admin/winners/${winner.id}`}
                                                                 state={{
@@ -1827,189 +1968,119 @@ export default function DrawDetails() {
                                                             >
                                                                 View
                                                             </Link>
-
                                                         </td>
-
                                                     </tr>
                                                 );
                                             }
                                         )}
-
                                     </tbody>
-
                                 </table>
 
-                                {draw.winners.length >
+                                {draw.winners
+                                        .length >
                                     5 && (
                                         <div className="border-t border-gray-200 px-5 py-4 text-center">
-
                                             <Link
                                                 to={`/admin/winners?draw_id=${draw.id}`}
                                                 className="text-sm font-medium text-blue-600 hover:text-blue-800"
                                             >
                                                 View all{' '}
-                                                {draw.winners.length}{' '}
+                                                {
+                                                    draw
+                                                        .winners
+                                                        .length
+                                                }{' '}
                                                 winners →
                                             </Link>
-
                                         </div>
                                     )}
-
                             </div>
                         )}
-
                 </section>
             )}
 
-            {/* Draw information */}
+            {/* Technical / Audit */}
 
-            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <SectionHeader
-                    title="Draw Information"
+                    title="Technical & Audit Details"
+                    description="Draw lifecycle and randomization information."
                 />
 
                 <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <InfoItem
+                        label="Draw ID"
+                        value={`#${draw.id}`}
+                    />
 
                     <InfoItem
                         label="Draw Date"
-                        value={
-                            formatDateTime(
-                                draw.draw_date
-                            )
-                        }
+                        value={formatDateTime(
+                            draw.draw_date
+                        )}
                     />
 
                     <InfoItem
                         label="Prepared"
-                        value={
-                            formatDateTime(
-                                draw.snapshot_at
-                            )
-                        }
+                        value={formatDateTime(
+                            draw.snapshot_at
+                        )}
                     />
 
                     <InfoItem
                         label="Executed"
-                        value={
-                            formatDateTime(
-                                draw.randomized_at
-                            )
-                        }
+                        value={formatDateTime(
+                            draw.randomized_at
+                        )}
                     />
 
                     <InfoItem
                         label="Completed"
+                        value={formatDateTime(
+                            draw.completed_at
+                        )}
+                    />
+
+                    <InfoItem
+                        label="Provider"
                         value={
-                            formatDateTime(
-                                draw.completed_at
-                            )
+                            draw.random_provider ??
+                            '-'
                         }
                     />
 
+                    <InfoItem
+                        label="Entry Count"
+                        value={
+                            draw.random_request
+                                ?.entry_count ??
+                            '-'
+                        }
+                    />
+
+                    <InfoItem
+                        label="Request ID"
+                        value={
+                            draw.random_request_id ??
+                            '-'
+                        }
+                    />
                 </div>
 
+                {draw.random_response && (
+                    <div className="border-t border-gray-100 p-5">
+                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                            Randomized Order
+                        </div>
+
+                        <div className="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-4 font-mono text-xs leading-6 text-gray-700">
+                            {draw.random_response.values.join(
+                                ', '
+                            )}
+                        </div>
+                    </div>
+                )}
             </section>
-
-            {/* Audit */}
-
-            {draw.random_response && (
-                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setAuditOpen(
-                                (current) =>
-                                    !current
-                            )
-                        }
-                        className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-gray-50"
-                    >
-
-                        <div>
-
-                            <h3 className="font-semibold text-gray-900">
-                                Draw Audit Information
-                            </h3>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                                Original randomization data used for initial and replacement winners.
-                            </p>
-
-                        </div>
-
-                        <span className="text-sm font-medium text-gray-500">
-                            {auditOpen
-                                ? 'Hide'
-                                : 'Show details'}
-                        </span>
-
-                    </button>
-
-                    {auditOpen && (
-
-                        <div className="border-t border-gray-200">
-
-                            <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
-
-                                <InfoItem
-                                    label="Provider"
-                                    value={
-                                        draw.random_provider ??
-                                        '-'
-                                    }
-                                />
-
-                                <InfoItem
-                                    label="Entry Count"
-                                    value={
-                                        draw.random_request
-                                            ?.entry_count ??
-                                        '-'
-                                    }
-                                />
-
-                                <InfoItem
-                                    label="Randomized At"
-                                    value={
-                                        formatDateTime(
-                                            draw.randomized_at
-                                        )
-                                    }
-                                />
-
-                                <InfoItem
-                                    label="Request ID"
-                                    value={
-                                        draw.random_request_id ??
-                                        '-'
-                                    }
-                                />
-
-                            </div>
-
-                            <div className="border-t border-gray-100 p-5">
-
-                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                    Randomized Order
-                                </div>
-
-                                <div className="mt-2 max-h-48 overflow-auto rounded-lg bg-gray-50 p-4 font-mono text-xs leading-6 text-gray-700">
-                                    {draw.random_response
-                                        .values.join(
-                                            ', '
-                                        )}
-                                </div>
-
-                            </div>
-
-                        </div>
-                    )}
-
-                </section>
-            )}
-
         </div>
     );
 }
@@ -2023,17 +2094,19 @@ function SectionHeader({
 }) {
     return (
         <div className="border-b border-gray-200 px-5 py-4">
-
             <h3 className="font-semibold text-gray-900">
-                {title}
+                {
+                    title
+                }
             </h3>
 
             {description && (
                 <p className="mt-1 text-sm text-gray-500">
-                    {description}
+                    {
+                        description
+                    }
                 </p>
             )}
-
         </div>
     );
 }
@@ -2041,25 +2114,25 @@ function SectionHeader({
 function SummaryCard({
                          label,
                          value,
-                         valueClassName = 'text-gray-900',
                      }: {
     label: string;
-    value: string | number;
-    valueClassName?: string;
+    value:
+        | string
+        | number;
 }) {
     return (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
             <div className="text-sm text-gray-500">
-                {label}
+                {
+                    label
+                }
             </div>
 
-            <div
-                className={`mt-2 text-2xl font-bold ${valueClassName}`}
-            >
-                {value}
+            <div className="mt-2 text-2xl font-bold text-gray-900">
+                {
+                    value
+                }
             </div>
-
         </div>
     );
 }
@@ -2067,7 +2140,8 @@ function SummaryCard({
 function ResultStat({
                         label,
                         value,
-                        valueClassName = 'text-gray-900',
+                        valueClassName =
+                        'text-gray-900',
                     }: {
     label: string;
     value: number;
@@ -2075,17 +2149,19 @@ function ResultStat({
 }) {
     return (
         <div className="bg-white p-5">
-
             <div className="text-sm text-gray-500">
-                {label}
+                {
+                    label
+                }
             </div>
 
             <div
                 className={`mt-1 text-2xl font-bold ${valueClassName}`}
             >
-                {value}
+                {
+                    value
+                }
             </div>
-
         </div>
     );
 }
@@ -2095,19 +2171,23 @@ function InfoItem({
                       value,
                   }: {
     label: string;
-    value: string | number;
+    value:
+        | string
+        | number;
 }) {
     return (
         <div>
-
             <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                {label}
+                {
+                    label
+                }
             </div>
 
             <div className="mt-1 break-all text-sm text-gray-700">
-                {value}
+                {
+                    value
+                }
             </div>
-
         </div>
     );
 }
@@ -2137,12 +2217,17 @@ function WorkflowStep({
     }
 
     return (
-        <div className={className}>
-
+        <div
+            className={
+                className
+            }
+        >
             <div className="flex items-center justify-between">
-
                 <span className="text-xs font-medium text-gray-500">
-                    STEP {number}
+                    STEP{' '}
+                    {
+                        number
+                    }
                 </span>
 
                 {complete && (
@@ -2150,32 +2235,41 @@ function WorkflowStep({
                         ✓ Done
                     </span>
                 )}
-
             </div>
 
             <div className="mt-1 font-semibold text-gray-900">
-                {title}
+                {
+                    title
+                }
             </div>
 
             <div className="mt-2 text-sm text-gray-600">
-                {children}
+                {
+                    children
+                }
             </div>
-
         </div>
     );
 }
 
-function Alert({
-                   type,
-                   children,
-                   onClose,
-               }: {
-    type: 'success' | 'error';
-    children: React.ReactNode;
-    onClose: () => void;
+function FeedbackAlert({
+                           type,
+                           children,
+                           onClose,
+                       }: {
+    type:
+        | 'success'
+        | 'error';
+
+    children:
+        React.ReactNode;
+
+    onClose:
+        () => void;
 }) {
     const className =
-        type === 'success'
+        type ===
+        'success'
             ? 'border-green-200 bg-green-50 text-green-700'
             : 'border-red-200 bg-red-50 text-red-700';
 
@@ -2183,9 +2277,10 @@ function Alert({
         <div
             className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm ${className}`}
         >
-
             <span>
-                {children}
+                {
+                    children
+                }
             </span>
 
             <button
@@ -2197,7 +2292,6 @@ function Alert({
             >
                 ×
             </button>
-
         </div>
     );
 }
