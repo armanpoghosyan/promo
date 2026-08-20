@@ -16,6 +16,7 @@ import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
 import ReceiptQuickReviewModal from '../../components/receipts/ReceiptQuickReviewModal';
 import StatusBadge from '../../components/StatusBadge';
+import Tooltip from '../../components/Tooltip';
 
 import api from '../../services/api';
 
@@ -33,6 +34,10 @@ import {
 import {
     formatDateTime,
 } from '../../utils/date';
+
+import {
+    formatEnumLabel,
+} from '../../utils/format';
 
 import {
     positiveIntegerParam,
@@ -323,10 +328,6 @@ export default function Receipts() {
             ]
         );
 
-    /*
-     * Keep only navigation state
-     * represented in the URL.
-     */
     useEffect(() => {
         const params =
             new URLSearchParams();
@@ -377,7 +378,9 @@ export default function Receipts() {
 
     useEffect(() => {
         loadReceipts();
-    }, [loadReceipts]);
+    }, [
+        loadReceipts,
+    ]);
 
     const changeTab = (
         nextTab: ReceiptTab
@@ -386,7 +389,9 @@ export default function Receipts() {
             nextTab
         );
 
-        setPage(1);
+        setPage(
+            1
+        );
 
         if (
             nextTab !==
@@ -405,7 +410,9 @@ export default function Receipts() {
             nextFilter
         );
 
-        setPage(1);
+        setPage(
+            1
+        );
     };
 
     const tabs: Array<{
@@ -455,7 +462,7 @@ export default function Receipts() {
                 description="Review participation receipts and prepare approved entries for the next draw."
             />
 
-            {/* Main status navigation */}
+            {/* Main tabs */}
 
             <div className="overflow-x-auto border-b border-gray-200">
                 <nav className="flex min-w-max gap-6">
@@ -516,7 +523,7 @@ export default function Receipts() {
                 </nav>
             </div>
 
-            {/* Review queue */}
+            {/* Review Queue */}
 
             {tab ===
                 'submitted' && (
@@ -602,14 +609,16 @@ export default function Receipts() {
                 <Alert
                     variant="error"
                     onDismiss={() =>
-                        setError(null)
+                        setError(
+                            null
+                        )
                     }
                 >
                     {error}
                 </Alert>
             )}
 
-            {/* Receipt table */}
+            {/* Table */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {loading ? (
@@ -667,24 +676,21 @@ export default function Receipts() {
                                         const participant =
                                             receipt.participant;
 
+                                        const participantOtherReceipts =
+                                            (
+                                                participant
+                                                    ?.receipts ??
+                                                []
+                                            ).filter(
+                                                (
+                                                    participantReceipt
+                                                ) =>
+                                                    participantReceipt.id !==
+                                                    receipt.id
+                                            );
+
                                         const otherReceipts =
-                                            Math.max(
-                                                (participant?.receipts_count ??
-                                                    1) -
-                                                1,
-                                                0
-                                            );
-
-                                        const noteCount =
-                                            receipt.notes_count ??
-                                            0;
-
-                                        const olderNotes =
-                                            Math.max(
-                                                noteCount -
-                                                1,
-                                                0
-                                            );
+                                            participantOtherReceipts.length;
 
                                         const reasons =
                                             receipt.suspicious_reasons ??
@@ -699,6 +705,21 @@ export default function Receipts() {
 
                                         const latestNote =
                                             receipt.latest_note;
+
+                                        const olderNoteItems =
+                                            (
+                                                receipt.notes ??
+                                                []
+                                            ).filter(
+                                                (
+                                                    note
+                                                ) =>
+                                                    note.id !==
+                                                    latestNote?.id
+                                            );
+
+                                        const olderNotes =
+                                            olderNoteItems.length;
 
                                         return (
                                             <tr
@@ -719,6 +740,8 @@ export default function Receipts() {
                                                     ' '
                                                 )}
                                             >
+                                                {/* Receipt */}
+
                                                 <td className="px-5 py-4 align-top">
                                                     <div className="font-semibold text-gray-900">
                                                         {
@@ -735,6 +758,8 @@ export default function Receipts() {
                                                     </div>
                                                 </td>
 
+                                                {/* Participant */}
+
                                                 <td className="px-5 py-4 align-top">
                                                     {participant ? (
                                                         <div>
@@ -750,18 +775,57 @@ export default function Receipts() {
 
                                                                 {otherReceipts >
                                                                     0 && (
-                                                                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                                                                            +
-                                                                            {
-                                                                                otherReceipts
-                                                                            }{' '}
-                                                                            other
-                                                                            receipt
-                                                                            {otherReceipts ===
-                                                                            1
-                                                                                ? ''
-                                                                                : 's'}
-                                                                        </span>
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-2 font-semibold">
+                                                                                        Other receipts
+                                                                                    </div>
+
+                                                                                    <div className="space-y-1.5">
+                                                                                        {participantOtherReceipts.map(
+                                                                                            (
+                                                                                                participantReceipt
+                                                                                            ) => (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        participantReceipt.id
+                                                                                                    }
+                                                                                                    className="flex items-center justify-between gap-4"
+                                                                                                >
+                                                                                                    <span className="text-gray-200">
+                                                                                                        {
+                                                                                                            participantReceipt.receipt_number
+                                                                                                        }
+                                                                                                    </span>
+
+                                                                                                    <span className="shrink-0 font-medium text-white">
+                                                                                                        {formatEnumLabel(
+                                                                                                            participantReceipt.status
+                                                                                                        )}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            )
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                380
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                                +
+                                                                                {
+                                                                                    otherReceipts
+                                                                                }{' '}
+                                                                                other receipt
+                                                                                {otherReceipts ===
+                                                                                1
+                                                                                    ? ''
+                                                                                    : 's'}
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     )}
                                                             </div>
 
@@ -784,13 +848,52 @@ export default function Receipts() {
                                                     )}
                                                 </td>
 
+                                                {/* Status */}
+
                                                 <td className="px-5 py-4 align-top">
-                                                    <StatusBadge
-                                                        status={
-                                                            receipt.status
+                                                    <Tooltip
+                                                        content={
+                                                            receipt.status ===
+                                                            'rejected' &&
+                                                            receipt.rejection_reason
+                                                                ? (
+                                                                    <div>
+                                                                        <div className="mb-1 font-semibold">
+                                                                            Rejection reason
+                                                                        </div>
+
+                                                                        <div className="text-gray-200">
+                                                                            {
+                                                                                receipt.rejection_reason
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                                : null
                                                         }
-                                                    />
+                                                        maxWidth={
+                                                            360
+                                                        }
+                                                    >
+        <span
+            className={
+                receipt.status ===
+                'rejected' &&
+                receipt.rejection_reason
+                    ? 'cursor-help'
+                    : undefined
+            }
+        >
+            <StatusBadge
+                status={
+                    receipt.status
+                }
+            />
+        </span>
+                                                    </Tooltip>
                                                 </td>
+
+                                                {/* Suspicious */}
 
                                                 <td className="px-5 py-4 align-top">
                                                     {receipt.is_suspicious &&
@@ -805,12 +908,50 @@ export default function Receipts() {
 
                                                             {extraReasons >
                                                                 0 && (
-                                                                    <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                                                                        +
-                                                                        {
-                                                                            extraReasons
-                                                                        }{' '}
-                                                                        more
+                                                                    <div className="mt-1">
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-1 font-semibold">
+                                                                                        Additional suspicious reasons
+                                                                                    </div>
+
+                                                                                    <div className="space-y-1 text-gray-200">
+                                                                                        {reasons
+                                                                                            .slice(
+                                                                                                1
+                                                                                            )
+                                                                                            .map(
+                                                                                                (
+                                                                                                    reason
+                                                                                                ) => (
+                                                                                                    <div
+                                                                                                        key={
+                                                                                                            reason
+                                                                                                        }
+                                                                                                    >
+                                                                                                        •{' '}
+                                                                                                        {suspiciousReasonLabel(
+                                                                                                            reason
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )
+                                                                                            )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                360
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                                                                +
+                                                                                {
+                                                                                    extraReasons
+                                                                                }{' '}
+                                                                                more
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     </div>
                                                                 )}
                                                         </div>
@@ -820,6 +961,8 @@ export default function Receipts() {
                                                             </span>
                                                     )}
                                                 </td>
+
+                                                {/* Notes */}
 
                                                 <td className="px-5 py-4 align-top">
                                                     {latestNote ? (
@@ -833,11 +976,53 @@ export default function Receipts() {
 
                                                             {olderNotes >
                                                                 0 && (
-                                                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                                                                        +
-                                                                        {
-                                                                            olderNotes
-                                                                        }
+                                                                    <span className="ml-2">
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-2 font-semibold">
+                                                                                        Earlier notes
+                                                                                    </div>
+
+                                                                                    <div className="space-y-2">
+                                                                                        {olderNoteItems.map(
+                                                                                            (
+                                                                                                note
+                                                                                            ) => (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        note.id
+                                                                                                    }
+                                                                                                    className="border-b border-white/10 pb-2 last:border-b-0 last:pb-0"
+                                                                                                >
+                                                                                                    <div className="text-gray-200">
+                                                                                                        {
+                                                                                                            note.note
+                                                                                                        }
+                                                                                                    </div>
+
+                                                                                                    <div className="mt-0.5 text-[10px] text-gray-400">
+                                                                                                        {formatDateTime(
+                                                                                                            note.created_at
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                380
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                                +
+                                                                                {
+                                                                                    olderNotes
+                                                                                }
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     </span>
                                                                 )}
                                                         </div>
@@ -847,6 +1032,8 @@ export default function Receipts() {
                                                             </span>
                                                     )}
                                                 </td>
+
+                                                {/* Submitted */}
 
                                                 <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
                                                     {formatDateTime(
@@ -895,6 +1082,8 @@ export default function Receipts() {
                     </>
                 )}
             </section>
+
+            {/* Quick Review */}
 
             {quickReviewReceiptId !==
                 null && (
