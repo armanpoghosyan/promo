@@ -1,4 +1,5 @@
 import {
+    Fragment,
     useCallback,
     useEffect,
     useState,
@@ -15,6 +16,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
+import StatusBadge from '../../components/StatusBadge';
 
 import api from '../../services/api';
 
@@ -32,6 +34,7 @@ import {
 
 import {
     formatDate,
+    formatDateTime,
 } from '../../utils/date';
 
 import {
@@ -81,6 +84,13 @@ export default function Participants() {
     ] = useState<
         Participant[]
     >([]);
+
+    const [
+        expandedParticipantId,
+        setExpandedParticipantId,
+    ] = useState<
+        number | null
+    >(null);
 
     const [
         loading,
@@ -146,10 +156,6 @@ export default function Participants() {
             ]
         );
 
-    /*
-     * Keep the input synchronized
-     * with browser navigation.
-     */
     useEffect(() => {
         setSearchInput(
             urlSearch
@@ -158,13 +164,6 @@ export default function Participants() {
         urlSearch,
     ]);
 
-    /*
-     * Type-ahead search.
-     *
-     * Search starts after 3 characters.
-     * Clearing or reducing below 3
-     * resets the list.
-     */
     useEffect(() => {
         const timer =
             window.setTimeout(
@@ -271,6 +270,10 @@ export default function Participants() {
         );
 
     useEffect(() => {
+        setExpandedParticipantId(
+            null
+        );
+
         loadParticipants();
     }, [
         loadParticipants,
@@ -278,6 +281,20 @@ export default function Participants() {
 
     const currentListUrl =
         `${location.pathname}${location.search}`;
+
+    const toggleParticipant = (
+        participantId: number
+    ) => {
+        setExpandedParticipantId(
+            (
+                current
+            ) =>
+                current ===
+                participantId
+                    ? null
+                    : participantId
+        );
+    };
 
     const openParticipant = (
         participantId: number
@@ -306,7 +323,7 @@ export default function Participants() {
         <div className="space-y-6">
             <PageHeader
                 title="Participants"
-                description="Find participants and review their participation activity."
+                description="Find participants and review their participation history."
             />
 
             {/* Search */}
@@ -328,7 +345,7 @@ export default function Participants() {
                             )
                         }
                         placeholder="Search by name, phone, email or participant ID..."
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-28 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-20 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                     />
 
                     {searchInput && (
@@ -381,7 +398,7 @@ export default function Participants() {
                 </Alert>
             )}
 
-            {/* Participants */}
+            {/* List */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {loading ? (
@@ -401,9 +418,11 @@ export default function Participants() {
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1000px] text-left text-sm">
+                            <table className="w-full min-w-[900px] text-left text-sm">
                                 <thead className="bg-gray-50">
                                 <tr>
+                                    <th className="w-8 px-3 py-3" />
+
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Participant
                                     </th>
@@ -417,16 +436,10 @@ export default function Participants() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Needs Review
-                                    </th>
-
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Attention
-                                    </th>
-
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Joined
                                     </th>
+
+                                    <th className="px-5 py-3" />
                                 </tr>
                                 </thead>
 
@@ -435,164 +448,263 @@ export default function Participants() {
                                     (
                                         participant
                                     ) => {
-                                        const submittedCount =
-                                            participant.submitted_receipts_count ??
-                                            0;
+                                        const expanded =
+                                            expandedParticipantId ===
+                                            participant.id;
 
-                                        const suspiciousCount =
-                                            participant.suspicious_receipts_count ??
-                                            0;
-
-                                        const rejectedCount =
-                                            participant.rejected_receipts_count ??
-                                            0;
-
-                                        const hasAttention =
-                                            suspiciousCount >
-                                            0 ||
-                                            rejectedCount >
-                                            0;
+                                        const receipts =
+                                            participant.receipts ??
+                                            [];
 
                                         return (
-                                            <tr
+                                            <Fragment
                                                 key={
                                                     participant.id
                                                 }
-                                                tabIndex={
-                                                    0
-                                                }
-                                                role="button"
-                                                onClick={() =>
-                                                    openParticipant(
-                                                        participant.id
-                                                    )
-                                                }
-                                                onKeyDown={(
-                                                    event
-                                                ) => {
-                                                    if (
-                                                        event.key ===
-                                                        'Enter' ||
-                                                        event.key ===
-                                                        ' '
-                                                    ) {
-                                                        event.preventDefault();
-
-                                                        openParticipant(
-                                                            participant.id
-                                                        );
-                                                    }
-                                                }}
-                                                className="cursor-pointer transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
                                             >
-                                                {/* Participant */}
-
-                                                <td className="px-5 py-4 align-top">
-                                                    <div className="font-semibold text-gray-900">
-                                                        {
-                                                            participant.first_name
-                                                        }{' '}
-                                                        {
-                                                            participant.last_name
-                                                        }
-                                                    </div>
-
-                                                    <div className="mt-1 text-xs text-gray-400">
-                                                        Participant
-                                                        ID
-                                                        #{' '}
-                                                        {
+                                                <tr
+                                                    onClick={() =>
+                                                        toggleParticipant(
                                                             participant.id
-                                                        }
-                                                    </div>
-                                                </td>
+                                                        )
+                                                    }
+                                                    className={[
+                                                        'cursor-pointer transition hover:bg-gray-50',
+                                                        expanded
+                                                            ? 'bg-gray-50'
+                                                            : '',
+                                                    ].join(
+                                                        ' '
+                                                    )}
+                                                >
+                                                    {/* Expand */}
 
-                                                {/* Contact */}
+                                                    <td className="px-3 py-4 align-top">
+                                                            <span
+                                                                className={[
+                                                                    'inline-block text-xs text-gray-400 transition-transform',
+                                                                    expanded
+                                                                        ? 'rotate-90'
+                                                                        : '',
+                                                                ].join(
+                                                                    ' '
+                                                                )}
+                                                            >
+                                                                ▶
+                                                            </span>
+                                                    </td>
 
-                                                <td className="px-5 py-4 align-top">
-                                                    <div className="text-sm text-gray-700">
-                                                        {
-                                                            participant.phone
-                                                        }
-                                                    </div>
+                                                    {/* Participant */}
 
-                                                    <div className="mt-1 max-w-[260px] truncate text-xs text-gray-500">
-                                                        {
-                                                            participant.email
-                                                        }
-                                                    </div>
-                                                </td>
-
-                                                {/* Receipts */}
-
-                                                <td className="px-5 py-4 text-center align-top">
-                                                        <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                    <td className="px-5 py-4 align-top">
+                                                        <div className="font-semibold text-gray-900">
                                                             {
-                                                                participant.receipts_count ??
-                                                                0
+                                                                participant.first_name
+                                                            }{' '}
+                                                            {
+                                                                participant.last_name
                                                             }
-                                                        </span>
-                                                </td>
-
-                                                {/* Needs Review */}
-
-                                                <td className="px-5 py-4 align-top">
-                                                    {submittedCount >
-                                                    0 ? (
-                                                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                                                {
-                                                                    submittedCount
-                                                                }{' '}
-                                                            need
-                                                                review
-                                                            </span>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">
-                                                                —
-                                                            </span>
-                                                    )}
-                                                </td>
-
-                                                {/* Attention */}
-
-                                                <td className="px-5 py-4 align-top">
-                                                    {hasAttention ? (
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {suspiciousCount >
-                                                                0 && (
-                                                                    <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
-                                                                        {
-                                                                            suspiciousCount
-                                                                        }{' '}
-                                                                        suspicious
-                                                                    </span>
-                                                                )}
-
-                                                            {rejectedCount >
-                                                                0 && (
-                                                                    <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
-                                                                        {
-                                                                            rejectedCount
-                                                                        }{' '}
-                                                                        rejected
-                                                                    </span>
-                                                                )}
                                                         </div>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">
-                                                                —
+
+                                                        <div className="mt-1 text-xs text-gray-400">
+                                                            Participant
+                                                            ID
+                                                            #{' '}
+                                                            {
+                                                                participant.id
+                                                            }
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Contact */}
+
+                                                    <td className="px-5 py-4 align-top">
+                                                        <div className="text-sm text-gray-700">
+                                                            {
+                                                                participant.phone
+                                                            }
+                                                        </div>
+
+                                                        <div className="mt-1 max-w-[260px] truncate text-xs text-gray-500">
+                                                            {
+                                                                participant.email
+                                                            }
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Receipts */}
+
+                                                    <td className="px-5 py-4 text-center align-top">
+                                                            <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                                {
+                                                                    participant.receipts_count ??
+                                                                    receipts.length
+                                                                }
                                                             </span>
-                                                    )}
-                                                </td>
+                                                    </td>
 
-                                                {/* Joined */}
+                                                    {/* Joined */}
 
-                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
-                                                    {formatDate(
-                                                        participant.created_at
-                                                    )}
-                                                </td>
-                                            </tr>
+                                                    <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                        {formatDate(
+                                                            participant.created_at
+                                                        )}
+                                                    </td>
+
+                                                    {/* View */}
+
+                                                    <td className="px-5 py-4 text-right align-top">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(
+                                                                event
+                                                            ) => {
+                                                                event.stopPropagation();
+
+                                                                openParticipant(
+                                                                    participant.id
+                                                                );
+                                                            }}
+                                                            className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                                        >
+                                                            View Participant →
+                                                        </button>
+                                                    </td>
+                                                </tr>
+
+                                                {/* Expanded receipts */}
+
+                                                {expanded && (
+                                                    <tr>
+                                                        <td
+                                                            colSpan={
+                                                                6
+                                                            }
+                                                            className="bg-gray-50/70 px-6 py-4"
+                                                        >
+                                                            <div className="ml-5 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                                                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                                                                    <div>
+                                                                        <div className="text-sm font-semibold text-gray-900">
+                                                                            Receipts
+                                                                        </div>
+
+                                                                        <div className="mt-0.5 text-xs text-gray-500">
+                                                                            {
+                                                                                receipts.length
+                                                                            }{' '}
+                                                                            submitted receipt
+                                                                            {receipts.length ===
+                                                                            1
+                                                                                ? ''
+                                                                                : 's'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {receipts.length ===
+                                                                0 ? (
+                                                                    <div className="px-4 py-5 text-sm text-gray-400">
+                                                                        No receipts submitted.
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="divide-y divide-gray-100">
+                                                                        {receipts.map(
+                                                                            (
+                                                                                receipt
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        receipt.id
+                                                                                    }
+                                                                                    className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+                                                                                >
+                                                                                    <div className="min-w-0">
+                                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                                                <span className="font-medium text-gray-900">
+                                                                                                    {
+                                                                                                        receipt.receipt_number
+                                                                                                    }
+                                                                                                </span>
+
+                                                                                            {receipt.is_suspicious && (
+                                                                                                <span className="text-sm text-amber-600">
+                                                                                                        ⚠
+                                                                                                    </span>
+                                                                                            )}
+
+                                                                                            <StatusBadge
+                                                                                                status={
+                                                                                                    receipt.status
+                                                                                                }
+                                                                                            />
+                                                                                        </div>
+
+                                                                                        <div className="mt-1 text-xs text-gray-400">
+                                                                                            Receipt
+                                                                                            ID
+                                                                                            #{' '}
+                                                                                            {
+                                                                                                receipt.id
+                                                                                            }
+
+                                                                                            {' · Submitted '}
+
+                                                                                            {formatDateTime(
+                                                                                                receipt.submitted_at ??
+                                                                                                receipt.created_at
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        {receipt.is_suspicious &&
+                                                                                            receipt
+                                                                                                .suspicious_reasons
+                                                                                                ?.length >
+                                                                                            0 && (
+                                                                                                <div className="mt-2 text-xs text-amber-800">
+                                                                                                    {receipt.suspicious_reasons
+                                                                                                        .map(
+                                                                                                            (
+                                                                                                                reason
+                                                                                                            ) =>
+                                                                                                                reason
+                                                                                                                    .replaceAll(
+                                                                                                                        '_',
+                                                                                                                        ' '
+                                                                                                                    )
+                                                                                                                    .replace(
+                                                                                                                        /\b\w/g,
+                                                                                                                        (
+                                                                                                                            character
+                                                                                                                        ) =>
+                                                                                                                            character.toUpperCase()
+                                                                                                                    )
+                                                                                                        )
+                                                                                                        .join(
+                                                                                                            ' · '
+                                                                                                        )}
+                                                                                                </div>
+                                                                                            )}
+
+                                                                                        {receipt.rejection_reason && (
+                                                                                            <div className="mt-2 text-xs text-red-700">
+                                                                                                Rejected:{' '}
+                                                                                                {
+                                                                                                    receipt.rejection_reason
+                                                                                                }
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </Fragment>
                                         );
                                     }
                                 )}

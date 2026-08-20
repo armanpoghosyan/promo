@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
-use App\Enums\ReceiptStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Participant;
 use App\Services\ParticipantIdentityService;
@@ -33,35 +32,27 @@ class ParticipantController extends Controller
         ]);
 
         $query = Participant::query()
-            ->withCount([
-                'receipts',
-
-                'receipts as submitted_receipts_count' => function ($query) {
-                    $query->where(
-                        'status',
-                        ReceiptStatus::SUBMITTED
-                    );
-                },
-
-                'receipts as approved_receipts_count' => function ($query) {
-                    $query->where(
-                        'status',
-                        ReceiptStatus::APPROVED
-                    );
-                },
-
-                'receipts as rejected_receipts_count' => function ($query) {
-                    $query->where(
-                        'status',
-                        ReceiptStatus::REJECTED
-                    );
-                },
-
-                'receipts as suspicious_receipts_count' => function ($query) {
-                    $query->where(
-                        'is_suspicious',
-                        true
-                    );
+            ->withCount(
+                'receipts'
+            )
+            ->with([
+                'receipts' => function ($query) {
+                    $query
+                        ->select([
+                            'id',
+                            'participant_id',
+                            'receipt_number',
+                            'status',
+                            'is_suspicious',
+                            'suspicious_reasons',
+                            'submitted_at',
+                            'rejection_reason',
+                            'created_at',
+                            'updated_at',
+                        ])
+                        ->latest(
+                            'submitted_at'
+                        );
                 },
             ])
             ->latest();
@@ -75,15 +66,17 @@ class ParticipantController extends Controller
                 $filters['search']
             );
 
-            $normalizedPhone = $this->participantIdentity
-                ->normalizePhone(
-                    $search
-                );
+            $normalizedPhone =
+                $this->participantIdentity
+                    ->normalizePhone(
+                        $search
+                    );
 
-            $normalizedEmail = $this->participantIdentity
-                ->normalizeEmail(
-                    $search
-                );
+            $normalizedEmail =
+                $this->participantIdentity
+                    ->normalizeEmail(
+                        $search
+                    );
 
             $query->where(
                 function ($query) use (

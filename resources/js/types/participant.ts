@@ -28,11 +28,6 @@ export interface Participant {
 
     receipts_count?: number;
 
-    submitted_receipts_count?: number;
-    approved_receipts_count?: number;
-    rejected_receipts_count?: number;
-    suspicious_receipts_count?: number;
-
     receipts?: Receipt[];
 }
 
