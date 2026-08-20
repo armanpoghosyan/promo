@@ -1,27 +1,55 @@
-import { useEffect, useState } from 'react';
 import {
-    Link,
+    useCallback,
+    useEffect,
+    useState,
+} from 'react';
+
+import {
     useLocation,
+    useNavigate,
     useSearchParams,
 } from 'react-router-dom';
 
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
+import Pagination from '../../components/Pagination';
+
 import api from '../../services/api';
-import type { PaginatedResponse } from '../../types/api';
-import { formatDate } from '../../utils/date';
 
-type Participant = {
-    id: number;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    email: string;
-    receipts_count: number;
-    created_at: string;
-};
+import type {
+    PaginatedResponse,
+} from '../../types/api';
 
+import type {
+    Participant,
+} from '../../types/participant';
+
+import {
+    getApiErrorMessage,
+} from '../../utils/apiError';
+
+import {
+    formatDate,
+} from '../../utils/date';
+
+import {
+    positiveIntegerParam,
+} from '../../utils/query';
+
+const SEARCH_MIN_LENGTH =
+    3;
+
+const SEARCH_DEBOUNCE_MS =
+    350;
 
 export default function Participants() {
-    const location = useLocation();
+    const location =
+        useLocation();
+
+    const navigate =
+        useNavigate();
 
     const [
         searchParams,
@@ -29,275 +57,353 @@ export default function Participants() {
     ] = useSearchParams();
 
     const urlSearch =
-        searchParams.get('search') ?? '';
-
-    const rawPage =
-        Number(
-            searchParams.get('page') ??
-            '1'
-        );
+        searchParams.get(
+            'search'
+        ) ?? '';
 
     const page =
-        Number.isInteger(rawPage) &&
-        rawPage > 0
-            ? rawPage
-            : 1;
+        positiveIntegerParam(
+            searchParams.get(
+                'page'
+            )
+        );
+
+    const [
+        searchInput,
+        setSearchInput,
+    ] = useState(
+        urlSearch
+    );
 
     const [
         participants,
         setParticipants,
-    ] = useState<Participant[]>([]);
+    ] = useState<
+        Participant[]
+    >([]);
 
-    const [loading, setLoading] =
-        useState(true);
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
 
-    const [error, setError] =
-        useState<string | null>(null);
-
-    const [searchInput, setSearchInput] =
-        useState(urlSearch);
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
 
     const [
         pagination,
         setPagination,
-    ] = useState<PaginatedResponse<Participant> | null>(
-        null
-    );
+    ] = useState({
+        current_page: 1,
+        last_page: 1,
+        per_page: 20,
+        total: 0,
+    });
 
-    const loadParticipants = async () => {
-        setLoading(true);
-        setError(null);
+    const updateUrl =
+        useCallback(
+            (
+                nextSearch: string,
+                nextPage: number
+            ) => {
+                const params =
+                    new URLSearchParams();
 
-        try {
-            const response =
-                await api.get<PaginatedResponse<Participant>>(
-                    '/admin/participants',
+                if (
+                    nextSearch
+                ) {
+                    params.set(
+                        'search',
+                        nextSearch
+                    );
+                }
+
+                if (
+                    nextPage >
+                    1
+                ) {
+                    params.set(
+                        'page',
+                        String(
+                            nextPage
+                        )
+                    );
+                }
+
+                setSearchParams(
+                    params,
                     {
-                        params: {
-                            search:
-                                urlSearch.trim() ||
-                                undefined,
-
-                            page,
-
-                            per_page: 20,
-                        },
+                        replace: true,
                     }
                 );
+            },
+            [
+                setSearchParams,
+            ]
+        );
 
-            setParticipants(
-                response.data.data ?? []
-            );
-
-            setPagination(
-                response.data
-            );
-        } catch (err) {
-            console.error(err);
-
-            setError(
-                'Unable to load participants.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    /*
+     * Keep the input synchronized
+     * with browser navigation.
+     */
     useEffect(() => {
-        setSearchInput(urlSearch);
-
-        loadParticipants();
+        setSearchInput(
+            urlSearch
+        );
     }, [
         urlSearch,
-        page,
     ]);
 
-    const updateUrl = (
-        nextSearch: string,
-        nextPage: number
-    ) => {
-        const params =
-            new URLSearchParams();
+    /*
+     * Type-ahead search.
+     *
+     * Search starts after 3 characters.
+     * Clearing or reducing below 3
+     * resets the list.
+     */
+    useEffect(() => {
+        const timer =
+            window.setTimeout(
+                () => {
+                    const value =
+                        searchInput.trim();
 
-        if (nextSearch.trim()) {
-            params.set(
-                'search',
-                nextSearch.trim()
+                    const nextSearch =
+                        value.length >=
+                        SEARCH_MIN_LENGTH
+                            ? value
+                            : '';
+
+                    if (
+                        nextSearch !==
+                        urlSearch
+                    ) {
+                        updateUrl(
+                            nextSearch,
+                            1
+                        );
+                    }
+                },
+                SEARCH_DEBOUNCE_MS
             );
-        }
 
-        if (nextPage > 1) {
-            params.set(
-                'page',
-                String(nextPage)
+        return () => {
+            window.clearTimeout(
+                timer
             );
-        }
+        };
+    }, [
+        searchInput,
+        urlSearch,
+        updateUrl,
+    ]);
 
-        setSearchParams(params);
-    };
+    const loadParticipants =
+        useCallback(
+            async () => {
+                setLoading(true);
+                setError(null);
 
-    const handleSearch = () => {
-        updateUrl(
-            searchInput,
-            1
+                try {
+                    const response =
+                        await api.get<
+                            PaginatedResponse<Participant>
+                        >(
+                            '/admin/participants',
+                            {
+                                params: {
+                                    search:
+                                        urlSearch ||
+                                        undefined,
+
+                                    page,
+
+                                    per_page:
+                                        20,
+                                },
+                            }
+                        );
+
+                    setParticipants(
+                        response.data
+                            .data ??
+                        []
+                    );
+
+                    setPagination({
+                        current_page:
+                        response.data
+                            .current_page,
+
+                        last_page:
+                        response.data
+                            .last_page,
+
+                        per_page:
+                        response.data
+                            .per_page,
+
+                        total:
+                        response.data
+                            .total,
+                    });
+                } catch (
+                    error: unknown
+                    ) {
+                    setError(
+                        getApiErrorMessage(
+                            error,
+                            'Unable to load participants.'
+                        )
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            },
+            [
+                urlSearch,
+                page,
+            ]
         );
-    };
 
-    const handleClear = () => {
-        setSearchInput('');
+    useEffect(() => {
+        loadParticipants();
+    }, [
+        loadParticipants,
+    ]);
 
-        updateUrl(
-            '',
-            1
-        );
-    };
+    const currentListUrl =
+        `${location.pathname}${location.search}`;
 
-    const goToPage = (
-        nextPage: number
+    const openParticipant = (
+        participantId: number
     ) => {
-        if (
-            nextPage < 1 ||
-            (
-                pagination &&
-                nextPage >
-                pagination.last_page
-            )
-        ) {
-            return;
-        }
-
-        updateUrl(
-            urlSearch,
-            nextPage
+        navigate(
+            `/admin/participants/${participantId}`,
+            {
+                state: {
+                    from:
+                    currentListUrl,
+                },
+            }
         );
     };
+
+    const trimmedSearch =
+        searchInput.trim();
+
+    const showSearchHint =
+        trimmedSearch.length >
+        0 &&
+        trimmedSearch.length <
+        SEARCH_MIN_LENGTH;
 
     return (
         <div className="space-y-6">
-
-            {/* Header */}
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
-                <div>
-
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Participants
-                    </h2>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Search participants and review
-                        their participation history.
-                    </p>
-
-                </div>
-
-                {pagination && (
-                    <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
-                        {pagination.total}{' '}
-                        participant
-                        {pagination.total === 1
-                            ? ''
-                            : 's'}
-                    </div>
-                )}
-
-            </div>
+            <PageHeader
+                title="Participants"
+                description="Find participants and review their participation activity."
+            />
 
             {/* Search */}
 
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-
+                <div className="relative">
                     <input
                         type="text"
-                        value={searchInput}
-                        onChange={(event) =>
+                        value={
+                            searchInput
+                        }
+                        onChange={(
+                            event
+                        ) =>
                             setSearchInput(
-                                event.target.value
+                                event
+                                    .target
+                                    .value
                             )
                         }
-                        onKeyDown={(event) => {
-                            if (
-                                event.key ===
-                                'Enter'
-                            ) {
-                                handleSearch();
-                            }
-                        }}
-                        placeholder="Search by name, phone or email..."
-                        className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                        placeholder="Search by name, phone, email or participant ID..."
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-28 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                     />
 
-                    <button
-                        type="button"
-                        onClick={handleSearch}
-                        disabled={loading}
-                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        Search
-                    </button>
-
-                    {urlSearch && (
+                    {searchInput && (
                         <button
                             type="button"
-                            onClick={handleClear}
-                            disabled={loading}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            onClick={() =>
+                                setSearchInput(
+                                    ''
+                                )
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 hover:text-gray-700"
                         >
                             Clear
                         </button>
                     )}
-
                 </div>
 
+                <div className="mt-2 flex items-center justify-between gap-4">
+                    <div className="text-xs text-gray-400">
+                        {showSearchHint
+                            ? `Type at least ${SEARCH_MIN_LENGTH} characters to search.`
+                            : urlSearch
+                                ? `Searching for “${urlSearch}”`
+                                : 'Search starts automatically after 3 characters.'}
+                    </div>
+
+                    <div className="shrink-0 text-xs text-gray-500">
+                        {
+                            pagination.total
+                        }{' '}
+                        participant
+                        {pagination.total ===
+                        1
+                            ? ''
+                            : 's'}
+                    </div>
+                </div>
             </section>
 
-            {/* Error */}
-
             {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <Alert
+                    variant="error"
+                    onDismiss={() =>
+                        setError(
+                            null
+                        )
+                    }
+                >
                     {error}
-                </div>
+                </Alert>
             )}
 
-            {/* List */}
+            {/* Participants */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
                 {loading ? (
-
-                    <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                        Loading participants...
-                    </div>
-
-                ) : participants.length === 0 ? (
-
-                    <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-
-                        <div className="text-sm font-medium text-gray-700">
-                            No participants found.
-                        </div>
-
-                        <div className="mt-1 text-sm text-gray-400">
-                            Try changing your search terms.
-                        </div>
-
-                    </div>
-
+                    <LoadingState
+                        message="Loading participants..."
+                    />
+                ) : participants.length ===
+                0 ? (
+                    <EmptyState
+                        title="No participants found."
+                        description={
+                            urlSearch
+                                ? 'No participant matches this search.'
+                                : 'No participants have been registered yet.'
+                        }
+                    />
                 ) : (
-
                     <>
-
                         <div className="overflow-x-auto">
-
-                            <table className="min-w-full text-left text-sm">
-
+                            <table className="w-full min-w-[1000px] text-left text-sm">
                                 <thead className="bg-gray-50">
-
                                 <tr>
-
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Participant
                                     </th>
@@ -311,207 +417,223 @@ export default function Participants() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Registered
+                                        Needs Review
                                     </th>
 
-                                    <th className="px-5 py-3" />
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Attention
+                                    </th>
 
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Joined
+                                    </th>
                                 </tr>
-
                                 </thead>
 
                                 <tbody className="divide-y divide-gray-100">
-
                                 {participants.map(
-                                    (participant) => (
+                                    (
+                                        participant
+                                    ) => {
+                                        const submittedCount =
+                                            participant.submitted_receipts_count ??
+                                            0;
 
-                                        <tr
-                                            key={
-                                                participant.id
-                                            }
-                                            className="hover:bg-gray-50"
-                                        >
+                                        const suspiciousCount =
+                                            participant.suspicious_receipts_count ??
+                                            0;
 
-                                            {/* Participant */}
+                                        const rejectedCount =
+                                            participant.rejected_receipts_count ??
+                                            0;
 
-                                            <td className="px-5 py-4">
+                                        const hasAttention =
+                                            suspiciousCount >
+                                            0 ||
+                                            rejectedCount >
+                                            0;
 
-                                                <div className="font-medium text-gray-900">
-                                                    {
-                                                        participant.first_name
-                                                    }{' '}
-                                                    {
-                                                        participant.last_name
-                                                    }
-                                                </div>
-
-                                                <div className="mt-1 text-xs text-gray-400">
-                                                    ID #
-                                                    {
+                                        return (
+                                            <tr
+                                                key={
+                                                    participant.id
+                                                }
+                                                tabIndex={
+                                                    0
+                                                }
+                                                role="button"
+                                                onClick={() =>
+                                                    openParticipant(
                                                         participant.id
+                                                    )
+                                                }
+                                                onKeyDown={(
+                                                    event
+                                                ) => {
+                                                    if (
+                                                        event.key ===
+                                                        'Enter' ||
+                                                        event.key ===
+                                                        ' '
+                                                    ) {
+                                                        event.preventDefault();
+
+                                                        openParticipant(
+                                                            participant.id
+                                                        );
                                                     }
-                                                </div>
+                                                }}
+                                                className="cursor-pointer transition hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                                            >
+                                                {/* Participant */}
 
-                                            </td>
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="font-semibold text-gray-900">
+                                                        {
+                                                            participant.first_name
+                                                        }{' '}
+                                                        {
+                                                            participant.last_name
+                                                        }
+                                                    </div>
 
-                                            {/* Contact */}
+                                                    <div className="mt-1 text-xs text-gray-400">
+                                                        Participant
+                                                        ID
+                                                        #{' '}
+                                                        {
+                                                            participant.id
+                                                        }
+                                                    </div>
+                                                </td>
 
-                                            <td className="px-5 py-4">
+                                                {/* Contact */}
 
-                                                <div className="text-sm text-gray-700">
-                                                    {
-                                                        participant.phone
-                                                    }
-                                                </div>
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="text-sm text-gray-700">
+                                                        {
+                                                            participant.phone
+                                                        }
+                                                    </div>
 
-                                                <div className="mt-1 max-w-[260px] truncate text-xs text-gray-500">
-                                                    {
-                                                        participant.email
-                                                    }
-                                                </div>
+                                                    <div className="mt-1 max-w-[260px] truncate text-xs text-gray-500">
+                                                        {
+                                                            participant.email
+                                                        }
+                                                    </div>
+                                                </td>
 
-                                            </td>
+                                                {/* Receipts */}
 
-                                            {/* Receipts */}
+                                                <td className="px-5 py-4 text-center align-top">
+                                                        <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                            {
+                                                                participant.receipts_count ??
+                                                                0
+                                                            }
+                                                        </span>
+                                                </td>
 
-                                            <td className="px-5 py-4 text-center">
+                                                {/* Needs Review */}
 
-                                                <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                                                    {
-                                                        participant.receipts_count
-                                                    }
-                                                </span>
+                                                <td className="px-5 py-4 align-top">
+                                                    {submittedCount >
+                                                    0 ? (
+                                                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                                {
+                                                                    submittedCount
+                                                                }{' '}
+                                                            need
+                                                                review
+                                                            </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
 
-                                            </td>
+                                                {/* Attention */}
 
-                                            {/* Registered */}
+                                                <td className="px-5 py-4 align-top">
+                                                    {hasAttention ? (
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {suspiciousCount >
+                                                                0 && (
+                                                                    <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+                                                                        {
+                                                                            suspiciousCount
+                                                                        }{' '}
+                                                                        suspicious
+                                                                    </span>
+                                                                )}
 
-                                            <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-500">
-                                                {formatDate(
-                                                    participant.created_at
-                                                )}
-                                            </td>
+                                                            {rejectedCount >
+                                                                0 && (
+                                                                    <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                                                                        {
+                                                                            rejectedCount
+                                                                        }{' '}
+                                                                        rejected
+                                                                    </span>
+                                                                )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
 
-                                            {/* Action */}
+                                                {/* Joined */}
 
-                                            <td className="px-5 py-4 text-right">
-
-                                                <Link
-                                                    to={`/admin/participants/${participant.id}`}
-                                                    state={{
-                                                        from:
-                                                            `${location.pathname}${location.search}`,
-                                                    }}
-                                                    className="inline-flex rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
-                                                >
-                                                    View profile
-                                                </Link>
-
-                                            </td>
-
-                                        </tr>
-
-                                    )
+                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                    {formatDate(
+                                                        participant.created_at
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    }
                                 )}
-
                                 </tbody>
-
                             </table>
-
                         </div>
 
-                        {/* Pagination */}
+                        <Pagination
+                            currentPage={
+                                pagination.current_page
+                            }
+                            lastPage={
+                                pagination.last_page
+                            }
+                            perPage={
+                                pagination.per_page
+                            }
+                            total={
+                                pagination.total
+                            }
+                            loading={
+                                loading
+                            }
+                            onPageChange={(
+                                nextPage
+                            ) => {
+                                updateUrl(
+                                    urlSearch,
+                                    nextPage
+                                );
 
-                        {pagination &&
-                            pagination.last_page >
-                            1 && (
-
-                                <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                                    <div className="text-sm text-gray-500">
-
-                                        Showing{' '}
-
-                                        {(pagination.current_page -
-                                                1) *
-                                            pagination.per_page +
-                                            1}
-
-                                        {' '}to{' '}
-
-                                        {Math.min(
-                                            pagination.current_page *
-                                            pagination.per_page,
-                                            pagination.total
-                                        )}
-
-                                        {' '}of{' '}
-
-                                        {
-                                            pagination.total
-                                        }
-
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                pagination.current_page <=
-                                                1 ||
-                                                loading
-                                            }
-                                            onClick={() =>
-                                                goToPage(
-                                                    pagination.current_page -
-                                                    1
-                                                )
-                                            }
-                                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Previous
-                                        </button>
-
-                                        <span className="px-2 text-sm text-gray-600">
-                                        Page{' '}
-                                            {
-                                                pagination.current_page
-                                            }{' '}
-                                            of{' '}
-                                            {
-                                                pagination.last_page
-                                            }
-                                    </span>
-
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                pagination.current_page >=
-                                                pagination.last_page ||
-                                                loading
-                                            }
-                                            onClick={() =>
-                                                goToPage(
-                                                    pagination.current_page +
-                                                    1
-                                                )
-                                            }
-                                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                        >
-                                            Next
-                                        </button>
-
-                                    </div>
-
-                                </div>
-                            )}
-
+                                window.scrollTo({
+                                    top: 0,
+                                    behavior:
+                                        'smooth',
+                                });
+                            }}
+                        />
                     </>
                 )}
-
             </section>
-
         </div>
     );
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\ReceiptStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Participant;
 use App\Services\ParticipantIdentityService;
@@ -16,82 +17,159 @@ class ParticipantController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $filters = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'per_page' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100',
+            ],
+        ]);
+
         $query = Participant::query()
-            ->withCount('receipts')
+            ->withCount([
+                'receipts',
+
+                'receipts as submitted_receipts_count' => function ($query) {
+                    $query->where(
+                        'status',
+                        ReceiptStatus::SUBMITTED
+                    );
+                },
+
+                'receipts as approved_receipts_count' => function ($query) {
+                    $query->where(
+                        'status',
+                        ReceiptStatus::APPROVED
+                    );
+                },
+
+                'receipts as rejected_receipts_count' => function ($query) {
+                    $query->where(
+                        'status',
+                        ReceiptStatus::REJECTED
+                    );
+                },
+
+                'receipts as suspicious_receipts_count' => function ($query) {
+                    $query->where(
+                        'is_suspicious',
+                        true
+                    );
+                },
+            ])
             ->latest();
 
-        if ($request->filled('search')) {
+        if (
+            ! empty(
+                $filters['search']
+            )
+        ) {
             $search = trim(
-                $request->string('search')->toString()
+                $filters['search']
             );
 
             $normalizedPhone = $this->participantIdentity
-                ->normalizePhone($search);
+                ->normalizePhone(
+                    $search
+                );
 
             $normalizedEmail = $this->participantIdentity
-                ->normalizeEmail($search);
+                ->normalizeEmail(
+                    $search
+                );
 
-            $query->where(function ($query) use (
-                $search,
-                $normalizedPhone,
-                $normalizedEmail
-            ) {
-                $query->where(
-                    'first_name',
-                    'like',
-                    "%{$search}%"
-                )
-                    ->orWhere(
-                        'last_name',
-                        'like',
-                        "%{$search}%"
-                    )
-                    ->orWhere(
-                        'phone',
-                        'like',
-                        "%{$search}%"
-                    )
-                    ->orWhere(
-                        'email',
-                        'like',
-                        "%{$search}%"
-                    );
+            $query->where(
+                function ($query) use (
+                    $search,
+                    $normalizedPhone,
+                    $normalizedEmail
+                ) {
+                    $query
+                        ->where(
+                            'first_name',
+                            'like',
+                            "%{$search}%"
+                        )
+                        ->orWhere(
+                            'last_name',
+                            'like',
+                            "%{$search}%"
+                        )
+                        ->orWhere(
+                            'phone',
+                            'like',
+                            "%{$search}%"
+                        )
+                        ->orWhere(
+                            'email',
+                            'like',
+                            "%{$search}%"
+                        );
 
-                if ($normalizedPhone !== '') {
-                    $query->orWhere(
-                        'phone_normalized',
-                        'like',
-                        "%{$normalizedPhone}%"
-                    );
+                    if (
+                        ctype_digit(
+                            $search
+                        )
+                    ) {
+                        $query->orWhere(
+                            'id',
+                            (int) $search
+                        );
+                    }
+
+                    if (
+                        $normalizedPhone !==
+                        ''
+                    ) {
+                        $query->orWhere(
+                            'phone_normalized',
+                            'like',
+                            "%{$normalizedPhone}%"
+                        );
+                    }
+
+                    if (
+                        $normalizedEmail !==
+                        ''
+                    ) {
+                        $query->orWhere(
+                            'email_normalized',
+                            'like',
+                            "%{$normalizedEmail}%"
+                        );
+                    }
                 }
-
-                if ($normalizedEmail !== '') {
-                    $query->orWhere(
-                        'email_normalized',
-                        'like',
-                        "%{$normalizedEmail}%"
-                    );
-                }
-            });
+            );
         }
 
-        $perPage = min(
-            max($request->integer('per_page', 20), 1),
-            100
-        );
+        $perPage =
+            $filters['per_page'] ??
+            20;
 
         return response()->json(
-            $query->paginate($perPage)
+            $query->paginate(
+                $perPage
+            )
         );
     }
 
     public function show(
         Participant $participant
     ): JsonResponse {
-        $participant->load('receipts');
+        $participant->load(
+            'receipts'
+        );
 
         return response()->json([
-            'data' => $participant,
+            'data' =>
+                $participant,
         ]);
     }
 }
