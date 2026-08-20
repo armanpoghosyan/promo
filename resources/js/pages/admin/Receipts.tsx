@@ -239,7 +239,7 @@ export default function Receipts() {
                             'suspicious'
                         ) {
                             params.suspicious =
-                                true;
+                                1;
                         }
 
                         if (
@@ -247,7 +247,7 @@ export default function Receipts() {
                             'normal'
                         ) {
                             params.suspicious =
-                                false;
+                                0;
                         }
                     }
 
