@@ -37,64 +37,52 @@ class ReceiptController extends Controller
             ],
         ]);
 
-        /*
-         * Main lifecycle counts.
-         *
-         * Suspicious is a review signal,
-         * not a lifecycle status.
-         */
         $counts = [
-            'all' =>
-                Receipt::query()
-                    ->count(),
+            'all' => Receipt::query()
+                ->count(),
 
-            'submitted' =>
-                Receipt::query()
-                    ->where(
-                        'status',
-                        ReceiptStatus::SUBMITTED
-                    )
-                    ->count(),
+            'submitted' => Receipt::query()
+                ->where(
+                    'status',
+                    ReceiptStatus::SUBMITTED
+                )
+                ->count(),
 
-            'submitted_suspicious' =>
-                Receipt::query()
-                    ->where(
-                        'status',
-                        ReceiptStatus::SUBMITTED
-                    )
-                    ->where(
-                        'is_suspicious',
-                        true
-                    )
-                    ->count(),
+            'submitted_suspicious' => Receipt::query()
+                ->where(
+                    'status',
+                    ReceiptStatus::SUBMITTED
+                )
+                ->where(
+                    'is_suspicious',
+                    true
+                )
+                ->count(),
 
-            'submitted_normal' =>
-                Receipt::query()
-                    ->where(
-                        'status',
-                        ReceiptStatus::SUBMITTED
-                    )
-                    ->where(
-                        'is_suspicious',
-                        false
-                    )
-                    ->count(),
+            'submitted_normal' => Receipt::query()
+                ->where(
+                    'status',
+                    ReceiptStatus::SUBMITTED
+                )
+                ->where(
+                    'is_suspicious',
+                    false
+                )
+                ->count(),
 
-            'approved' =>
-                Receipt::query()
-                    ->where(
-                        'status',
-                        ReceiptStatus::APPROVED
-                    )
-                    ->count(),
+            'approved' => Receipt::query()
+                ->where(
+                    'status',
+                    ReceiptStatus::APPROVED
+                )
+                ->count(),
 
-            'rejected' =>
-                Receipt::query()
-                    ->where(
-                        'status',
-                        ReceiptStatus::REJECTED
-                    )
-                    ->count(),
+            'rejected' => Receipt::query()
+                ->where(
+                    'status',
+                    ReceiptStatus::REJECTED
+                )
+                ->count(),
         ];
 
         $query =
@@ -111,12 +99,6 @@ class ReceiptController extends Controller
             );
         }
 
-        /*
-         * false is meaningful here.
-         *
-         * suspicious=true
-         * suspicious=false
-         */
         if (
             array_key_exists(
                 'suspicious',
@@ -132,33 +114,53 @@ class ReceiptController extends Controller
         }
 
         /*
-         * Efficient list context:
+         * Table context:
          *
-         * - participant receipt count
+         * - participant + all receipt summaries
          * - latest note
-         * - total note count
+         * - note history
+         * - note count
+         *
+         * This allows informative table tooltips
+         * without additional requests on hover.
          */
         $query
             ->with([
-                'participant' =>
-                    function ($query) {
-                        $query->withCount(
+                'participant' => function ($query) {
+                    $query
+                        ->withCount(
                             'receipts'
-                        );
-                    },
+                        )
+                        ->with([
+                            'receipts' => function ($query) {
+                                $query
+                                    ->select([
+                                        'id',
+                                        'participant_id',
+                                        'receipt_number',
+                                        'status',
+                                        'is_suspicious',
+                                        'suspicious_reasons',
+                                        'submitted_at',
+                                        'rejection_reason',
+                                        'created_at',
+                                        'updated_at',
+                                    ])
+                                    ->latest(
+                                        'submitted_at'
+                                    );
+                            },
+                        ]);
+                },
 
                 'latestNote.user',
+
+                'notes.user',
             ])
             ->withCount(
                 'notes'
             );
 
-        /*
-         * Fixed ordering.
-         *
-         * Most recently submitted receipts
-         * are always shown first.
-         */
         $query
             ->orderByDesc(
                 'submitted_at'
@@ -177,41 +179,31 @@ class ReceiptController extends Controller
             );
 
         return response()->json([
-            'data' =>
-                $paginator->items(),
+            'data' => $paginator->items(),
 
-            'current_page' =>
-                $paginator->currentPage(),
+            'current_page' => $paginator->currentPage(),
 
-            'last_page' =>
-                $paginator->lastPage(),
+            'last_page' => $paginator->lastPage(),
 
-            'per_page' =>
-                $paginator->perPage(),
+            'per_page' => $paginator->perPage(),
 
-            'total' =>
-                $paginator->total(),
+            'total' => $paginator->total(),
 
-            'from' =>
-                $paginator->firstItem(),
+            'from' => $paginator->firstItem(),
 
-            'to' =>
-                $paginator->lastItem(),
+            'to' => $paginator->lastItem(),
 
             'meta' => [
-                'counts' =>
-                    $counts,
+                'counts' => $counts,
 
                 'filters' => [
-                    'status' =>
-                        $filters['status'] ??
+                    'status' => $filters['status'] ??
                         null,
 
-                    'suspicious' =>
-                        array_key_exists(
-                            'suspicious',
-                            $filters
-                        )
+                    'suspicious' => array_key_exists(
+                        'suspicious',
+                        $filters
+                    )
                             ? $request->boolean(
                                 'suspicious'
                             )
@@ -229,8 +221,7 @@ class ReceiptController extends Controller
         );
 
         return response()->json([
-            'data' =>
-                $receipt,
+            'data' => $receipt,
         ]);
     }
 
@@ -243,8 +234,7 @@ class ReceiptController extends Controller
             ReceiptStatus::SUBMITTED
         ) {
             return response()->json([
-                'message' =>
-                    'Only submitted receipts can be approved.',
+                'message' => 'Only submitted receipts can be approved.',
             ], 422);
         }
 
@@ -281,65 +271,50 @@ class ReceiptController extends Controller
                         now();
 
                     $receipt->update([
-                        'status' =>
-                            ReceiptStatus::APPROVED,
+                        'status' => ReceiptStatus::APPROVED,
 
-                        'verified_at' =>
-                            $verifiedAt,
+                        'verified_at' => $verifiedAt,
 
-                        'verified_by' =>
-                            $request
-                                ->user()
-                                ->id,
+                        'verified_by' => $request
+                            ->user()
+                            ->id,
 
-                        'rejection_reason' =>
-                            null,
+                        'rejection_reason' => null,
                     ]);
 
                     AuditLog::create([
-                        'user_id' =>
-                            $request
-                                ->user()
-                                ->id,
+                        'user_id' => $request
+                            ->user()
+                            ->id,
 
-                        'action' =>
-                            'receipt.approved',
+                        'action' => 'receipt.approved',
 
-                        'auditable_type' =>
-                            Receipt::class,
+                        'auditable_type' => Receipt::class,
 
-                        'auditable_id' =>
-                            $receipt->id,
+                        'auditable_id' => $receipt->id,
 
                         'old_values' => [
-                            'status' =>
-                                $oldStatus,
+                            'status' => $oldStatus,
                         ],
 
                         'new_values' => [
-                            'status' =>
-                                ReceiptStatus::APPROVED
-                                    ->value,
+                            'status' => ReceiptStatus::APPROVED
+                                ->value,
 
-                            'verified_at' =>
-                                $verifiedAt
-                                    ->toISOString(),
+                            'verified_at' => $verifiedAt
+                                ->toISOString(),
 
-                            'verified_by' =>
-                                $request
-                                    ->user()
-                                    ->id,
+                            'verified_by' => $request
+                                ->user()
+                                ->id,
                         ],
 
-                        'description' =>
-                            'Receipt approved by organizer.',
+                        'description' => 'Receipt approved by organizer.',
 
-                        'ip_address' =>
-                            $request->ip(),
+                        'ip_address' => $request->ip(),
 
-                        'user_agent' =>
-                            $request
-                                ->userAgent(),
+                        'user_agent' => $request
+                            ->userAgent(),
                     ]);
 
                     return $receipt;
@@ -351,11 +326,9 @@ class ReceiptController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Receipt approved successfully.',
+            'message' => 'Receipt approved successfully.',
 
-            'data' =>
-                $receipt,
+            'data' => $receipt,
         ]);
     }
 
@@ -377,8 +350,7 @@ class ReceiptController extends Controller
             ReceiptStatus::SUBMITTED
         ) {
             return response()->json([
-                'message' =>
-                    'Only submitted receipts can be rejected.',
+                'message' => 'Only submitted receipts can be rejected.',
             ], 422);
         }
 
@@ -416,68 +388,52 @@ class ReceiptController extends Controller
                         now();
 
                     $receipt->update([
-                        'status' =>
-                            ReceiptStatus::REJECTED,
+                        'status' => ReceiptStatus::REJECTED,
 
-                        'verified_at' =>
-                            $verifiedAt,
+                        'verified_at' => $verifiedAt,
 
-                        'verified_by' =>
-                            $request
-                                ->user()
-                                ->id,
+                        'verified_by' => $request
+                            ->user()
+                            ->id,
 
-                        'rejection_reason' =>
-                            $data['reason'],
+                        'rejection_reason' => $data['reason'],
                     ]);
 
                     AuditLog::create([
-                        'user_id' =>
-                            $request
-                                ->user()
-                                ->id,
+                        'user_id' => $request
+                            ->user()
+                            ->id,
 
-                        'action' =>
-                            'receipt.rejected',
+                        'action' => 'receipt.rejected',
 
-                        'auditable_type' =>
-                            Receipt::class,
+                        'auditable_type' => Receipt::class,
 
-                        'auditable_id' =>
-                            $receipt->id,
+                        'auditable_id' => $receipt->id,
 
                         'old_values' => [
-                            'status' =>
-                                $oldStatus,
+                            'status' => $oldStatus,
                         ],
 
                         'new_values' => [
-                            'status' =>
-                                ReceiptStatus::REJECTED
-                                    ->value,
+                            'status' => ReceiptStatus::REJECTED
+                                ->value,
 
-                            'verified_at' =>
-                                $verifiedAt
-                                    ->toISOString(),
+                            'verified_at' => $verifiedAt
+                                ->toISOString(),
 
-                            'verified_by' =>
-                                $request
-                                    ->user()
-                                    ->id,
+                            'verified_by' => $request
+                                ->user()
+                                ->id,
 
-                            'rejection_reason' =>
-                                $data['reason'],
+                            'rejection_reason' => $data['reason'],
                         ],
 
-                        'description' =>
-                            'Receipt rejected by organizer.',
+                        'description' => 'Receipt rejected by organizer.',
 
-                        'ip_address' =>
-                            $request->ip(),
+                        'ip_address' => $request->ip(),
 
-                        'user_agent' =>
-                            $request
-                                ->userAgent(),
+                        'user_agent' => $request
+                            ->userAgent(),
                     ]);
 
                     return $receipt;
@@ -489,11 +445,9 @@ class ReceiptController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Receipt rejected successfully.',
+            'message' => 'Receipt rejected successfully.',
 
-            'data' =>
-                $receipt,
+            'data' => $receipt,
         ]);
     }
 
@@ -521,44 +475,34 @@ class ReceiptController extends Controller
                         $receipt
                             ->notes()
                             ->create([
-                                'user_id' =>
-                                    $request
-                                        ->user()
-                                        ->id,
+                                'user_id' => $request
+                                    ->user()
+                                    ->id,
 
-                                'note' =>
-                                    $data['note'],
+                                'note' => $data['note'],
                             ]);
 
                     AuditLog::create([
-                        'user_id' =>
-                            $request
-                                ->user()
-                                ->id,
+                        'user_id' => $request
+                            ->user()
+                            ->id,
 
-                        'action' =>
-                            'receipt.note_added',
+                        'action' => 'receipt.note_added',
 
-                        'auditable_type' =>
-                            Receipt::class,
+                        'auditable_type' => Receipt::class,
 
-                        'auditable_id' =>
-                            $receipt->id,
+                        'auditable_id' => $receipt->id,
 
                         'new_values' => [
-                            'note_id' =>
-                                $note->id,
+                            'note_id' => $note->id,
                         ],
 
-                        'description' =>
-                            'Organizer added a receipt note.',
+                        'description' => 'Organizer added a receipt note.',
 
-                        'ip_address' =>
-                            $request->ip(),
+                        'ip_address' => $request->ip(),
 
-                        'user_agent' =>
-                            $request
-                                ->userAgent(),
+                        'user_agent' => $request
+                            ->userAgent(),
                     ]);
 
                     return $note;
@@ -570,11 +514,9 @@ class ReceiptController extends Controller
         );
 
         return response()->json([
-            'message' =>
-                'Note added successfully.',
+            'message' => 'Note added successfully.',
 
-            'data' =>
-                $note,
+            'data' => $note,
         ], 201);
     }
 
@@ -590,8 +532,7 @@ class ReceiptController extends Controller
             )
         ) {
             return response()->json([
-                'message' =>
-                    'Receipt image not found.',
+                'message' => 'Receipt image not found.',
             ], 404);
         }
 
@@ -606,37 +547,35 @@ class ReceiptController extends Controller
         Receipt $receipt
     ): void {
         $receipt->load([
-            'participant' =>
-                function ($query) {
-                    $query
-                        ->withCount(
-                            'receipts'
-                        )
-                        ->with([
-                            'receipts' =>
-                                function ($query) {
-                                    $query
-                                        ->select([
-                                            'id',
-                                            'participant_id',
-                                            'receipt_number',
-                                            'status',
-                                            'is_suspicious',
-                                            'suspicious_reasons',
-                                            'submitted_at',
-                                            'rejection_reason',
-                                            'created_at',
-                                            'updated_at',
-                                        ])
-                                        ->latest(
-                                            'submitted_at'
-                                        )
-                                        ->limit(
-                                            10
-                                        );
-                                },
-                        ]);
-                },
+            'participant' => function ($query) {
+                $query
+                    ->withCount(
+                        'receipts'
+                    )
+                    ->with([
+                        'receipts' => function ($query) {
+                            $query
+                                ->select([
+                                    'id',
+                                    'participant_id',
+                                    'receipt_number',
+                                    'status',
+                                    'is_suspicious',
+                                    'suspicious_reasons',
+                                    'submitted_at',
+                                    'rejection_reason',
+                                    'created_at',
+                                    'updated_at',
+                                ])
+                                ->latest(
+                                    'submitted_at'
+                                )
+                                ->limit(
+                                    10
+                                );
+                        },
+                    ]);
+            },
 
             'notes.user',
         ]);

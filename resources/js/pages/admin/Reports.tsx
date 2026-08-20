@@ -16,6 +16,7 @@ import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
 import ReceiptQuickReviewModal from '../../components/receipts/ReceiptQuickReviewModal';
 import StatusBadge from '../../components/StatusBadge';
+import Tooltip from '../../components/Tooltip';
 
 import api from '../../services/api';
 
@@ -35,6 +36,10 @@ import {
 } from '../../utils/date';
 
 import {
+    formatEnumLabel,
+} from '../../utils/format';
+
+import {
     positiveIntegerParam,
 } from '../../utils/query';
 
@@ -42,19 +47,23 @@ type ReceiptTab =
     | 'all'
     | 'submitted'
     | 'approved'
-    | 'rejected'
-    | 'suspicious';
+    | 'rejected';
 
-type SortDirection =
-    | 'asc'
-    | 'desc';
+type ReviewFilter =
+    | 'all'
+    | 'suspicious'
+    | 'normal';
 
 const emptyCounts: ReceiptListCounts = {
     all: 0,
+
     submitted: 0,
+
+    submitted_suspicious: 0,
+    submitted_normal: 0,
+
     approved: 0,
     rejected: 0,
-    suspicious: 0,
 };
 
 const suspiciousReasonLabels: Record<
@@ -76,48 +85,6 @@ const suspiciousReasonLabels: Record<
     receipt_number_non_numeric:
         'Receipt number contains unexpected characters',
 };
-
-const suspiciousReasonOptions = [
-    {
-        value: '',
-        label: 'All suspicious reasons',
-    },
-
-    {
-        value:
-            'duplicate_receipt_number',
-        label:
-            'Duplicate receipt number',
-    },
-
-    {
-        value:
-            'duplicate_receipt_image',
-        label:
-            'Duplicate receipt image',
-    },
-
-    {
-        value:
-            'phone_used_by_another_participant',
-        label:
-            'Phone used by another participant',
-    },
-
-    {
-        value:
-            'email_used_by_another_participant',
-        label:
-            'Email used by another participant',
-    },
-
-    {
-        value:
-            'receipt_number_non_numeric',
-        label:
-            'Unexpected receipt number format',
-    },
-];
 
 function suspiciousReasonLabel(
     reason: SuspiciousReason
@@ -179,32 +146,12 @@ export default function Receipts() {
             ) as ReceiptTab | null
         ) ?? 'all';
 
-    const initialSearch =
-        searchParams.get(
-            'search'
-        ) ?? '';
-
-    const initialDateFrom =
-        searchParams.get(
-            'date_from'
-        ) ?? '';
-
-    const initialDateTo =
-        searchParams.get(
-            'date_to'
-        ) ?? '';
-
-    const initialReason =
-        searchParams.get(
-            'suspicious_reason'
-        ) ?? '';
-
-    const initialDirection =
+    const initialReviewFilter =
         (
             searchParams.get(
-                'direction'
-            ) as SortDirection | null
-        ) ?? 'desc';
+                'review'
+            ) as ReviewFilter | null
+        ) ?? 'all';
 
     const [
         receipts,
@@ -246,53 +193,18 @@ export default function Receipts() {
     );
 
     const [
-        search,
-        setSearch,
-    ] = useState(
-        initialSearch
-    );
-
-    const [
-        searchInput,
-        setSearchInput,
-    ] = useState(
-        initialSearch
-    );
-
-    const [
-        dateFrom,
-        setDateFrom,
-    ] = useState(
-        initialDateFrom
-    );
-
-    const [
-        dateTo,
-        setDateTo,
-    ] = useState(
-        initialDateTo
-    );
-
-    const [
-        suspiciousReason,
-        setSuspiciousReason,
-    ] = useState(
-        initialReason
-    );
-
-    const [
-        direction,
-        setDirection,
-    ] = useState<SortDirection>(
-        initialDirection
+        reviewFilter,
+        setReviewFilter,
+    ] = useState<ReviewFilter>(
+        initialReviewFilter
     );
 
     const [
         quickReviewReceiptId,
         setQuickReviewReceiptId,
-    ] = useState<number | null>(
-        null
-    );
+    ] = useState<
+        number | null
+    >(null);
 
     const [
         pagination,
@@ -318,7 +230,6 @@ export default function Receipts() {
                         | boolean
                     > = {
                         page,
-                        direction,
                     };
 
                     if (
@@ -327,6 +238,22 @@ export default function Receipts() {
                     ) {
                         params.status =
                             'submitted';
+
+                        if (
+                            reviewFilter ===
+                            'suspicious'
+                        ) {
+                            params.suspicious =
+                                1;
+                        }
+
+                        if (
+                            reviewFilter ===
+                            'normal'
+                        ) {
+                            params.suspicious =
+                                0;
+                        }
                     }
 
                     if (
@@ -343,38 +270,6 @@ export default function Receipts() {
                     ) {
                         params.status =
                             'rejected';
-                    }
-
-                    if (
-                        tab ===
-                        'suspicious'
-                    ) {
-                        params.suspicious =
-                            true;
-                    }
-
-                    if (
-                        search.trim()
-                    ) {
-                        params.search =
-                            search.trim();
-                    }
-
-                    if (dateFrom) {
-                        params.date_from =
-                            dateFrom;
-                    }
-
-                    if (dateTo) {
-                        params.date_to =
-                            dateTo;
-                    }
-
-                    if (
-                        suspiciousReason
-                    ) {
-                        params.suspicious_reason =
-                            suspiciousReason;
                     }
 
                     const response =
@@ -429,79 +324,10 @@ export default function Receipts() {
             [
                 page,
                 tab,
-                search,
-                dateFrom,
-                dateTo,
-                suspiciousReason,
-                direction,
+                reviewFilter,
             ]
         );
 
-    /*
-     * Live global search.
-     *
-     * Numeric values can search
-     * immediately because they may
-     * be exact receipt IDs.
-     *
-     * Other searches start from
-     * three characters.
-     */
-    useEffect(() => {
-        const value =
-            searchInput.trim();
-
-        if (
-            value === ''
-        ) {
-            if (
-                search !== ''
-            ) {
-                setPage(1);
-                setSearch('');
-            }
-
-            return;
-        }
-
-        const numeric =
-            /^\d+$/.test(
-                value
-            );
-
-        if (
-            !numeric &&
-            value.length < 3
-        ) {
-            return;
-        }
-
-        const timeout =
-            window.setTimeout(
-                () => {
-                    setPage(1);
-
-                    setSearch(
-                        value
-                    );
-                },
-                350
-            );
-
-        return () => {
-            window.clearTimeout(
-                timeout
-            );
-        };
-    }, [
-        searchInput,
-        search,
-    ]);
-
-    /*
-     * Keep the list workspace
-     * represented in the URL.
-     */
     useEffect(() => {
         const params =
             new URLSearchParams();
@@ -526,48 +352,14 @@ export default function Receipts() {
         }
 
         if (
-            search
+            tab ===
+            'submitted' &&
+            reviewFilter !==
+            'all'
         ) {
             params.set(
-                'search',
-                search
-            );
-        }
-
-        if (
-            dateFrom
-        ) {
-            params.set(
-                'date_from',
-                dateFrom
-            );
-        }
-
-        if (
-            dateTo
-        ) {
-            params.set(
-                'date_to',
-                dateTo
-            );
-        }
-
-        if (
-            suspiciousReason
-        ) {
-            params.set(
-                'suspicious_reason',
-                suspiciousReason
-            );
-        }
-
-        if (
-            direction !==
-            'desc'
-        ) {
-            params.set(
-                'direction',
-                direction
+                'review',
+                reviewFilter
             );
         }
 
@@ -580,39 +372,15 @@ export default function Receipts() {
     }, [
         page,
         tab,
-        search,
-        dateFrom,
-        dateTo,
-        suspiciousReason,
-        direction,
+        reviewFilter,
         setSearchParams,
     ]);
 
     useEffect(() => {
         loadReceipts();
-    }, [loadReceipts]);
-
-    const hasFilters =
-        Boolean(
-            search ||
-            dateFrom ||
-            dateTo ||
-            suspiciousReason
-        );
-
-    const resetFilters = () => {
-        setPage(1);
-
-        setSearch('');
-        setSearchInput('');
-
-        setDateFrom('');
-        setDateTo('');
-
-        setSuspiciousReason(
-            ''
-        );
-    };
+    }, [
+        loadReceipts,
+    ]);
 
     const changeTab = (
         nextTab: ReceiptTab
@@ -621,21 +389,31 @@ export default function Receipts() {
             nextTab
         );
 
-        setPage(1);
+        setPage(
+            1
+        );
+
+        if (
+            nextTab !==
+            'submitted'
+        ) {
+            setReviewFilter(
+                'all'
+            );
+        }
     };
 
-    const toggleSubmittedSort =
-        () => {
-            setDirection(
-                (current) =>
-                    current ===
-                    'desc'
-                        ? 'asc'
-                        : 'desc'
-            );
+    const changeReviewFilter = (
+        nextFilter: ReviewFilter
+    ) => {
+        setReviewFilter(
+            nextFilter
+        );
 
-            setPage(1);
-        };
+        setPage(
+            1
+        );
+    };
 
     const tabs: Array<{
         value: ReceiptTab;
@@ -672,14 +450,6 @@ export default function Receipts() {
             count:
             counts.rejected,
         },
-        {
-            value:
-                'suspicious',
-            label:
-                'Suspicious',
-            count:
-            counts.suspicious,
-        },
     ];
 
     const currentListUrl =
@@ -692,7 +462,7 @@ export default function Receipts() {
                 description="Review participation receipts and prepare approved entries for the next draw."
             />
 
-            {/* Tabs */}
+            {/* Main tabs */}
 
             <div className="overflow-x-auto border-b border-gray-200">
                 <nav className="flex min-w-max gap-6">
@@ -753,182 +523,95 @@ export default function Receipts() {
                 </nav>
             </div>
 
-            {/* Search */}
+            {/* Review Queue */}
 
-            <div>
-                <input
-                    type="search"
-                    value={
-                        searchInput
-                    }
-                    onChange={(
-                        event
-                    ) =>
-                        setSearchInput(
-                            event
-                                .target
-                                .value
-                        )
-                    }
-                    placeholder="Search receipt ID, receipt number, participant name, phone or email..."
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                />
+            {tab ===
+                'submitted' && (
+                    <section className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold text-gray-900">
+                                Review Queue
+                            </div>
 
-                {searchInput.trim() &&
-                    !/^\d+$/.test(
-                        searchInput.trim()
-                    ) &&
-                    searchInput
-                        .trim()
-                        .length <
-                    3 && (
-                        <div className="mt-1.5 text-xs text-gray-400">
-                            Enter at
-                            least 3
-                            characters
-                            to search.
+                            <div className="mt-0.5 text-xs text-gray-500">
+                                Separate normal
+                                submissions from
+                                receipts requiring
+                                deeper review.
+                            </div>
                         </div>
-                    )}
-            </div>
 
-            {/* Filters */}
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'all'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'all'
+                                        ? 'rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                }
+                            >
+                                All{' '}
+                                {
+                                    counts.submitted
+                                }
+                            </button>
 
-            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
-                    <div>
-                        <label
-                            htmlFor="date-from"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Submitted
-                            from
-                        </label>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'suspicious'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'suspicious'
+                                        ? 'rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100'
+                                }
+                            >
+                                Suspicious{' '}
+                                {
+                                    counts.submitted_suspicious
+                                }
+                            </button>
 
-                        <input
-                            id="date-from"
-                            type="date"
-                            value={
-                                dateFrom
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setDateFrom(
-                                    event
-                                        .target
-                                        .value
-                                );
-
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
-                        />
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="date-to"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Submitted
-                            to
-                        </label>
-
-                        <input
-                            id="date-to"
-                            type="date"
-                            value={
-                                dateTo
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setDateTo(
-                                    event
-                                        .target
-                                        .value
-                                );
-
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
-                        />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                        <label
-                            htmlFor="suspicious-reason"
-                            className="mb-1.5 block text-xs font-medium text-gray-500"
-                        >
-                            Suspicious
-                            reason
-                        </label>
-
-                        <select
-                            id="suspicious-reason"
-                            value={
-                                suspiciousReason
-                            }
-                            onChange={(
-                                event
-                            ) => {
-                                setSuspiciousReason(
-                                    event
-                                        .target
-                                        .value
-                                );
-
-                                setPage(
-                                    1
-                                );
-                            }}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                        >
-                            {suspiciousReasonOptions.map(
-                                (
-                                    option
-                                ) => (
-                                    <option
-                                        key={
-                                            option.value
-                                        }
-                                        value={
-                                            option.value
-                                        }
-                                    >
-                                        {
-                                            option.label
-                                        }
-                                    </option>
-                                )
-                            )}
-                        </select>
-                    </div>
-
-                    {hasFilters && (
-                        <button
-                            type="button"
-                            onClick={
-                                resetFilters
-                            }
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                        >
-                            Reset
-                            filters
-                        </button>
-                    )}
-                </div>
-            </section>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    changeReviewFilter(
+                                        'normal'
+                                    )
+                                }
+                                className={
+                                    reviewFilter ===
+                                    'normal'
+                                        ? 'rounded-lg bg-gray-700 px-3 py-2 text-sm font-medium text-white'
+                                        : 'rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                }
+                            >
+                                Normal{' '}
+                                {
+                                    counts.submitted_normal
+                                }
+                            </button>
+                        </div>
+                    </section>
+                )}
 
             {error && (
                 <Alert
                     variant="error"
                     onDismiss={() =>
-                        setError(null)
+                        setError(
+                            null
+                        )
                     }
                 >
                     {error}
@@ -947,15 +630,16 @@ export default function Receipts() {
                     <EmptyState
                         title="No receipts found."
                         description={
-                            hasFilters
-                                ? 'Try changing the search or filters.'
+                            tab ===
+                            'submitted'
+                                ? 'There are no receipts waiting for review in this queue.'
                                 : 'There are no receipts in this section.'
                         }
                     />
                 ) : (
                     <>
                         <div className="overflow-x-auto">
-                            <table className="min-w-[1180px] w-full text-left text-sm">
+                            <table className="w-full min-w-[1180px] text-left text-sm">
                                 <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -975,27 +659,11 @@ export default function Receipts() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Latest
-                                        Note
+                                        Latest Note
                                     </th>
 
-                                    <th className="px-5 py-3">
-                                        <button
-                                            type="button"
-                                            onClick={
-                                                toggleSubmittedSort
-                                            }
-                                            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-900"
-                                        >
-                                            Submitted
-
-                                            <span>
-                                                    {direction ===
-                                                    'desc'
-                                                        ? '↓'
-                                                        : '↑'}
-                                                </span>
-                                        </button>
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Submitted
                                     </th>
                                 </tr>
                                 </thead>
@@ -1008,24 +676,21 @@ export default function Receipts() {
                                         const participant =
                                             receipt.participant;
 
+                                        const participantOtherReceipts =
+                                            (
+                                                participant
+                                                    ?.receipts ??
+                                                []
+                                            ).filter(
+                                                (
+                                                    participantReceipt
+                                                ) =>
+                                                    participantReceipt.id !==
+                                                    receipt.id
+                                            );
+
                                         const otherReceipts =
-                                            Math.max(
-                                                (participant?.receipts_count ??
-                                                    1) -
-                                                1,
-                                                0
-                                            );
-
-                                        const noteCount =
-                                            receipt.notes_count ??
-                                            0;
-
-                                        const olderNotes =
-                                            Math.max(
-                                                noteCount -
-                                                1,
-                                                0
-                                            );
+                                            participantOtherReceipts.length;
 
                                         const reasons =
                                             receipt.suspicious_reasons ??
@@ -1040,6 +705,21 @@ export default function Receipts() {
 
                                         const latestNote =
                                             receipt.latest_note;
+
+                                        const olderNoteItems =
+                                            (
+                                                receipt.notes ??
+                                                []
+                                            ).filter(
+                                                (
+                                                    note
+                                                ) =>
+                                                    note.id !==
+                                                    latestNote?.id
+                                            );
+
+                                        const olderNotes =
+                                            olderNoteItems.length;
 
                                         return (
                                             <tr
@@ -1070,8 +750,7 @@ export default function Receipts() {
                                                     </div>
 
                                                     <div className="mt-1 text-xs text-gray-400">
-                                                        Receipt
-                                                        ID
+                                                        Receipt ID
                                                         #{' '}
                                                         {
                                                             receipt.id
@@ -1096,18 +775,57 @@ export default function Receipts() {
 
                                                                 {otherReceipts >
                                                                     0 && (
-                                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                                                                            +
-                                                                            {
-                                                                                otherReceipts
-                                                                            }{' '}
-                                                                            other
-                                                                            receipt
-                                                                            {otherReceipts ===
-                                                                            1
-                                                                                ? ''
-                                                                                : 's'}
-                                                                        </span>
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-2 font-semibold">
+                                                                                        Other receipts
+                                                                                    </div>
+
+                                                                                    <div className="space-y-1.5">
+                                                                                        {participantOtherReceipts.map(
+                                                                                            (
+                                                                                                participantReceipt
+                                                                                            ) => (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        participantReceipt.id
+                                                                                                    }
+                                                                                                    className="flex items-center justify-between gap-4"
+                                                                                                >
+                                                                                                    <span className="text-gray-200">
+                                                                                                        {
+                                                                                                            participantReceipt.receipt_number
+                                                                                                        }
+                                                                                                    </span>
+
+                                                                                                    <span className="shrink-0 font-medium text-white">
+                                                                                                        {formatEnumLabel(
+                                                                                                            participantReceipt.status
+                                                                                                        )}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            )
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                380
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                                +
+                                                                                {
+                                                                                    otherReceipts
+                                                                                }{' '}
+                                                                                other receipt
+                                                                                {otherReceipts ===
+                                                                                1
+                                                                                    ? ''
+                                                                                    : 's'}
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     )}
                                                             </div>
 
@@ -1155,12 +873,50 @@ export default function Receipts() {
 
                                                             {extraReasons >
                                                                 0 && (
-                                                                    <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                                                                        +
-                                                                        {
-                                                                            extraReasons
-                                                                        }{' '}
-                                                                        more
+                                                                    <div className="mt-1">
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-1 font-semibold">
+                                                                                        Additional suspicious reasons
+                                                                                    </div>
+
+                                                                                    <div className="space-y-1 text-gray-200">
+                                                                                        {reasons
+                                                                                            .slice(
+                                                                                                1
+                                                                                            )
+                                                                                            .map(
+                                                                                                (
+                                                                                                    reason
+                                                                                                ) => (
+                                                                                                    <div
+                                                                                                        key={
+                                                                                                            reason
+                                                                                                        }
+                                                                                                    >
+                                                                                                        •{' '}
+                                                                                                        {suspiciousReasonLabel(
+                                                                                                            reason
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )
+                                                                                            )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                360
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                                                                +
+                                                                                {
+                                                                                    extraReasons
+                                                                                }{' '}
+                                                                                more
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     </div>
                                                                 )}
                                                         </div>
@@ -1171,7 +927,7 @@ export default function Receipts() {
                                                     )}
                                                 </td>
 
-                                                {/* Latest note */}
+                                                {/* Notes */}
 
                                                 <td className="px-5 py-4 align-top">
                                                     {latestNote ? (
@@ -1185,11 +941,53 @@ export default function Receipts() {
 
                                                             {olderNotes >
                                                                 0 && (
-                                                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                                                                        +
-                                                                        {
-                                                                            olderNotes
-                                                                        }
+                                                                    <span className="ml-2">
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-2 font-semibold">
+                                                                                        Earlier notes
+                                                                                    </div>
+
+                                                                                    <div className="space-y-2">
+                                                                                        {olderNoteItems.map(
+                                                                                            (
+                                                                                                note
+                                                                                            ) => (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        note.id
+                                                                                                    }
+                                                                                                    className="border-b border-white/10 pb-2 last:border-b-0 last:pb-0"
+                                                                                                >
+                                                                                                    <div className="text-gray-200">
+                                                                                                        {
+                                                                                                            note.note
+                                                                                                        }
+                                                                                                    </div>
+
+                                                                                                    <div className="mt-0.5 text-[10px] text-gray-400">
+                                                                                                        {formatDateTime(
+                                                                                                            note.created_at
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            }
+                                                                            maxWidth={
+                                                                                380
+                                                                            }
+                                                                        >
+                                                                            <span className="cursor-help rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                                +
+                                                                                {
+                                                                                    olderNotes
+                                                                                }
+                                                                            </span>
+                                                                        </Tooltip>
                                                                     </span>
                                                                 )}
                                                         </div>
@@ -1239,46 +1037,38 @@ export default function Receipts() {
                                     nextPage
                                 );
 
-                                window.scrollTo(
-                                    {
-                                        top: 0,
-                                        behavior:
-                                            'smooth',
-                                    }
-                                );
+                                window.scrollTo({
+                                    top: 0,
+                                    behavior:
+                                        'smooth',
+                                });
                             }}
                         />
                     </>
                 )}
             </section>
 
-            {/* Quick review */}
+            {/* Quick Review */}
 
-            {quickReviewReceiptId !== null && (
-                <ReceiptQuickReviewModal
-                    receiptId={
-                        quickReviewReceiptId
-                    }
-                    backUrl={
-                        currentListUrl
-                    }
-                    onClose={() =>
-                        setQuickReviewReceiptId(
-                            null
-                        )
-                    }
-                    onChanged={() => {
-                        /*
-                         * Refreshes:
-                         * - row state
-                         * - tab counts
-                         * - suspicious count
-                         * - pagination totals
-                         */
-                        loadReceipts();
-                    }}
-                />
-            )}
+            {quickReviewReceiptId !==
+                null && (
+                    <ReceiptQuickReviewModal
+                        receiptId={
+                            quickReviewReceiptId
+                        }
+                        backUrl={
+                            currentListUrl
+                        }
+                        onClose={() =>
+                            setQuickReviewReceiptId(
+                                null
+                            )
+                        }
+                        onChanged={() => {
+                            loadReceipts();
+                        }}
+                    />
+                )}
         </div>
     );
 }
