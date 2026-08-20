@@ -30,6 +30,8 @@ import {
 type Props = {
     receiptId: number;
 
+    backUrl: string;
+
     onClose: () => void;
 
     onChanged: (
@@ -37,8 +39,10 @@ type Props = {
     ) => void;
 };
 
-const suspiciousReasonLabels:
-    Record<string, string> = {
+const suspiciousReasonLabels: Record<
+    string,
+    string
+> = {
     duplicate_receipt_number:
         'Duplicate receipt number',
 
@@ -77,6 +81,7 @@ function suspiciousReasonLabel(
 
 export default function ReceiptQuickReviewModal({
                                                     receiptId,
+                                                    backUrl,
                                                     onClose,
                                                     onChanged,
                                                 }: Props) {
@@ -158,10 +163,6 @@ export default function ReceiptQuickReviewModal({
         loadReceipt();
     }, [receiptId]);
 
-    /*
-     * Escape closes image first,
-     * then the review modal.
-     */
     useEffect(() => {
         const handleKeyDown = (
             event: KeyboardEvent
@@ -198,10 +199,6 @@ export default function ReceiptQuickReviewModal({
         onClose,
     ]);
 
-    /*
-     * Prevent page scrolling behind
-     * the modal.
-     */
     useEffect(() => {
         const previousOverflow =
             document.body.style
@@ -433,18 +430,14 @@ export default function ReceiptQuickReviewModal({
                                         </button>
 
                                         <div className="mt-2 text-center text-xs text-gray-400">
-                                            Click
-                                            image
-                                            to
-                                            enlarge
+                                            Click image
+                                            to enlarge
                                         </div>
                                     </div>
 
-                                    {/* Review data */}
+                                    {/* Review information */}
 
                                     <div className="space-y-5 p-5">
-                                        {/* Receipt number */}
-
                                         <section>
                                             <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                                                 Receipt
@@ -457,8 +450,6 @@ export default function ReceiptQuickReviewModal({
                                                 }
                                             </div>
                                         </section>
-
-                                        {/* Participant */}
 
                                         {participant && (
                                             <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -520,8 +511,6 @@ export default function ReceiptQuickReviewModal({
                                             </section>
                                         )}
 
-                                        {/* Suspicious */}
-
                                         {suspicious && (
                                             <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                                                 <div className="font-semibold text-amber-900">
@@ -530,12 +519,10 @@ export default function ReceiptQuickReviewModal({
                                                 </div>
 
                                                 <div className="mt-1 text-xs text-amber-700">
-                                                    This
-                                                    receipt
+                                                    This receipt
                                                     was
                                                     automatically
-                                                    flagged
-                                                    for
+                                                    flagged for
                                                     additional
                                                     review.
                                                 </div>
@@ -743,7 +730,7 @@ export default function ReceiptQuickReviewModal({
                                     to={`/admin/receipts/${receipt.id}`}
                                     state={{
                                         from:
-                                            '/admin/receipts',
+                                        backUrl,
                                     }}
                                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                                 >
@@ -760,8 +747,7 @@ export default function ReceiptQuickReviewModal({
                                         className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
                                     >
                                         Leave
-                                        for
-                                        Later
+                                        for Later
                                     </button>
 
                                     {canReview && (
@@ -814,7 +800,7 @@ export default function ReceiptQuickReviewModal({
                 </div>
             </div>
 
-            {/* Enlarged image */}
+            {/* Enlarged receipt */}
 
             {imageOpen &&
                 receipt && (

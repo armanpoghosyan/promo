@@ -1,55 +1,155 @@
-import { useEffect, useState } from 'react';
 import {
-    Link,
+    useCallback,
+    useEffect,
+    useState,
+} from 'react';
+
+import {
     useLocation,
     useSearchParams,
 } from 'react-router-dom';
 
-import api from '../../services/api';
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
+import Pagination from '../../components/Pagination';
+import ReceiptQuickReviewModal from '../../components/receipts/ReceiptQuickReviewModal';
 import StatusBadge from '../../components/StatusBadge';
-import type { PaginatedResponse } from '../../types/api';
-import { formatDateTime } from '../../utils/date';
+
+import api from '../../services/api';
 
 import type {
     Receipt,
+    ReceiptListCounts,
+    ReceiptListResponse,
+    SuspiciousReason,
 } from '../../types/receipt';
 
-type FilterValue =
-    | ''
-    | 'needs_review'
+import {
+    getApiErrorMessage,
+} from '../../utils/apiError';
+
+import {
+    formatDateTime,
+} from '../../utils/date';
+
+import {
+    positiveIntegerParam,
+} from '../../utils/query';
+
+type ReceiptTab =
+    | 'all'
+    | 'submitted'
     | 'approved'
     | 'rejected'
     | 'suspicious';
 
-const filters: Array<{
-    label: string;
-    value: FilterValue;
-}> = [
+type SortDirection =
+    | 'asc'
+    | 'desc';
+
+const emptyCounts: ReceiptListCounts = {
+    all: 0,
+    submitted: 0,
+    approved: 0,
+    rejected: 0,
+    suspicious: 0,
+};
+
+const suspiciousReasonLabels: Record<
+    string,
+    string
+> = {
+    duplicate_receipt_number:
+        'Duplicate receipt number',
+
+    duplicate_receipt_image:
+        'Duplicate receipt image',
+
+    phone_used_by_another_participant:
+        'Phone used by another participant',
+
+    email_used_by_another_participant:
+        'Email used by another participant',
+
+    receipt_number_non_numeric:
+        'Receipt number contains unexpected characters',
+};
+
+const suspiciousReasonOptions = [
     {
-        label: 'All',
         value: '',
+        label: 'All suspicious reasons',
     },
     {
-        label: 'Needs Review',
-        value: 'needs_review',
+        value: 'duplicate_receipt_number',
+        label: 'Duplicate receipt number',
     },
     {
-        label: 'Approved',
-        value: 'approved',
+        value: 'duplicate_receipt_image',
+        label: 'Duplicate receipt image',
     },
     {
-        label: 'Rejected',
-        value: 'rejected',
+        value:
+            'phone_used_by_another_participant',
+        label:
+            'Phone used by another participant',
     },
     {
-        label: 'Suspicious',
-        value: 'suspicious',
+        value:
+            'email_used_by_another_participant',
+        label:
+            'Email used by another participant',
+    },
+    {
+        value:
+            'receipt_number_non_numeric',
+        label:
+            'Unexpected receipt number format',
     },
 ];
 
+function suspiciousReasonLabel(
+    reason: SuspiciousReason
+): string {
+    return (
+        suspiciousReasonLabels[
+            reason
+            ] ??
+        reason
+            .replaceAll(
+                '_',
+                ' '
+            )
+            .replace(
+                /\b\w/g,
+                (character) =>
+                    character.toUpperCase()
+            )
+    );
+}
+
+function truncate(
+    value: string,
+    limit: number
+): string {
+    if (
+        value.length <=
+        limit
+    ) {
+        return value;
+    }
+
+    return `${value.slice(
+        0,
+        limit
+    )}...`;
+}
 
 export default function Receipts() {
-    const location = useLocation();
+    const location =
+        useLocation();
 
     const [
         searchParams,
@@ -57,40 +157,133 @@ export default function Receipts() {
     ] = useSearchParams();
 
     const initialPage =
-        Number(
-            searchParams.get('page')
-        ) || 1;
-
-    const initialFilter =
-        (searchParams.get(
-            'filter'
-        ) as FilterValue | null) ?? '';
-
-    const initialSearch =
-        searchParams.get('search') ?? '';
-
-    const [receipts, setReceipts] =
-        useState<Receipt[]>([]);
-
-    const [loading, setLoading] =
-        useState(true);
-
-    const [error, setError] =
-        useState<string | null>(null);
-
-    const [page, setPage] =
-        useState(initialPage);
-
-    const [filter, setFilter] =
-        useState<FilterValue>(
-            initialFilter
+        positiveIntegerParam(
+            searchParams.get(
+                'page'
+            )
         );
 
-    const [search, setSearch] =
-        useState(initialSearch);
+    const initialTab =
+        (
+            searchParams.get(
+                'tab'
+            ) as ReceiptTab | null
+        ) ?? 'all';
 
-    const [searchInput, setSearchInput] =
-        useState(initialSearch);
+    const initialSearch =
+        searchParams.get(
+            'search'
+        ) ?? '';
+
+    const initialDateFrom =
+        searchParams.get(
+            'date_from'
+        ) ?? '';
+
+    const initialDateTo =
+        searchParams.get(
+            'date_to'
+        ) ?? '';
+
+    const initialReason =
+        searchParams.get(
+            'suspicious_reason'
+        ) ?? '';
+
+    const initialDirection =
+        (
+            searchParams.get(
+                'direction'
+            ) as SortDirection | null
+        ) ?? 'desc';
+
+    const [
+        receipts,
+        setReceipts,
+    ] = useState<Receipt[]>([]);
+
+    const [
+        counts,
+        setCounts,
+    ] =
+        useState<ReceiptListCounts>(
+            emptyCounts
+        );
+
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
+    const [
+        error,
+        setError,
+    ] = useState<
+        string | null
+    >(null);
+
+    const [
+        page,
+        setPage,
+    ] = useState(
+        initialPage
+    );
+
+    const [
+        tab,
+        setTab,
+    ] = useState<ReceiptTab>(
+        initialTab
+    );
+
+    const [
+        search,
+        setSearch,
+    ] = useState(
+        initialSearch
+    );
+
+    const [
+        searchInput,
+        setSearchInput,
+    ] = useState(
+        initialSearch
+    );
+
+    const [
+        dateFrom,
+        setDateFrom,
+    ] = useState(
+        initialDateFrom
+    );
+
+    const [
+        dateTo,
+        setDateTo,
+    ] = useState(
+        initialDateTo
+    );
+
+    const [
+        suspiciousReason,
+        setSuspiciousReason,
+    ] = useState(
+        initialReason
+    );
+
+    const [
+        direction,
+        setDirection,
+    ] = useState<SortDirection>(
+        initialDirection
+    );
+
+    const [
+        quickReviewReceiptId,
+        setQuickReviewReceiptId,
+    ] = useState<
+        number | null
+    >(null);
 
     const [
         pagination,
@@ -102,131 +295,261 @@ export default function Receipts() {
         total: 0,
     });
 
-    const loadReceipts = async () => {
-        setLoading(true);
-        setError(null);
+    const loadReceipts =
+        useCallback(
+            async () => {
+                setLoading(true);
+                setError(null);
 
-        try {
-            const params: Record<
-                string,
-                string | number | boolean
-            > = {
-                page,
-            };
+                try {
+                    const params: Record<
+                        string,
+                        | string
+                        | number
+                        | boolean
+                    > = {
+                        page,
+                        direction,
+                    };
 
-            if (search.trim()) {
-                /*
-                 * Backend currently supports
-                 * separate receipt_number,
-                 * phone and email filters.
-                 *
-                 * For now we send the same search
-                 * value to all three.
-                 *
-                 * This can later become a dedicated
-                 * backend "search" parameter.
-                 */
-                params.receipt_number =
-                    search.trim();
-
-                params.phone =
-                    search.trim();
-
-                params.email =
-                    search.trim();
-            }
-
-            if (
-                filter === 'approved' ||
-                filter === 'rejected'
-            ) {
-                params.status = filter;
-            }
-
-            if (
-                filter === 'needs_review'
-            ) {
-                /*
-                 * Backend currently only accepts
-                 * one status value.
-                 *
-                 * We use submitted for now.
-                 * Later we can support
-                 * submitted + reviewing together.
-                 */
-                params.status =
-                    'submitted';
-            }
-
-            if (
-                filter === 'suspicious'
-            ) {
-                params.suspicious = true;
-            }
-
-            const response =
-                await api.get<PaginatedResponse<Receipt>>(
-                    '/admin/receipts',
-                    {
-                        params,
+                    if (
+                        tab ===
+                        'submitted'
+                    ) {
+                        params.status =
+                            'submitted';
                     }
-                );
 
-            setReceipts(
-                response.data.data ?? []
-            );
+                    if (
+                        tab ===
+                        'approved'
+                    ) {
+                        params.status =
+                            'approved';
+                    }
 
-            setPagination({
-                current_page:
-                response.data.current_page,
+                    if (
+                        tab ===
+                        'rejected'
+                    ) {
+                        params.status =
+                            'rejected';
+                    }
 
-                last_page:
-                response.data.last_page,
+                    if (
+                        tab ===
+                        'suspicious'
+                    ) {
+                        params.suspicious =
+                            true;
+                    }
 
-                per_page:
-                response.data.per_page,
+                    if (
+                        search.trim()
+                    ) {
+                        params.search =
+                            search.trim();
+                    }
 
-                total:
-                response.data.total,
-            });
-        } catch (err) {
-            console.error(err);
+                    if (dateFrom) {
+                        params.date_from =
+                            dateFrom;
+                    }
 
-            setError(
-                'Unable to load receipts.'
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
+                    if (dateTo) {
+                        params.date_to =
+                            dateTo;
+                    }
+
+                    if (
+                        suspiciousReason
+                    ) {
+                        params.suspicious_reason =
+                            suspiciousReason;
+                    }
+
+                    const response =
+                        await api.get<ReceiptListResponse>(
+                            '/admin/receipts',
+                            {
+                                params,
+                            }
+                        );
+
+                    setReceipts(
+                        response.data.data
+                    );
+
+                    setCounts(
+                        response.data
+                            .meta.counts
+                    );
+
+                    setPagination({
+                        current_page:
+                        response.data
+                            .current_page,
+
+                        last_page:
+                        response.data
+                            .last_page,
+
+                        per_page:
+                        response.data
+                            .per_page,
+
+                        total:
+                        response.data
+                            .total,
+                    });
+                } catch (
+                    error: unknown
+                    ) {
+                    setError(
+                        getApiErrorMessage(
+                            error,
+                            'Unable to load receipts.'
+                        )
+                    );
+                } finally {
+                    setLoading(false);
+                }
+            },
+            [
+                page,
+                tab,
+                search,
+                dateFrom,
+                dateTo,
+                suspiciousReason,
+                direction,
+            ]
+        );
 
     /*
-     * Keep browser URL synchronized
-     * with current list state.
+     * Global live search.
+     *
+     * Numeric input may represent
+     * an exact receipt ID, so it
+     * searches immediately.
+     *
+     * Text searches begin from
+     * three characters.
+     */
+    useEffect(() => {
+        const value =
+            searchInput.trim();
+
+        if (
+            value === ''
+        ) {
+            if (
+                search !== ''
+            ) {
+                setPage(1);
+                setSearch('');
+            }
+
+            return;
+        }
+
+        const numeric =
+            /^\d+$/.test(
+                value
+            );
+
+        if (
+            !numeric &&
+            value.length < 3
+        ) {
+            return;
+        }
+
+        const timeout =
+            window.setTimeout(
+                () => {
+                    setPage(1);
+                    setSearch(
+                        value
+                    );
+                },
+                350
+            );
+
+        return () => {
+            window.clearTimeout(
+                timeout
+            );
+        };
+    }, [
+        searchInput,
+        search,
+    ]);
+
+    /*
+     * Preserve the complete receipt
+     * workspace in the URL.
      */
     useEffect(() => {
         const params =
             new URLSearchParams();
 
-        // Keep the URL clean on the first page.
-        if (page > 1) {
+        if (
+            page > 1
+        ) {
             params.set(
                 'page',
                 String(page)
             );
         }
 
-        if (filter) {
+        if (
+            tab !==
+            'all'
+        ) {
             params.set(
-                'filter',
-                filter
+                'tab',
+                tab
             );
         }
 
-        if (search.trim()) {
+        if (search) {
             params.set(
                 'search',
-                search.trim()
+                search
+            );
+        }
+
+        if (dateFrom) {
+            params.set(
+                'date_from',
+                dateFrom
+            );
+        }
+
+        if (dateTo) {
+            params.set(
+                'date_to',
+                dateTo
+            );
+        }
+
+        if (
+            suspiciousReason
+        ) {
+            params.set(
+                'suspicious_reason',
+                suspiciousReason
+            );
+        }
+
+        if (
+            direction !==
+            'desc'
+        ) {
+            params.set(
+                'direction',
+                direction
             );
         }
 
@@ -238,252 +561,385 @@ export default function Receipts() {
         );
     }, [
         page,
-        filter,
+        tab,
         search,
+        dateFrom,
+        dateTo,
+        suspiciousReason,
+        direction,
         setSearchParams,
     ]);
 
     useEffect(() => {
         loadReceipts();
-    }, [
-        page,
-        filter,
-        search,
-    ]);
+    }, [loadReceipts]);
 
-    const submitSearch = () => {
-        setPage(1);
-        setSearch(
-            searchInput.trim()
-        );
-    };
-
-    const clearSearch = () => {
-        setSearchInput('');
-        setSearch('');
-        setPage(1);
-    };
-
-    const hasActiveFilters =
+    const hasFilters =
         Boolean(
-            filter ||
-            search
+            search ||
+            dateFrom ||
+            dateTo ||
+            suspiciousReason
         );
+
+    const resetFilters =
+        () => {
+            setPage(1);
+
+            setSearch('');
+            setSearchInput('');
+
+            setDateFrom('');
+            setDateTo('');
+
+            setSuspiciousReason(
+                ''
+            );
+        };
+
+    const changeTab = (
+        nextTab: ReceiptTab
+    ) => {
+        setTab(
+            nextTab
+        );
+
+        setPage(1);
+    };
+
+    const toggleSubmittedSort =
+        () => {
+            setDirection(
+                (current) =>
+                    current ===
+                    'desc'
+                        ? 'asc'
+                        : 'desc'
+            );
+
+            setPage(1);
+        };
+
+    const tabs: Array<{
+        value: ReceiptTab;
+        label: string;
+        count: number;
+    }> = [
+        {
+            value: 'all',
+            label: 'All',
+            count:
+            counts.all,
+        },
+        {
+            value:
+                'submitted',
+            label:
+                'Needs Review',
+            count:
+            counts.submitted,
+        },
+        {
+            value:
+                'approved',
+            label:
+                'Approved',
+            count:
+            counts.approved,
+        },
+        {
+            value:
+                'rejected',
+            label:
+                'Rejected',
+            count:
+            counts.rejected,
+        },
+        {
+            value:
+                'suspicious',
+            label:
+                'Suspicious',
+            count:
+            counts.suspicious,
+        },
+    ];
+
+    const currentListUrl =
+        `${location.pathname}${location.search}`;
 
     return (
         <div className="space-y-6">
+            <PageHeader
+                title="Receipts"
+                description="Review participation receipts and prepare approved entries for the next draw."
+            />
 
-            {/* Header */}
+            {/* Navigation */}
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="overflow-x-auto border-b border-gray-200">
+                <nav className="flex min-w-max gap-6">
+                    {tabs.map(
+                        (
+                            item
+                        ) => {
+                            const active =
+                                tab ===
+                                item.value;
 
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Receipts
-                    </h2>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Review and verify
-                        submitted participation
-                        receipts.
-                    </p>
-                </div>
-
-                <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
-                    {pagination.total}{' '}
-                    receipt
-                    {pagination.total === 1
-                        ? ''
-                        : 's'}
-                </div>
-
-            </div>
-
-            {/* Search + Filters */}
-
-            <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                <div className="border-b border-gray-200 p-4">
-
-                    <div className="flex flex-col gap-3 lg:flex-row">
-
-                        <div className="flex flex-1 gap-2">
-
-                            <input
-                                type="text"
-                                value={
-                                    searchInput
-                                }
-                                onChange={(
-                                    event
-                                ) =>
-                                    setSearchInput(
-                                        event
-                                            .target
-                                            .value
-                                    )
-                                }
-                                onKeyDown={(
-                                    event
-                                ) => {
-                                    if (
-                                        event.key ===
-                                        'Enter'
-                                    ) {
-                                        submitSearch();
-                                    }
-                                }}
-                                placeholder="Search receipt number, phone or email..."
-                                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                            />
-
-                            <button
-                                type="button"
-                                onClick={
-                                    submitSearch
-                                }
-                                disabled={
-                                    loading
-                                }
-                                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Search
-                            </button>
-
-                            {search && (
-                                <button
-                                    type="button"
-                                    onClick={
-                                        clearSearch
-                                    }
-                                    disabled={
-                                        loading
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                    Clear
-                                </button>
-                            )}
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                {/* Filter tabs */}
-
-                <div className="p-4">
-
-                    <div className="flex flex-wrap gap-2">
-
-                        {filters.map(
-                            (item) => (
+                            return (
                                 <button
                                     key={
                                         item.value
                                     }
                                     type="button"
-                                    onClick={() => {
-                                        setFilter(
+                                    onClick={() =>
+                                        changeTab(
                                             item.value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-                                    }}
-                                    className={
-                                        filter ===
-                                        item.value
-                                            ? 'rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white'
-                                            : 'rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200'
+                                        )
                                     }
+                                    className={[
+                                        'relative whitespace-nowrap pb-3 text-sm font-medium transition',
+                                        active
+                                            ? 'text-gray-900'
+                                            : 'text-gray-500 hover:text-gray-900',
+                                    ].join(
+                                        ' '
+                                    )}
                                 >
                                     {
                                         item.label
                                     }
+
+                                    <span
+                                        className={[
+                                            'ml-2 rounded-full px-2 py-0.5 text-xs',
+                                            active
+                                                ? 'bg-gray-900 text-white'
+                                                : 'bg-gray-100 text-gray-500',
+                                        ].join(
+                                            ' '
+                                        )}
+                                    >
+                                        {
+                                            item.count
+                                        }
+                                    </span>
+
+                                    {active && (
+                                        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gray-900" />
+                                    )}
                                 </button>
-                            )
-                        )}
+                            );
+                        }
+                    )}
+                </nav>
+            </div>
 
-                        {hasActiveFilters && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setFilter(
-                                        ''
-                                    );
+            {/* Search */}
 
-                                    setSearch(
-                                        ''
-                                    );
+            <div>
+                <input
+                    type="search"
+                    value={
+                        searchInput
+                    }
+                    onChange={(
+                        event
+                    ) =>
+                        setSearchInput(
+                            event.target
+                                .value
+                        )
+                    }
+                    placeholder="Search receipt ID, receipt number, participant name, phone or email..."
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                />
 
-                                    setSearchInput(
-                                        ''
-                                    );
+                {searchInput.trim() &&
+                    !/^\d+$/.test(
+                        searchInput.trim()
+                    ) &&
+                    searchInput
+                        .trim()
+                        .length <
+                    3 && (
+                        <div className="mt-1.5 text-xs text-gray-400">
+                            Enter at
+                            least 3
+                            characters
+                            to search.
+                        </div>
+                    )}
+            </div>
 
-                                    setPage(
-                                        1
-                                    );
-                                }}
-                                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900"
-                            >
-                                Reset filters
-                            </button>
-                        )}
+            {/* Filters */}
 
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
+                    <div>
+                        <label
+                            htmlFor="date-from"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
+                            Submitted
+                            from
+                        </label>
+
+                        <input
+                            id="date-from"
+                            type="date"
+                            value={
+                                dateFrom
+                            }
+                            onChange={(
+                                event
+                            ) => {
+                                setDateFrom(
+                                    event
+                                        .target
+                                        .value
+                                );
+
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
+                        />
                     </div>
 
-                </div>
+                    <div>
+                        <label
+                            htmlFor="date-to"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
+                            Submitted
+                            to
+                        </label>
 
+                        <input
+                            id="date-to"
+                            type="date"
+                            value={
+                                dateTo
+                            }
+                            onChange={(
+                                event
+                            ) => {
+                                setDateTo(
+                                    event
+                                        .target
+                                        .value
+                                );
+
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 xl:w-44"
+                        />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                        <label
+                            htmlFor="suspicious-reason"
+                            className="mb-1.5 block text-xs font-medium text-gray-500"
+                        >
+                            Suspicious
+                            reason
+                        </label>
+
+                        <select
+                            id="suspicious-reason"
+                            value={
+                                suspiciousReason
+                            }
+                            onChange={(
+                                event
+                            ) => {
+                                setSuspiciousReason(
+                                    event
+                                        .target
+                                        .value
+                                );
+
+                                setPage(
+                                    1
+                                );
+                            }}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                        >
+                            {suspiciousReasonOptions.map(
+                                (
+                                    option
+                                ) => (
+                                    <option
+                                        key={
+                                            option.value
+                                        }
+                                        value={
+                                            option.value
+                                        }
+                                    >
+                                        {
+                                            option.label
+                                        }
+                                    </option>
+                                )
+                            )}
+                        </select>
+                    </div>
+
+                    {hasFilters && (
+                        <button
+                            type="button"
+                            onClick={
+                                resetFilters
+                            }
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                            Reset
+                            filters
+                        </button>
+                    )}
+                </div>
             </section>
 
-            {/* Error */}
-
             {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <Alert
+                    variant="error"
+                    onDismiss={() =>
+                        setError(null)
+                    }
+                >
                     {error}
-                </div>
+                </Alert>
             )}
 
-            {/* List */}
+            {/* Receipt table */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
                 {loading ? (
-
-                    <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                        Loading receipts...
-                    </div>
-
-                ) : receipts.length === 0 ? (
-
-                    <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-
-                        <div className="text-sm font-medium text-gray-700">
-                            No receipts found.
-                        </div>
-
-                        <div className="mt-1 text-sm text-gray-400">
-                            Try changing the
-                            current filters or
-                            search terms.
-                        </div>
-
-                    </div>
-
+                    <LoadingState
+                        message="Loading receipts..."
+                    />
+                ) : receipts.length ===
+                0 ? (
+                    <EmptyState
+                        title="No receipts found."
+                        description={
+                            hasFilters
+                                ? 'Try changing the search or filters.'
+                                : 'There are no receipts in this section.'
+                        }
+                    />
                 ) : (
-
                     <>
                         <div className="overflow-x-auto">
-
-                            <table className="min-w-full text-left text-sm">
-
+                            <table className="w-full min-w-[1180px] text-left text-sm">
                                 <thead className="bg-gray-50">
-
                                 <tr>
-
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                                         Receipt
                                     </th>
@@ -497,68 +953,140 @@ export default function Receipts() {
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Flags
+                                        Suspicious
                                     </th>
 
                                     <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                        Submitted
+                                        Latest
+                                        Note
                                     </th>
 
-                                    <th className="px-5 py-3" />
+                                    <th className="px-5 py-3">
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                toggleSubmittedSort
+                                            }
+                                            className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-900"
+                                        >
+                                            Submitted
 
+                                            <span>
+                                                    {direction ===
+                                                    'desc'
+                                                        ? '↓'
+                                                        : '↑'}
+                                                </span>
+                                        </button>
+                                    </th>
                                 </tr>
-
                                 </thead>
 
                                 <tbody className="divide-y divide-gray-100">
-
                                 {receipts.map(
-                                    (receipt) => {
-
+                                    (
+                                        receipt
+                                    ) => {
                                         const participant =
                                             receipt.participant;
+
+                                        const otherReceipts =
+                                            Math.max(
+                                                (participant?.receipts_count ??
+                                                    1) -
+                                                1,
+                                                0
+                                            );
+
+                                        const noteCount =
+                                            receipt.notes_count ??
+                                            0;
+
+                                        const olderNotes =
+                                            Math.max(
+                                                noteCount -
+                                                1,
+                                                0
+                                            );
+
+                                        const reasons =
+                                            receipt.suspicious_reasons ??
+                                            [];
+
+                                        const extraReasons =
+                                            Math.max(
+                                                reasons.length -
+                                                1,
+                                                0
+                                            );
+
+                                        const latestNote =
+                                            receipt.latest_note;
 
                                         return (
                                             <tr
                                                 key={
                                                     receipt.id
                                                 }
-                                                className="hover:bg-gray-50"
+                                                onClick={() =>
+                                                    setQuickReviewReceiptId(
+                                                        receipt.id
+                                                    )
+                                                }
+                                                className={[
+                                                    'cursor-pointer transition hover:bg-gray-50',
+                                                    receipt.is_suspicious
+                                                        ? 'bg-amber-50/30'
+                                                        : '',
+                                                ].join(
+                                                    ' '
+                                                )}
                                             >
-
-                                                {/* Receipt */}
-
-                                                <td className="px-5 py-4">
-
-                                                    <div className="font-medium text-gray-900">
+                                                <td className="px-5 py-4 align-top">
+                                                    <div className="font-semibold text-gray-900">
                                                         {
                                                             receipt.receipt_number
                                                         }
                                                     </div>
 
                                                     <div className="mt-1 text-xs text-gray-400">
-                                                        ID #
+                                                        Receipt
+                                                        ID
+                                                        #{' '}
                                                         {
                                                             receipt.id
                                                         }
                                                     </div>
-
                                                 </td>
 
-                                                {/* Participant */}
-
-                                                <td className="px-5 py-4">
-
+                                                <td className="px-5 py-4 align-top">
                                                     {participant ? (
                                                         <div>
+                                                            <div className="flex items-center gap-2">
+                                                                    <span className="font-medium text-gray-900">
+                                                                        {
+                                                                            participant.first_name
+                                                                        }{' '}
+                                                                        {
+                                                                            participant.last_name
+                                                                        }
+                                                                    </span>
 
-                                                            <div className="font-medium text-gray-900">
-                                                                {
-                                                                    participant.first_name
-                                                                }{' '}
-                                                                {
-                                                                    participant.last_name
-                                                                }
+                                                                {otherReceipts >
+                                                                    0 && (
+                                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                                                            +
+                                                                            {
+                                                                                otherReceipts
+                                                                            }{' '}
+                                                                            other
+                                                                            receipt
+                                                                            {otherReceipts ===
+                                                                            1
+                                                                                ? ''
+                                                                                : 's'}
+                                                                        </span>
+                                                                    )}
                                                             </div>
 
                                                             <div className="mt-1 text-xs text-gray-500">
@@ -567,192 +1095,151 @@ export default function Receipts() {
                                                                 }
                                                             </div>
 
-                                                            <div className="mt-0.5 max-w-[240px] truncate text-xs text-gray-400">
+                                                            <div className="mt-0.5 max-w-[220px] truncate text-xs text-gray-400">
                                                                 {
                                                                     participant.email
                                                                 }
                                                             </div>
-
                                                         </div>
                                                     ) : (
                                                         <span className="text-gray-400">
-                                                            -
-                                                        </span>
+                                                                —
+                                                            </span>
                                                     )}
-
                                                 </td>
 
-                                                {/* Status */}
-
-                                                <td className="px-5 py-4">
-
+                                                <td className="px-5 py-4 align-top">
                                                     <StatusBadge
                                                         status={
                                                             receipt.status
                                                         }
                                                     />
-
                                                 </td>
 
-                                                {/* Flags */}
+                                                <td className="px-5 py-4 align-top">
+                                                    {receipt.is_suspicious &&
+                                                    reasons.length >
+                                                    0 ? (
+                                                        <div>
+                                                            <div className="max-w-[210px] text-xs font-medium text-amber-800">
+                                                                {suspiciousReasonLabel(
+                                                                    reasons[0]
+                                                                )}
+                                                            </div>
 
-                                                <td className="px-5 py-4">
-
-                                                    {receipt.is_suspicious ? (
-
-                                                        <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
-                                                            Suspicious
-                                                        </span>
-
+                                                            {extraReasons >
+                                                                0 && (
+                                                                    <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                                                        +
+                                                                        {
+                                                                            extraReasons
+                                                                        }{' '}
+                                                                        more
+                                                                    </div>
+                                                                )}
+                                                        </div>
                                                     ) : (
-
                                                         <span className="text-xs text-gray-400">
-                                                            —
-                                                        </span>
-
+                                                                —
+                                                            </span>
                                                     )}
-
                                                 </td>
 
-                                                {/* Submitted */}
+                                                <td className="px-5 py-4 align-top">
+                                                    {latestNote ? (
+                                                        <div className="max-w-[260px]">
+                                                                <span className="text-xs text-gray-700">
+                                                                    {truncate(
+                                                                        latestNote.note,
+                                                                        38
+                                                                    )}
+                                                                </span>
 
-                                                <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-500">
+                                                            {olderNotes >
+                                                                0 && (
+                                                                    <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                                                        +
+                                                                        {
+                                                                            olderNotes
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                                —
+                                                            </span>
+                                                    )}
+                                                </td>
+
+                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
                                                     {formatDateTime(
                                                         receipt.submitted_at ??
                                                         receipt.created_at
                                                     )}
                                                 </td>
-
-                                                {/* Action */}
-
-                                                <td className="px-5 py-4 text-right">
-
-                                                    <Link
-                                                        to={`/admin/receipts/${receipt.id}`}
-                                                        state={{
-                                                            from:
-                                                                `${location.pathname}${location.search}`,
-                                                        }}
-                                                        className="inline-flex rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
-                                                    >
-                                                        {
-                                                            receipt.status === 'submitted'
-                                                                ? 'Review'
-                                                                : 'View'
-                                                        }
-                                                    </Link>
-
-                                                </td>
-
                                             </tr>
                                         );
                                     }
                                 )}
-
                                 </tbody>
-
                             </table>
-
                         </div>
 
-                        {/* Pagination */}
+                        <Pagination
+                            currentPage={
+                                pagination.current_page
+                            }
+                            lastPage={
+                                pagination.last_page
+                            }
+                            perPage={
+                                pagination.per_page
+                            }
+                            total={
+                                pagination.total
+                            }
+                            loading={
+                                loading
+                            }
+                            onPageChange={(
+                                nextPage
+                            ) => {
+                                setPage(
+                                    nextPage
+                                );
 
-                        <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                            <div className="text-sm text-gray-500">
-
-                                Showing{' '}
-                                {(pagination.current_page -
-                                        1) *
-                                    pagination.per_page +
-                                    1}
-
-                                {' '}to{' '}
-
-                                {Math.min(
-                                    pagination.current_page *
-                                    pagination.per_page,
-                                    pagination.total
-                                )}
-
-                                {' '}of{' '}
-
-                                {
-                                    pagination.total
-                                }
-
-                            </div>
-
-                            <div className="flex items-center gap-2">
-
-                                <button
-                                    type="button"
-                                    disabled={
-                                        pagination.current_page <=
-                                        1 ||
-                                        loading
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            (
-                                                current
-                                            ) =>
-                                                Math.max(
-                                                    1,
-                                                    current -
-                                                    1
-                                                )
-                                        )
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Previous
-                                </button>
-
-                                <span className="px-2 text-sm text-gray-600">
-                                    Page{' '}
+                                window.scrollTo(
                                     {
-                                        pagination.current_page
-                                    }{' '}
-                                    of{' '}
-                                    {
-                                        pagination.last_page
+                                        top: 0,
+                                        behavior:
+                                            'smooth',
                                     }
-                                </span>
-
-                                <button
-                                    type="button"
-                                    disabled={
-                                        pagination.current_page >=
-                                        pagination.last_page ||
-                                        loading
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            (
-                                                current
-                                            ) =>
-                                                Math.min(
-                                                    pagination.last_page,
-                                                    current +
-                                                    1
-                                                )
-                                        )
-                                    }
-                                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Next
-                                </button>
-
-                            </div>
-
-                        </div>
-
+                                );
+                            }}
+                        />
                     </>
                 )}
-
             </section>
 
+            {quickReviewReceiptId !== null && (
+                <ReceiptQuickReviewModal
+                    receiptId={
+                        quickReviewReceiptId
+                    }
+                    backUrl={
+                        currentListUrl
+                    }
+                    onClose={() =>
+                        setQuickReviewReceiptId(
+                            null
+                        )
+                    }
+                    onChanged={() => {
+                        loadReceipts();
+                    }}
+                />
+            )}
         </div>
     );
 }
