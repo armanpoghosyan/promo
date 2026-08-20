@@ -47,6 +47,23 @@ const SEARCH_MIN_LENGTH =
 const SEARCH_DEBOUNCE_MS =
     350;
 
+function formatSuspiciousReason(
+    reason: string
+): string {
+    return reason
+        .replaceAll(
+            '_',
+            ' '
+        )
+        .replace(
+            /\b\w/g,
+            (
+                character
+            ) =>
+                character.toUpperCase()
+        );
+}
+
 export default function Participants() {
     const location =
         useLocation();
@@ -156,6 +173,10 @@ export default function Participants() {
             ]
         );
 
+    /*
+     * Keep search input synchronized
+     * with browser navigation.
+     */
     useEffect(() => {
         setSearchInput(
             urlSearch
@@ -164,6 +185,12 @@ export default function Participants() {
         urlSearch,
     ]);
 
+    /*
+     * Type-ahead search.
+     *
+     * Search starts after 3 characters.
+     * Clearing the input resets the list.
+     */
     useEffect(() => {
         const timer =
             window.setTimeout(
@@ -204,8 +231,13 @@ export default function Participants() {
     const loadParticipants =
         useCallback(
             async () => {
-                setLoading(true);
-                setError(null);
+                setLoading(
+                    true
+                );
+
+                setError(
+                    null
+                );
 
                 try {
                     const response =
@@ -260,7 +292,9 @@ export default function Participants() {
                         )
                     );
                 } finally {
-                    setLoading(false);
+                    setLoading(
+                        false
+                    );
                 }
             },
             [
@@ -394,11 +428,13 @@ export default function Participants() {
                         )
                     }
                 >
-                    {error}
+                    {
+                        error
+                    }
                 </Alert>
             )}
 
-            {/* List */}
+            {/* Participants */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {loading ? (
@@ -462,6 +498,8 @@ export default function Participants() {
                                                     participant.id
                                                 }
                                             >
+                                                {/* Participant row */}
+
                                                 <tr
                                                     onClick={() =>
                                                         toggleParticipant(
@@ -525,14 +563,14 @@ export default function Participants() {
                                                             }
                                                         </div>
 
-                                                        <div className="mt-1 max-w-[260px] truncate text-xs text-gray-500">
+                                                        <div className="mt-1 max-w-[280px] truncate text-xs text-gray-500">
                                                             {
                                                                 participant.email
                                                             }
                                                         </div>
                                                     </td>
 
-                                                    {/* Receipts */}
+                                                    {/* Receipt count */}
 
                                                     <td className="px-5 py-4 text-center align-top">
                                                             <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
@@ -551,7 +589,7 @@ export default function Participants() {
                                                         )}
                                                     </td>
 
-                                                    {/* View */}
+                                                    {/* View participant */}
 
                                                     <td className="px-5 py-4 text-right align-top">
                                                         <button
@@ -567,7 +605,7 @@ export default function Participants() {
                                                             }}
                                                             className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
                                                         >
-                                                            View Participant →
+                                                            View →
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -583,121 +621,144 @@ export default function Participants() {
                                                             className="bg-gray-50/70 px-6 py-4"
                                                         >
                                                             <div className="ml-5 overflow-hidden rounded-xl border border-gray-200 bg-white">
-                                                                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
-                                                                    <div>
-                                                                        <div className="text-sm font-semibold text-gray-900">
-                                                                            Receipts
-                                                                        </div>
 
-                                                                        <div className="mt-0.5 text-xs text-gray-500">
-                                                                            {
-                                                                                receipts.length
-                                                                            }{' '}
-                                                                            submitted receipt
-                                                                            {receipts.length ===
-                                                                            1
-                                                                                ? ''
-                                                                                : 's'}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
+                                                                {/* Receipt table */}
 
                                                                 {receipts.length ===
                                                                 0 ? (
                                                                     <div className="px-4 py-5 text-sm text-gray-400">
-                                                                        No receipts submitted.
+                                                                        No
+                                                                        receipts
+                                                                        submitted.
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="divide-y divide-gray-100">
-                                                                        {receipts.map(
-                                                                            (
-                                                                                receipt
-                                                                            ) => (
-                                                                                <div
-                                                                                    key={
-                                                                                        receipt.id
-                                                                                    }
-                                                                                    className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
-                                                                                >
-                                                                                    <div className="min-w-0">
-                                                                                        <div className="flex flex-wrap items-center gap-2">
-                                                                                                <span className="font-medium text-gray-900">
+                                                                    <div className="overflow-x-auto">
+                                                                        <table className="w-full min-w-[760px] text-left text-sm">
+                                                                            <thead className="bg-gray-50">
+                                                                            <tr>
+                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                                    Receipt
+                                                                                </th>
+
+                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                                    Status
+                                                                                </th>
+
+                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                                    Suspicious
+                                                                                </th>
+
+                                                                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                                    Submitted
+                                                                                </th>
+                                                                            </tr>
+                                                                            </thead>
+
+                                                                            <tbody className="divide-y divide-gray-100">
+                                                                            {receipts.map(
+                                                                                (
+                                                                                    receipt
+                                                                                ) => {
+                                                                                    const reasons =
+                                                                                        receipt.suspicious_reasons ??
+                                                                                        [];
+
+                                                                                    const firstReason =
+                                                                                        reasons[0];
+
+                                                                                    const extraReasons =
+                                                                                        Math.max(
+                                                                                            reasons.length -
+                                                                                            1,
+                                                                                            0
+                                                                                        );
+
+                                                                                    return (
+                                                                                        <tr
+                                                                                            key={
+                                                                                                receipt.id
+                                                                                            }
+                                                                                            className="hover:bg-gray-50"
+                                                                                        >
+                                                                                            {/* Receipt */}
+
+                                                                                            <td className="px-4 py-3 align-top">
+                                                                                                <div className="font-medium text-gray-900">
                                                                                                     {
                                                                                                         receipt.receipt_number
                                                                                                     }
-                                                                                                </span>
-
-                                                                                            {receipt.is_suspicious && (
-                                                                                                <span className="text-sm text-amber-600">
-                                                                                                        ⚠
-                                                                                                    </span>
-                                                                                            )}
-
-                                                                                            <StatusBadge
-                                                                                                status={
-                                                                                                    receipt.status
-                                                                                                }
-                                                                                            />
-                                                                                        </div>
-
-                                                                                        <div className="mt-1 text-xs text-gray-400">
-                                                                                            Receipt
-                                                                                            ID
-                                                                                            #{' '}
-                                                                                            {
-                                                                                                receipt.id
-                                                                                            }
-
-                                                                                            {' · Submitted '}
-
-                                                                                            {formatDateTime(
-                                                                                                receipt.submitted_at ??
-                                                                                                receipt.created_at
-                                                                                            )}
-                                                                                        </div>
-
-                                                                                        {receipt.is_suspicious &&
-                                                                                            receipt
-                                                                                                .suspicious_reasons
-                                                                                                ?.length >
-                                                                                            0 && (
-                                                                                                <div className="mt-2 text-xs text-amber-800">
-                                                                                                    {receipt.suspicious_reasons
-                                                                                                        .map(
-                                                                                                            (
-                                                                                                                reason
-                                                                                                            ) =>
-                                                                                                                reason
-                                                                                                                    .replaceAll(
-                                                                                                                        '_',
-                                                                                                                        ' '
-                                                                                                                    )
-                                                                                                                    .replace(
-                                                                                                                        /\b\w/g,
-                                                                                                                        (
-                                                                                                                            character
-                                                                                                                        ) =>
-                                                                                                                            character.toUpperCase()
-                                                                                                                    )
-                                                                                                        )
-                                                                                                        .join(
-                                                                                                            ' · '
-                                                                                                        )}
                                                                                                 </div>
-                                                                                            )}
 
-                                                                                        {receipt.rejection_reason && (
-                                                                                            <div className="mt-2 text-xs text-red-700">
-                                                                                                Rejected:{' '}
-                                                                                                {
-                                                                                                    receipt.rejection_reason
-                                                                                                }
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                            )
-                                                                        )}
+                                                                                                <div className="mt-1 text-xs text-gray-400">
+                                                                                                    Receipt
+                                                                                                    ID
+                                                                                                    #{' '}
+                                                                                                    {
+                                                                                                        receipt.id
+                                                                                                    }
+                                                                                                </div>
+                                                                                            </td>
+
+                                                                                            {/* Status */}
+
+                                                                                            <td className="px-4 py-3 align-top">
+                                                                                                <StatusBadge
+                                                                                                    status={
+                                                                                                        receipt.status
+                                                                                                    }
+                                                                                                />
+                                                                                            </td>
+
+                                                                                            {/* Suspicious */}
+
+                                                                                            <td className="px-4 py-3 align-top">
+                                                                                                {receipt.is_suspicious ? (
+                                                                                                    firstReason ? (
+                                                                                                        <div>
+                                                                                                            <div className="max-w-[300px] text-xs font-medium text-amber-800">
+                                                                                                                {formatSuspiciousReason(
+                                                                                                                    firstReason
+                                                                                                                )}
+                                                                                                            </div>
+
+                                                                                                            {extraReasons >
+                                                                                                                0 && (
+                                                                                                                    <div className="mt-1 text-[11px] font-medium text-amber-600">
+                                                                                                                        +
+                                                                                                                        {
+                                                                                                                            extraReasons
+                                                                                                                        }{' '}
+                                                                                                                        more
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <span className="text-xs font-medium text-amber-700">
+                                                                                                                    ⚠
+                                                                                                                    Suspicious
+                                                                                                                </span>
+                                                                                                    )
+                                                                                                ) : (
+                                                                                                    <span className="text-xs text-gray-400">
+                                                                                                                —
+                                                                                                            </span>
+                                                                                                )}
+                                                                                            </td>
+
+                                                                                            {/* Submitted */}
+
+                                                                                            <td className="whitespace-nowrap px-4 py-3 align-top text-sm text-gray-500">
+                                                                                                {formatDateTime(
+                                                                                                    receipt.submitted_at ??
+                                                                                                    receipt.created_at
+                                                                                                )}
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    );
+                                                                                }
+                                                                            )}
+                                                                            </tbody>
+                                                                        </table>
                                                                     </div>
                                                                 )}
                                                             </div>
