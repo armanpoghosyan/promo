@@ -1,99 +1,217 @@
-import { NavLink } from 'react-router-dom';
-import { useLanguage } from '../../i18n/LanguageContext';
+import {
+    NavLink,
+} from 'react-router-dom';
+
 import Icon from '../../components/Icon';
+
+import {
+    useLanguage,
+} from '../../i18n/LanguageContext';
 
 type Props = {
     onNavigate?: () => void;
 };
 
-const linkClassName = ({isActive}: {isActive: boolean}) => [
-    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
-    isActive
-        ? 'bg-white text-gray-900 shadow-sm'
-        : 'text-gray-300 hover:bg-gray-800 hover:text-white',
-].join(' ');
+const linkClassName = ({
+                           isActive,
+                       }: {
+    isActive: boolean;
+}) =>
+    [
+        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
 
-export default function SidebarNavigation({onNavigate}: Props) {
-    const { tr } = useLanguage();
+        isActive
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-300 hover:bg-gray-800 hover:text-white',
+    ].join(' ');
+
+export default function SidebarNavigation({
+                                              onNavigate,
+                                          }: Props) {
+    const {
+        tr,
+    } = useLanguage();
 
     return (
         <div className="flex-1 overflow-y-auto px-3 py-5">
             <nav className="space-y-6">
+                {/* Operations */}
+
                 <div>
                     <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        {tr('Operations')}
+                        {tr(
+                            'Operations'
+                        )}
                     </div>
+
                     <div className="space-y-1">
                         <NavLink
                             to="/admin"
                             end
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="dashboard" />
-                            <span>{tr('Dashboard')}</span>
+
+                            <span>
+                                {tr(
+                                    'Dashboard'
+                                )}
+                            </span>
                         </NavLink>
+
                         <NavLink
                             to="/admin/receipts"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="receipts" />
-                            <span>{tr('Receipts')}</span>
+
+                            <span>
+                                {tr(
+                                    'Receipts'
+                                )}
+                            </span>
                         </NavLink>
+
                         <NavLink
                             to="/admin/draws"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="draws" />
-                            <span>{tr("Draws")}</span>
+
+                            <span>
+                                {tr(
+                                    'Draws'
+                                )}
+                            </span>
                         </NavLink>
+
                         <NavLink
                             to="/admin/winners"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="winners" />
-                            <span>{tr('Winners')}</span>
+
+                            <span>
+                                {tr(
+                                    'Winners'
+                                )}
+                            </span>
                         </NavLink>
                     </div>
                 </div>
+
+                {/* Data */}
+
                 <div>
                     <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        {tr('Data')}
+                        {tr(
+                            'Data'
+                        )}
                     </div>
+
                     <div className="space-y-1">
                         <NavLink
                             to="/admin/participants"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="participants" />
-                            <span>{tr('Participants')}</span>
+
+                            <span>
+                                {tr(
+                                    'Participants'
+                                )}
+                            </span>
                         </NavLink>
+
                         <NavLink
                             to="/admin/prizes"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="prizes" />
-                            <span>{tr('Prizes')}</span>
+
+                            <span>
+                                {tr(
+                                    'Prizes'
+                                )}
+                            </span>
                         </NavLink>
                     </div>
                 </div>
+
+                {/* Insights */}
+
                 <div>
                     <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        {tr('Insights')}
+                        {tr(
+                            'Insights'
+                        )}
                     </div>
+
                     <div className="space-y-1">
                         <NavLink
                             to="/admin/reports"
-                            onClick={onNavigate}
-                            className={linkClassName}
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
                         >
                             <Icon type="reports" />
-                            <span>{tr('Reports')}</span>
+
+                            <span>
+                                {tr(
+                                    'Reports'
+                                )}
+                            </span>
+                        </NavLink>
+
+                        <NavLink
+                            to="/admin/activity"
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
+                        >
+                            <Icon type="activity" />
+
+                            <span>
+                                {tr(
+                                    'Activity Log'
+                                )}
+                            </span>
                         </NavLink>
                     </div>
                 </div>

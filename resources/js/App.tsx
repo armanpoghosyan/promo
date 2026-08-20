@@ -1,19 +1,28 @@
-import {Navigate, Route, Routes} from 'react-router-dom';
+import {
+    Navigate,
+    Route,
+    Routes,
+} from 'react-router-dom';
+
 import ProtectedRoute from './auth/ProtectedRoute';
+
 import AdminLayout from './layouts/AdminLayout';
+
 import Landing from './pages/Landing';
-import Login from './pages/admin/Login';
+
+import ActivityLog from './pages/admin/ActivityLog';
 import Dashboard from './pages/admin/Dashboard';
-import Receipts from './pages/admin/Receipts';
-import ReceiptDetails from './pages/admin/ReceiptDetails';
-import Draws from './pages/admin/Draws';
 import DrawDetails from './pages/admin/DrawDetails';
-import Participants from './pages/admin/Participants';
+import Draws from './pages/admin/Draws';
+import Login from './pages/admin/Login';
 import ParticipantDetails from './pages/admin/ParticipantDetails';
+import Participants from './pages/admin/Participants';
 import Prizes from './pages/admin/Prizes';
+import ReceiptDetails from './pages/admin/ReceiptDetails';
+import Receipts from './pages/admin/Receipts';
 import Reports from './pages/admin/Reports';
-import Winners from './pages/admin/Winners';
 import WinnerDetails from './pages/admin/WinnerDetails';
+import Winners from './pages/admin/Winners';
 
 function AdminNotFound() {
     return (
@@ -32,86 +41,141 @@ function AdminNotFound() {
 export default function App() {
     return (
         <Routes>
-
             {/* Public */}
+
             <Route
                 path="/"
-                element={<Landing />}
+                element={
+                    <Landing />
+                }
             />
+
             <Route
                 path="/login"
-                element={<Login />}
+                element={
+                    <Login />
+                }
             />
 
             {/* Protected Admin */}
+
             <Route
-                element={<ProtectedRoute />}
+                element={
+                    <ProtectedRoute />
+                }
             >
                 <Route
                     path="/admin"
-                    element={<AdminLayout />}
+                    element={
+                        <AdminLayout />
+                    }
                 >
                     <Route
                         index
-                        element={<Dashboard />}
+                        element={
+                            <Dashboard />
+                        }
                     />
+
                     <Route
                         path="receipts"
-                        element={<Receipts />}
+                        element={
+                            <Receipts />
+                        }
                     />
+
                     <Route
                         path="receipts/:id"
-                        element={<ReceiptDetails />}
+                        element={
+                            <ReceiptDetails />
+                        }
                     />
+
                     <Route
                         path="draws"
-                        element={<Draws />}
+                        element={
+                            <Draws />
+                        }
                     />
+
                     <Route
                         path="draws/:id"
-                        element={<DrawDetails />}
+                        element={
+                            <DrawDetails />
+                        }
                     />
+
                     <Route
                         path="participants"
-                        element={<Participants />}
+                        element={
+                            <Participants />
+                        }
                     />
+
                     <Route
                         path="participants/:id"
-                        element={<ParticipantDetails />}
+                        element={
+                            <ParticipantDetails />
+                        }
                     />
+
                     <Route
                         path="prizes"
-                        element={<Prizes />}
+                        element={
+                            <Prizes />
+                        }
                     />
-                    <Route
-                        path="reports"
-                        element={<Reports />}
-                    />
+
                     <Route
                         path="winners"
-                        element={<Winners />}
+                        element={
+                            <Winners />
+                        }
                     />
+
                     <Route
                         path="winners/:id"
-                        element={<WinnerDetails />}
+                        element={
+                            <WinnerDetails />
+                        }
+                    />
+
+                    <Route
+                        path="reports"
+                        element={
+                            <Reports />
+                        }
+                    />
+
+                    <Route
+                        path="activity"
+                        element={
+                            <ActivityLog />
+                        }
                     />
 
                     {/* Unknown admin page */}
+
                     <Route
                         path="*"
-                        element={<AdminNotFound />}
+                        element={
+                            <AdminNotFound />
+                        }
                     />
                 </Route>
             </Route>
 
             {/* Unknown public path */}
+
             <Route
                 path="*"
                 element={
-                    <Navigate to="/" replace/>
+                    <Navigate
+                        to="/"
+                        replace
+                    />
                 }
             />
-
         </Routes>
     );
 }
