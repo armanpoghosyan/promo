@@ -11,11 +11,13 @@ import {
 import Alert from '../Alert';
 import LoadingState from '../LoadingState';
 import StatusBadge from '../StatusBadge';
+import Tooltip from '../Tooltip';
 
 import api from '../../services/api';
 
 import type {
     Receipt,
+    ReceiptNoteResponse,
     ReceiptResponse,
     SuspiciousReason,
 } from '../../types/receipt';
@@ -78,23 +80,6 @@ function suspiciousReasonLabel(
                     character.toUpperCase()
             )
     );
-}
-
-function truncate(
-    value: string,
-    limit: number
-): string {
-    if (
-        value.length <=
-        limit
-    ) {
-        return value;
-    }
-
-    return `${value.slice(
-        0,
-        limit
-    )}...`;
 }
 
 export default function ReceiptQuickReviewModal({
@@ -163,6 +148,28 @@ export default function ReceiptQuickReviewModal({
         setImageOpen,
     ] = useState(false);
 
+    const [
+        showAddNote,
+        setShowAddNote,
+    ] = useState(false);
+
+    const [
+        newNote,
+        setNewNote,
+    ] = useState('');
+
+    const [
+        noteLoading,
+        setNoteLoading,
+    ] = useState(false);
+
+    const [
+        noteError,
+        setNoteError,
+    ] = useState<string | null>(
+        null
+    );
+
     useEffect(() => {
         setActiveReceiptId(
             receiptId
@@ -177,14 +184,24 @@ export default function ReceiptQuickReviewModal({
         const loadReceipt =
             async () => {
                 setLoading(true);
+
                 setError(null);
                 setActionError(null);
+                setNoteError(null);
 
                 setShowReject(
                     false
                 );
 
                 setRejectionReason(
+                    ''
+                );
+
+                setShowAddNote(
+                    false
+                );
+
+                setNewNote(
                     ''
                 );
 
@@ -216,7 +233,9 @@ export default function ReceiptQuickReviewModal({
             };
 
         loadReceipt();
-    }, [activeReceiptId]);
+    }, [
+        activeReceiptId,
+    ]);
 
     useEffect(() => {
         const handleKeyDown = (
@@ -229,8 +248,44 @@ export default function ReceiptQuickReviewModal({
                 return;
             }
 
-            if (imageOpen) {
-                setImageOpen(false);
+            if (
+                imageOpen
+            ) {
+                setImageOpen(
+                    false
+                );
+
+                return;
+            }
+
+            if (
+                showReject
+            ) {
+                setShowReject(
+                    false
+                );
+
+                setRejectionReason(
+                    ''
+                );
+
+                return;
+            }
+
+            if (
+                showAddNote
+            ) {
+                setShowAddNote(
+                    false
+                );
+
+                setNewNote(
+                    ''
+                );
+
+                setNoteError(
+                    null
+                );
 
                 return;
             }
@@ -251,6 +306,8 @@ export default function ReceiptQuickReviewModal({
         };
     }, [
         imageOpen,
+        showReject,
+        showAddNote,
         onClose,
     ]);
 
@@ -322,12 +379,19 @@ export default function ReceiptQuickReviewModal({
 
     const approveReceipt =
         async () => {
-            if (!receipt) {
+            if (
+                !receipt
+            ) {
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
 
             try {
                 const response =
@@ -346,15 +410,6 @@ export default function ReceiptQuickReviewModal({
                     updatedReceipt
                 );
 
-                /*
-                 * If reviewing the originally
-                 * selected receipt, close.
-                 *
-                 * If reviewing participant
-                 * history, keep the modal open
-                 * so the admin can continue
-                 * investigating.
-                 */
                 if (
                     receipt.id ===
                     receiptId
@@ -371,7 +426,9 @@ export default function ReceiptQuickReviewModal({
                     )
                 );
             } finally {
-                setActionLoading(false);
+                setActionLoading(
+                    false
+                );
             }
         };
 
@@ -384,8 +441,13 @@ export default function ReceiptQuickReviewModal({
                 return;
             }
 
-            setActionLoading(true);
-            setActionError(null);
+            setActionLoading(
+                true
+            );
+
+            setActionError(
+                null
+            );
 
             try {
                 const response =
@@ -432,7 +494,81 @@ export default function ReceiptQuickReviewModal({
                     )
                 );
             } finally {
-                setActionLoading(false);
+                setActionLoading(
+                    false
+                );
+            }
+        };
+
+    const addNote =
+        async () => {
+            if (
+                !receipt ||
+                !newNote.trim()
+            ) {
+                return;
+            }
+
+            setNoteLoading(
+                true
+            );
+
+            setNoteError(
+                null
+            );
+
+            try {
+                const response =
+                    await api.post<ReceiptNoteResponse>(
+                        `/admin/receipts/${receipt.id}/notes`,
+                        {
+                            note:
+                                newNote.trim(),
+                        }
+                    );
+
+                const createdNote =
+                    response.data.data;
+
+                const updatedReceipt: Receipt =
+                    {
+                        ...receipt,
+
+                        notes: [
+                            createdNote,
+                            ...(receipt.notes ??
+                                []),
+                        ],
+                    };
+
+                setReceipt(
+                    updatedReceipt
+                );
+
+                setNewNote(
+                    ''
+                );
+
+                setShowAddNote(
+                    false
+                );
+
+                onChanged(
+                    updatedReceipt
+                );
+            } catch (
+                error: unknown
+                ) {
+                setNoteError(
+                    getApiErrorMessage(
+                        error,
+                        'Unable to add note.'
+                    )
+                );
+            } finally {
+                setNoteLoading(
+                    false
+                );
             }
         };
 
@@ -457,16 +593,6 @@ export default function ReceiptQuickReviewModal({
                 participant,
                 receipt?.id,
             ]
-        );
-
-    const participantOtherReceiptCount =
-        Math.max(
-            (
-                participant
-                    ?.receipts_count ??
-                1
-            ) - 1,
-            0
         );
 
     const canReview =
@@ -510,8 +636,7 @@ export default function ReceiptQuickReviewModal({
                                     }
                                     className="mb-2 inline-flex text-xs font-medium text-blue-600 hover:text-blue-800"
                                 >
-                                    ← Back to previous
-                                    receipt
+                                    ← Back to previous receipt
                                 </button>
                             )}
 
@@ -601,12 +726,11 @@ export default function ReceiptQuickReviewModal({
                                         </button>
 
                                         <div className="mt-2 text-center text-xs text-gray-400">
-                                            Click image to
-                                            enlarge
+                                            Click image to enlarge
                                         </div>
                                     </div>
 
-                                    {/* Review context */}
+                                    {/* Context */}
 
                                     <div className="space-y-5 p-5">
                                         <section>
@@ -626,37 +750,17 @@ export default function ReceiptQuickReviewModal({
                                         {participant && (
                                             <section className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                                                 <div className="p-4">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                                Participant
-                                                            </div>
+                                                    <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                                        Participant
+                                                    </div>
 
-                                                            <div className="mt-2 font-semibold text-gray-900">
-                                                                {
-                                                                    participant.first_name
-                                                                }{' '}
-                                                                {
-                                                                    participant.last_name
-                                                                }
-                                                            </div>
-                                                        </div>
-
-                                                        {participantOtherReceiptCount >
-                                                            0 && (
-                                                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                                                +
-                                                                    {
-                                                                        participantOtherReceiptCount
-                                                                    }{' '}
-                                                                    other
-                                                                receipt
-                                                                    {participantOtherReceiptCount ===
-                                                                    1
-                                                                        ? ''
-                                                                        : 's'}
-                                                            </span>
-                                                            )}
+                                                    <div className="mt-2 font-semibold text-gray-900">
+                                                        {
+                                                            participant.first_name
+                                                        }{' '}
+                                                        {
+                                                            participant.last_name
+                                                        }
                                                     </div>
 
                                                     <div className="mt-3 space-y-1 text-sm text-gray-600">
@@ -674,30 +778,16 @@ export default function ReceiptQuickReviewModal({
                                                     </div>
                                                 </div>
 
-                                                {/* Other receipt history */}
+                                                {/* Other receipts */}
 
                                                 {otherReceipts.length >
                                                     0 && (
                                                         <div className="border-t border-gray-200 bg-white">
-                                                            <div className="flex items-center justify-between px-4 py-3">
-                                                                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                    Other
-                                                                    Receipts
-                                                                </div>
-
-                                                                <span className="text-[11px] text-gray-400">
-                                                                Showing{' '}
-                                                                    {
-                                                                        otherReceipts.length
-                                                                    }{' '}
-                                                                    of{' '}
-                                                                    {
-                                                                        participantOtherReceiptCount
-                                                                    }
-                                                            </span>
+                                                            <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                Other Receipts
                                                             </div>
 
-                                                            <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
+                                                            <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
                                                                 {otherReceipts.map(
                                                                     (
                                                                         participantReceipt
@@ -706,6 +796,13 @@ export default function ReceiptQuickReviewModal({
                                                                             participantReceipt.suspicious_reasons ??
                                                                             [];
 
+                                                                        const rejectionReasonTooltip =
+                                                                            participantReceipt.status ===
+                                                                            'rejected' &&
+                                                                            participantReceipt.rejection_reason
+                                                                                ? participantReceipt.rejection_reason
+                                                                                : null;
+
                                                                         return (
                                                                             <div
                                                                                 key={
@@ -713,68 +810,114 @@ export default function ReceiptQuickReviewModal({
                                                                                 }
                                                                                 className="px-4 py-3"
                                                                             >
-                                                                                <div className="flex items-start justify-between gap-3">
-                                                                                    <div className="min-w-0">
-                                                                                        <div className="flex flex-wrap items-center gap-2">
-                                                                                            <span className="text-sm font-medium text-gray-900">
-                                                                                                {
-                                                                                                    participantReceipt.receipt_number
-                                                                                                }
-                                                                                            </span>
+                                                                                {/* Top row */}
 
-                                                                                            <StatusBadge
-                                                                                                status={
-                                                                                                    participantReceipt.status
-                                                                                                }
-                                                                                            />
-                                                                                        </div>
+                                                                                <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+            {
+                participantReceipt.receipt_number
+            }
+        </span>
 
-                                                                                        <div className="mt-1 text-[11px] text-gray-400">
-                                                                                            Receipt ID
-                                                                                            #{' '}
-                                                                                            {
-                                                                                                participantReceipt.id
+                                                                                    {participantReceipt.is_suspicious && (
+                                                                                        <Tooltip
+                                                                                            content={
+                                                                                                reasons.length >
+                                                                                                0 ? (
+                                                                                                    <div>
+                                                                                                        <div className="mb-1 font-semibold">
+                                                                                                            Suspicious reasons
+                                                                                                        </div>
+
+                                                                                                        <div className="space-y-1 text-gray-200">
+                                                                                                            {reasons.map(
+                                                                                                                (
+                                                                                                                    reason
+                                                                                                                ) => (
+                                                                                                                    <div
+                                                                                                                        key={
+                                                                                                                            reason
+                                                                                                                        }
+                                                                                                                    >
+                                                                                                                        •{' '}
+                                                                                                                        {suspiciousReasonLabel(
+                                                                                                                            reason
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                )
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    'This receipt was marked as suspicious.'
+                                                                                                )
                                                                                             }
+                                                                                            maxWidth={
+                                                                                                360
+                                                                                            }
+                                                                                        >
+                <span className="shrink-0 cursor-help text-sm text-amber-600">
+                    ⚠
+                </span>
+                                                                                        </Tooltip>
+                                                                                    )}
 
-                                                                                            {' · '}
+                                                                                    <span className="shrink-0">
+            <Tooltip
+                content={
+                    rejectionReasonTooltip
+                        ? (
+                            <div>
+                                <div className="mb-1 font-semibold">
+                                    Rejection reason
+                                </div>
 
-                                                                                            {formatDateTime(
-                                                                                                participantReceipt.submitted_at ??
-                                                                                                participantReceipt.created_at
-                                                                                            )}
-                                                                                        </div>
+                                <div className="text-gray-200">
+                                    {
+                                        rejectionReasonTooltip
+                                    }
+                                </div>
+                            </div>
+                        )
+                        : null
+                }
+                maxWidth={
+                    360
+                }
+            >
+                <span
+                    className={
+                        rejectionReasonTooltip
+                            ? 'cursor-help'
+                            : undefined
+                    }
+                >
+                    <StatusBadge
+                        status={
+                            participantReceipt.status
+                        }
+                    />
+                </span>
+            </Tooltip>
+        </span>
+                                                                                </div>
 
-                                                                                        {participantReceipt.status ===
-                                                                                            'rejected' &&
-                                                                                            participantReceipt.rejection_reason && (
-                                                                                                <div className="mt-2 text-xs text-red-700">
-                                                                                                    {truncate(
-                                                                                                        participantReceipt.rejection_reason,
-                                                                                                        65
-                                                                                                    )}
-                                                                                                </div>
-                                                                                            )}
+                                                                                {/* Bottom row */}
 
-                                                                                        {participantReceipt.is_suspicious &&
-                                                                                            reasons.length >
-                                                                                            0 && (
-                                                                                                <div className="mt-2 text-xs font-medium text-amber-700">
-                                                                                                    ⚠{' '}
-                                                                                                    {suspiciousReasonLabel(
-                                                                                                        reasons[0]
-                                                                                                    )}
+                                                                                <div className="mt-1 flex items-center justify-between gap-3">
+                                                                                    <div className="min-w-0 truncate text-[11px] text-gray-400">
+                                                                                        Receipt ID
+                                                                                        #{' '}
+                                                                                        {
+                                                                                            participantReceipt.id
+                                                                                        }
 
-                                                                                                    {reasons.length >
-                                                                                                        1 && (
-                                                                                                            <>
-                                                                                                                {' '}
-                                                                                                                +
-                                                                                                                {reasons.length -
-                                                                                                                    1}
-                                                                                                            </>
-                                                                                                        )}
-                                                                                                </div>
-                                                                                            )}
+                                                                                        {' · '}
+
+                                                                                        {formatDateTime(
+                                                                                            participantReceipt.submitted_at ??
+                                                                                            participantReceipt.created_at
+                                                                                        )}
                                                                                     </div>
 
                                                                                     <button
@@ -784,7 +927,7 @@ export default function ReceiptQuickReviewModal({
                                                                                                 participantReceipt.id
                                                                                             )
                                                                                         }
-                                                                                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                                                                        className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
                                                                                     >
                                                                                         Review →
                                                                                     </button>
@@ -802,27 +945,18 @@ export default function ReceiptQuickReviewModal({
                                                         to={`/admin/participants/${participant.id}`}
                                                         className="text-xs font-medium text-blue-600 hover:text-blue-800"
                                                     >
-                                                        View Participant
-                                                        →
+                                                        View Participant →
                                                     </Link>
                                                 </div>
                                             </section>
                                         )}
 
-                                        {/* Suspicious reasons */}
+                                        {/* Suspicious current receipt */}
 
                                         {suspicious && (
                                             <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                                                 <div className="font-semibold text-amber-900">
                                                     Review flags
-                                                </div>
-
-                                                <div className="mt-1 text-xs text-amber-700">
-                                                    This receipt was
-                                                    automatically
-                                                    flagged for
-                                                    additional
-                                                    review.
                                                 </div>
 
                                                 <ul className="mt-3 space-y-2">
@@ -855,20 +989,121 @@ export default function ReceiptQuickReviewModal({
                                         {/* Notes */}
 
                                         <section>
-                                            <div className="flex items-center justify-between">
-                                                <h3 className="text-sm font-semibold text-gray-900">
-                                                    Notes
-                                                </h3>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-sm font-semibold text-gray-900">
+                                                        Notes
+                                                    </h3>
 
-                                                <span className="text-xs text-gray-400">
-                                                    {
-                                                        receipt
-                                                            .notes
-                                                            ?.length ??
-                                                        0
-                                                    }
-                                                </span>
+                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
+                                                        {
+                                                            receipt
+                                                                .notes
+                                                                ?.length ??
+                                                            0
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowAddNote(
+                                                            (
+                                                                current
+                                                            ) =>
+                                                                !current
+                                                        );
+
+                                                        setNewNote(
+                                                            ''
+                                                        );
+
+                                                        setNoteError(
+                                                            null
+                                                        );
+                                                    }}
+                                                    className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                >
+                                                    {showAddNote
+                                                        ? 'Cancel'
+                                                        : '+ Add new note'}
+                                                </button>
                                             </div>
+
+                                            {showAddNote && (
+                                                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                                    <textarea
+                                                        value={
+                                                            newNote
+                                                        }
+                                                        onChange={(
+                                                            event
+                                                        ) =>
+                                                            setNewNote(
+                                                                event
+                                                                    .target
+                                                                    .value
+                                                            )
+                                                        }
+                                                        rows={
+                                                            3
+                                                        }
+                                                        autoFocus
+                                                        placeholder="Add a quick note..."
+                                                        className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                                    />
+
+                                                    {noteError && (
+                                                        <div className="mt-2 text-xs text-red-600">
+                                                            {
+                                                                noteError
+                                                            }
+                                                        </div>
+                                                    )}
+
+                                                    <div className="mt-2 flex justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                noteLoading
+                                                            }
+                                                            onClick={() => {
+                                                                setShowAddNote(
+                                                                    false
+                                                                );
+
+                                                                setNewNote(
+                                                                    ''
+                                                                );
+
+                                                                setNoteError(
+                                                                    null
+                                                                );
+                                                            }}
+                                                            className="rounded-lg px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                                                        >
+                                                            Cancel
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                noteLoading ||
+                                                                !newNote.trim()
+                                                            }
+                                                            onClick={
+                                                                addNote
+                                                            }
+                                                            className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        >
+                                                            {noteLoading
+                                                                ? 'Adding...'
+                                                                : 'Add Note'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {!receipt
                                                 .notes
@@ -915,7 +1150,7 @@ export default function ReceiptQuickReviewModal({
                                             )}
                                         </section>
 
-                                        {/* Rejection reason */}
+                                        {/* Current rejection reason */}
 
                                         {receipt.rejection_reason && (
                                             <section className="rounded-xl border border-red-200 bg-red-50 p-4">
@@ -946,7 +1181,7 @@ export default function ReceiptQuickReviewModal({
                                             </Alert>
                                         )}
 
-                                        {/* Reject form */}
+                                        {/* Reject */}
 
                                         {showReject && (
                                             <section className="rounded-xl border border-red-200 bg-red-50 p-4">
@@ -1021,7 +1256,7 @@ export default function ReceiptQuickReviewModal({
                                 </div>
                             </div>
 
-                            {/* Footer actions */}
+                            {/* Footer */}
 
                             <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                                 <Link
@@ -1035,61 +1270,49 @@ export default function ReceiptQuickReviewModal({
                                     Full Details →
                                 </Link>
 
-                                <div className="flex flex-wrap justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={
-                                            onClose
-                                        }
-                                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                                    >
-                                        Leave for Later
-                                    </button>
-
-                                    {canReview && (
-                                        <>
-                                            {!showReject && (
-                                                <button
-                                                    type="button"
-                                                    disabled={
-                                                        actionLoading
-                                                    }
-                                                    onClick={() =>
-                                                        setShowReject(
-                                                            true
-                                                        )
-                                                    }
-                                                    className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                                                >
-                                                    Reject
-                                                </button>
-                                            )}
-
+                                {canReview && (
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        {!showReject && (
                                             <button
                                                 type="button"
                                                 disabled={
-                                                    actionLoading ||
-                                                    showReject
+                                                    actionLoading
                                                 }
-                                                onClick={
-                                                    approveReceipt
+                                                onClick={() =>
+                                                    setShowReject(
+                                                        true
+                                                    )
                                                 }
-                                                className={[
-                                                    'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
-                                                    suspicious
-                                                        ? 'bg-gray-900 hover:bg-gray-800'
-                                                        : 'bg-green-600 hover:bg-green-700',
-                                                ].join(
-                                                    ' '
-                                                )}
+                                                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                                             >
-                                                {actionLoading
-                                                    ? 'Processing...'
-                                                    : 'Approve'}
+                                                Reject
                                             </button>
-                                        </>
-                                    )}
-                                </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                actionLoading ||
+                                                showReject
+                                            }
+                                            onClick={
+                                                approveReceipt
+                                            }
+                                            className={[
+                                                'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
+                                                suspicious
+                                                    ? 'bg-gray-900 hover:bg-gray-800'
+                                                    : 'bg-green-600 hover:bg-green-700',
+                                            ].join(
+                                                ' '
+                                            )}
+                                        >
+                                            {actionLoading
+                                                ? 'Processing...'
+                                                : 'Approve'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}
