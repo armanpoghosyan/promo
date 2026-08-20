@@ -12,7 +12,7 @@ type StatusConfig = {
 const statusStyles: Record<string, StatusConfig> = {
     submitted: {
         className:
-            'bg-amber-50 text-amber-700 ring-amber-600/20',
+            'bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200',
     },
 
     approved: {
