@@ -457,7 +457,7 @@ class ReportExportController extends Controller
     }
 
     /**
-     * @param resource $handle
+     * @param  resource  $handle
      */
     private function writeCsvRow($handle, array $values): void
     {

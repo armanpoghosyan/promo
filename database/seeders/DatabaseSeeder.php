@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $dataset = strtolower(
-            trim((string) env('SEED_DATASET', 'none'))
+            trim((string) config('campaign.seed_dataset', 'none'))
         );
 
         match ($dataset) {

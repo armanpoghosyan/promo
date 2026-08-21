@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import Alert from '../../components/Alert';
+import WorkQueueTabs from '../../components/admin/WorkQueueTabs';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import PageHeader from '../../components/PageHeader';
@@ -41,7 +42,7 @@ export default function Receipts() {
     const initialPage = positiveIntegerParam(searchParams.get('page'));
     const tabParam = searchParams.get('tab');
     const reviewParam = searchParams.get('review');
-    const initialTab: ReceiptTab = tabParam === 'submitted' || tabParam === 'approved' || tabParam === 'rejected' ? tabParam : 'all';
+    const initialTab: ReceiptTab = tabParam === 'all' || tabParam === 'approved' || tabParam === 'rejected' ? tabParam : 'submitted';
     const initialReviewFilter: ReviewFilter = reviewParam === 'suspicious' || reviewParam === 'normal' ? reviewParam : 'all';
     const [receipts, setReceipts] = useState<Receipt[]>([]);
     const [counts, setCounts] = useState<ReceiptListCounts>(emptyCounts);
@@ -120,11 +121,6 @@ export default function Receipts() {
 
     const tabs: Array<{ value: ReceiptTab; label: string; count: number; }> = [
         {
-            value: 'all',
-            label: 'All',
-            count: counts.all,
-        },
-        {
             value: 'submitted',
             label: 'Needs Review',
             count: counts.submitted,
@@ -139,6 +135,11 @@ export default function Receipts() {
             label: 'Rejected',
             count: counts.rejected,
         },
+        {
+            value: 'all',
+            label: 'All',
+            count: counts.all,
+        },
     ];
 
     const currentListUrl = `${location.pathname}${location.search}`;
@@ -147,76 +148,20 @@ export default function Receipts() {
         <div className="space-y-5">
             <PageHeader
                 title="Receipts"
-                description="Review participation receipts and prepare approved entries for the next draw."
+                description="Start with incoming receipts that need a decision, then review completed work."
             />
 
-            <div className="overflow-x-auto border-b border-gray-200">
-                <nav className="flex min-w-max gap-5">
-                    {tabs.map((item) => {
-                        return (
-                            <button
-                                key={item.value}
-                                type="button"
-                                onClick={() => changeTab(item.value)}
-                                className={[
-                                    'relative whitespace-nowrap pb-2.5 text-sm font-medium transition',
-                                    tab === item.value ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900',
-                                ].join(' ')}
-                            >
-                                {item.label}
-
-                                <span
-                                    className={[
-                                        'ml-2 rounded-full px-2 py-0.5 text-xs',
-                                        tab === item.value ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500',
-                                    ].join(' ')}
-                                >
-                                    {item.count}
-                                </span>
-
-                                { tab === item.value && (<span className="absolute inset-x-0 bottom-0 h-0.5 bg-gray-900" />)}
-                            </button>
-                        );
-                    })}
-                </nav>
-            </div>
-
-            {/* Review Queue */}
-
-            {tab === 'submitted' && (
-                <section className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <div className="text-sm font-semibold text-gray-900">
-                            Review Queue
-                        </div>
-
-                        <div className="mt-0.5 text-xs text-gray-500">
-                            Focus on suspicious receipts when deeper review is needed.
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        <QueueButton
-                            active={reviewFilter === 'all'}
-                            onClick={() => changeReviewFilter('all')}
-                        >
-                            All{' '}{counts.submitted}
-                        </QueueButton>
-                        <QueueButton active={reviewFilter === 'suspicious'}
-                            warning
-                            onClick={() => changeReviewFilter('suspicious')}
-                        >
-                            Suspicious{' '}{counts.submitted_suspicious}
-                        </QueueButton>
-                        <QueueButton
-                            active={reviewFilter === 'normal'}
-                            onClick={() => changeReviewFilter('normal')}
-                        >
-                            Normal{' '}{counts.submitted_normal}
-                        </QueueButton>
-                    </div>
-                </section>
-            )}
+            <WorkQueueTabs
+                active={tab}
+                ariaLabel="Receipt work queues"
+                tabs={tabs.map((item) => ({
+                    ...item,
+                    attention: item.value === 'submitted',
+                }))}
+                onChange={(value) =>
+                    changeTab(value as ReceiptTab)
+                }
+            />
 
             {error && (
                 <Alert variant="error" onDismiss={() => setError(null)}>
@@ -227,6 +172,39 @@ export default function Receipts() {
             {/* Table */}
 
             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {tab === 'submitted' && (
+                    <div className="flex flex-col gap-2 border-b border-gray-200 bg-gray-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Show receipts
+                        </span>
+
+                        <nav
+                            aria-label="Filter needs review receipts"
+                            className="flex flex-wrap gap-1.5"
+                        >
+                            <ReviewFilterButton
+                                active={reviewFilter === 'all'}
+                                count={counts.submitted}
+                                label="All"
+                                onClick={() => changeReviewFilter('all')}
+                            />
+                            <ReviewFilterButton
+                                active={reviewFilter === 'suspicious'}
+                                count={counts.submitted_suspicious}
+                                label="Suspicious"
+                                warning
+                                onClick={() => changeReviewFilter('suspicious')}
+                            />
+                            <ReviewFilterButton
+                                active={reviewFilter === 'normal'}
+                                count={counts.submitted_normal}
+                                label="Not flagged"
+                                onClick={() => changeReviewFilter('normal')}
+                            />
+                        </nav>
+                    </div>
+                )}
+
                 {loading ? (
                     <LoadingState message="Loading receipts..." />
                 ) : receipts.length ===
@@ -456,17 +434,21 @@ export default function Receipts() {
     );
 }
 
-function QueueButton({active, warning = false, children, onClick,}: { active: boolean; warning?: boolean; children: React.ReactNode; onClick: () => void; }) {
+function ReviewFilterButton({active, count, label, warning = false, onClick,}: { active: boolean; count: number; label: string; warning?: boolean; onClick: () => void; }) {
     const inactiveClass = warning ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
     const activeClass = warning ? 'bg-amber-600 text-white' : 'bg-gray-900 text-white';
 
     return (
         <button
             type="button"
+            aria-pressed={active}
             onClick={onClick}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${active ? activeClass : inactiveClass}`}
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition ${active ? activeClass : inactiveClass}`}
         >
-            {children}
+            <span>{label}</span>
+            <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums ${active ? 'bg-white/20 text-white' : 'bg-white/70 text-current'}`}>
+                {count}
+            </span>
         </button>
     );
 }
