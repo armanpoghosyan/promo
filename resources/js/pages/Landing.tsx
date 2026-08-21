@@ -50,6 +50,8 @@ const initialForm: FormState = {
     personal_data_consent: false,
 };
 
+const turnstileEnabled = import.meta.env.VITE_TURNSTILE_ENABLED === 'true';
+
 const faqItems = [
     {
         question: 'How can I participate?',
@@ -107,7 +109,7 @@ export default function Landing() {
     const validateForm = (): boolean => {
         const errors: FormErrors = {};
 
-        if (!turnstileToken) {
+        if (turnstileEnabled && !turnstileToken) {
             errors.turnstile_token = tr('Please complete the CAPTCHA verification.');
         }
 
@@ -178,7 +180,10 @@ export default function Landing() {
 
         const data = new FormData();
 
-        data.append('turnstile_token', turnstileToken);
+        if (turnstileEnabled) {
+            data.append('turnstile_token', turnstileToken);
+        }
+
         data.append('first_name', form.first_name.trim());
         data.append('last_name', form.last_name.trim());
         data.append('phone', form.phone.trim());
@@ -456,19 +461,23 @@ export default function Landing() {
 
                         {/* CAPTCHA */}
 
-                        <div className="mt-5">
-                            <TurnstileWidget
-                                key={turnstileResetKey}
-                                onTokenChange={handleTurnstileToken}
-                                onUnavailable={handleTurnstileUnavailable}
-                            />
+                        {turnstileEnabled && (
+                            <div className="mt-5">
+                                <TurnstileWidget
+                                    key={turnstileResetKey}
+                                    onTokenChange={handleTurnstileToken}
+                                    onUnavailable={
+                                        handleTurnstileUnavailable
+                                    }
+                                />
 
-                            {fieldErrors.turnstile_token && (
-                                <InlineError>
-                                    {fieldErrors.turnstile_token}
-                                </InlineError>
-                            )}
-                        </div>
+                                {fieldErrors.turnstile_token && (
+                                    <InlineError>
+                                        {fieldErrors.turnstile_token}
+                                    </InlineError>
+                                )}
+                            </div>
+                        )}
 
                         {/* Consents */}
 

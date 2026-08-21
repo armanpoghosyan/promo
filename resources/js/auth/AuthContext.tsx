@@ -68,11 +68,10 @@ export function AuthProvider({
             withCredentials: true,
         });
 
-        const response =
-            await api.post<LoginResponse>(
-                '/admin/login',
-                credentials
-            );
+        const response = await api.post<LoginResponse>(
+            '/admin/login',
+            credentials
+        );
 
         setUser(response.data.data.user);
         setLoading(false);

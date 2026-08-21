@@ -14,7 +14,13 @@ class SubmitReceiptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'turnstile_token' => [
+            'turnstile_token' => app()->environment('local')
+            ? [
+                'nullable',
+                'string',
+                'max:2048',
+            ]
+            : [
                 'required',
                 'string',
                 'max:2048',
