@@ -1,26 +1,11 @@
-import {
-    createContext,
-    type ReactNode,
-    useContext,
-    useEffect,
-    useState,
-} from 'react';
+import {useCallback, createContext, type ReactNode, useContext, useEffect, useState} from 'react';
 
-import {
-    translations,
-    type Language,
-} from './translations';
+import {translations, type Language} from './translations';
 
 type LanguageContextValue = {
     language: Language;
-
-    setLanguage: (
-        language: Language
-    ) => void;
-
-    tr: (
-        text: string
-    ) => string;
+    setLanguage: (language: Language) => void;
+    tr: (text: string) => string;
 };
 
 const DEFAULT_LANGUAGE: Language = 'hy';
@@ -79,24 +64,19 @@ export function LanguageProvider({
             language;
     }, [language]);
 
-    const tr = (
-        text: string
-    ): string => {
+    const tr = useCallback((text: string): string => {
         if (language === 'en') {
             return text;
         }
 
-        const translation =
-            translations[
-                text as keyof typeof translations
-                ];
+        const translation = translations[text as keyof typeof translations];
 
         if (!translation) {
             return text;
         }
 
         return translation.hy ?? text;
-    };
+    }, [language]);
 
     return (
         <LanguageContext.Provider

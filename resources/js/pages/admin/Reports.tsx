@@ -1,12 +1,6 @@
-import {
-    useCallback,
-    useEffect,
-    useState,
-} from 'react';
-
-import {
-    Link,
-} from 'react-router-dom';
+import {useCallback, useEffect, useState} from 'react';
+import {Link} from 'react-router-dom';
+import type { AxiosResponse } from 'axios';
 
 import Alert from '../../components/Alert';
 import EmptyState from '../../components/EmptyState';
@@ -14,19 +8,11 @@ import LoadingState from '../../components/LoadingState';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 
+
 import api from '../../services/api';
-
-import {
-    getApiErrorMessage,
-} from '../../utils/apiError';
-
-import {
-    formatDateTime,
-} from '../../utils/date';
-
-import {
-    formatEnumLabel,
-} from '../../utils/format';
+import {getApiErrorMessage} from '../../utils/apiError';
+import {formatDateTime} from '../../utils/date';
+import {formatEnumLabel} from '../../utils/format';
 
 type ReceiptOverview = {
     total: number;
@@ -143,35 +129,21 @@ function needsActionCount(
 }
 
 function downloadFilename(
-    response:
-    Awaited<
-        ReturnType<
-            typeof api.get
-        >
-    >,
+    response: AxiosResponse<Blob>,
     fallback: string
 ): string {
     const disposition =
-        response.headers[
-            'content-disposition'
-            ];
+        response.headers['content-disposition'];
 
-    if (
-        typeof disposition !==
-        'string'
-    ) {
+    if (typeof disposition !== 'string') {
         return fallback;
     }
 
-    const match =
-        disposition.match(
-            /filename="?([^"]+)"?/i
-        );
-
-    return (
-        match?.[1] ??
-        fallback
+    const match = disposition.match(
+        /filename="?([^"]+)"?/i
     );
+
+    return match?.[1] ?? fallback;
 }
 
 export default function Reports() {

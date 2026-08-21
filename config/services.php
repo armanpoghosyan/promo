@@ -38,8 +38,14 @@ return [
     'turnstile' => [
         'site_key' => env('TURNSTILE_SITE_KEY'),
         'secret' => env('TURNSTILE_SECRET'),
+        'expected_hostname' => env(
+            'TURNSTILE_EXPECTED_HOSTNAME'
+        ),
+        'expected_action' => env(
+            'TURNSTILE_EXPECTED_ACTION',
+            'receipt-submit'
+        ),
     ],
-
     'random' => [
         'provider' => env('RANDOM_PROVIDER', 'local'),
     ],

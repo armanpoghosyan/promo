@@ -14,6 +14,11 @@ class SubmitReceiptRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'turnstile_token' => [
+                'required',
+                'string',
+                'max:2048',
+            ],
             'first_name' => [
                 'required',
                 'string',

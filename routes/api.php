@@ -15,12 +15,12 @@ use Illuminate\Support\Facades\Route;
 Route::post(
     '/participants/receipts',
     [ParticipantReceiptController::class, 'store']
-);
+)->middleware('throttle:receipt-submissions');
 
 Route::post(
     '/admin/login',
     [AuthController::class, 'login']
-);
+)->middleware('throttle:admin-login');
 
 Route::prefix('admin')
     ->middleware('auth:sanctum')

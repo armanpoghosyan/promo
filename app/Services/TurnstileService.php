@@ -15,14 +15,26 @@ class TurnstileService
             return true;
         }
 
-        $response = Http::asForm()->post(
-            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-            [
-                'secret' => config('services.turnstile.secret'),
-                'response' => $token,
-                'remoteip' => $ip,
-            ]
-        );
+        $secret = config('services.turnstile.secret');
+
+        if (! is_string($secret) || $secret === '') {
+            throw new RuntimeException(
+                'CAPTCHA verification is not configured.'
+            );
+        }
+
+        $response = Http::asForm()
+            ->connectTimeout(3)
+            ->timeout(8)
+            ->retry(2, 200)
+            ->post(
+                'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+                [
+                    'secret' => $secret,
+                    'response' => $token,
+                    'remoteip' => $ip,
+                ]
+            );
 
         if (! $response->successful()) {
             throw new RuntimeException(
@@ -30,6 +42,28 @@ class TurnstileService
             );
         }
 
-        return $response->json('success') === true;
+        if ($response->json('success') !== true) {
+            return false;
+        }
+
+        $expectedHostname = config(
+            'services.turnstile.expected_hostname'
+        );
+
+        if (
+            is_string($expectedHostname)
+            && $expectedHostname !== ''
+            && $response->json('hostname') !== $expectedHostname
+        ) {
+            return false;
+        }
+
+        $expectedAction = config(
+            'services.turnstile.expected_action'
+        );
+
+        return ! is_string($expectedAction)
+            || $expectedAction === ''
+            || $response->json('action') === $expectedAction;
     }
 }

@@ -1,4 +1,6 @@
-import {useState, type ChangeEvent, type FormEvent, type ReactNode} from 'react';
+import {useCallback, useState, type ChangeEvent, type FormEvent, type ReactNode,} from 'react';
+
+import TurnstileWidget from '../components/TurnstileWidget';
 
 import api from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -17,6 +19,7 @@ type FormState = {
 
 type FormErrors = Partial<
     Record<
+        | 'turnstile_token'
         | 'first_name'
         | 'last_name'
         | 'phone'
@@ -72,6 +75,9 @@ export default function Landing() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [turnstileToken, setTurnstileToken] = useState('');
+    const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+
     const [success, setSuccess] = useState<string | null>(null);
 
     const [modal, setModal] = useState<ModalType>(null);
@@ -100,6 +106,10 @@ export default function Landing() {
 
     const validateForm = (): boolean => {
         const errors: FormErrors = {};
+
+        if (!turnstileToken) {
+            errors.turnstile_token = tr('Please complete the CAPTCHA verification.');
+        }
 
         if (!form.first_name.trim()) {
             errors.first_name = tr('This field is required.');
@@ -145,6 +155,8 @@ export default function Landing() {
     };
 
     const resetForm = () => {
+        setTurnstileToken('');
+        setTurnstileResetKey((current) => current + 1);
         setForm(initialForm);
         setReceiptImage(null);
         setFieldErrors({});
@@ -166,6 +178,7 @@ export default function Landing() {
 
         const data = new FormData();
 
+        data.append('turnstile_token', turnstileToken);
         data.append('first_name', form.first_name.trim());
         data.append('last_name', form.last_name.trim());
         data.append('phone', form.phone.trim());
@@ -175,11 +188,6 @@ export default function Landing() {
         data.append('privacy_policy_accepted', '1');
         data.append('official_rules_accepted', '1');
         data.append('personal_data_consent', '1');
-
-        /*
-         * CAPTCHA token will be
-         * added here later.
-         */
 
         setSubmitting(true);
 
@@ -217,8 +225,34 @@ export default function Landing() {
             setError(tr(err.response?.data?.message) ?? tr('Unable to submit participation. Please try again.'));
         } finally {
             setSubmitting(false);
+            setSubmitting(false);
+            setTurnstileToken('');
+            setTurnstileResetKey((current) => current + 1);
         }
     };
+
+    const handleTurnstileUnavailable = useCallback(() => {
+        setTurnstileToken('');
+
+        setFieldErrors((current) => ({
+            ...current,
+            turnstile_token: tr('CAPTCHA could not be loaded. Please refresh and try again.'),
+        }));
+    }, [tr]);
+
+    const handleTurnstileToken = useCallback(
+        (token: string) => {
+            setTurnstileToken(token);
+
+            if (token) {
+                setFieldErrors((current) => ({
+                    ...current,
+                    turnstile_token: undefined,
+                }));
+            }
+        },
+        []
+    );
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -422,8 +456,18 @@ export default function Landing() {
 
                         {/* CAPTCHA */}
 
-                        <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
-                            <div className="text-sm font-medium text-gray-700">CAPTCHA</div>
+                        <div className="mt-5">
+                            <TurnstileWidget
+                                key={turnstileResetKey}
+                                onTokenChange={handleTurnstileToken}
+                                onUnavailable={handleTurnstileUnavailable}
+                            />
+
+                            {fieldErrors.turnstile_token && (
+                                <InlineError>
+                                    {fieldErrors.turnstile_token}
+                                </InlineError>
+                            )}
                         </div>
 
                         {/* Consents */}
