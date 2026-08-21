@@ -1,565 +1,294 @@
-import {
-    useEffect,
-    useMemo,
-    useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
-import {
-    Link,
-} from 'react-router-dom';
-
-import api from '../../services/api';
+import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 
+import api from '../../services/api';
+
 import type {
-    ApiError,
-} from '../../types/api';
+    CreateDrawResponse,
+    Draw,
+    DrawListResponse,
+} from '../../types/draw';
 
-import {
-    formatDateTime,
-} from '../../utils/date';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { formatDateTime } from '../../utils/date';
 
-type Prize = {
-    id: number;
-    name: string;
-    type: string;
-    value: number | null;
-    currency: string | null;
-    total_quantity: number;
-};
+const PROMOTION_WEEKS = [1, 2, 3, 4, 5];
 
-type DrawPrize = {
-    id: number;
-    draw_id: number;
-    prize_id: number;
-    quantity: number;
-    prize: Prize;
-};
+interface DrawProgress {
+    label: string;
+    description: string;
+    tone: string;
+}
 
-type Draw = {
-    id: number;
-    week_number: number;
-    draw_date: string | null;
-    status: string;
+function totalPrizeQuantity(draw: Draw): number {
+    return (draw.draw_prizes ?? []).reduce(
+        (total, drawPrize) => total + drawPrize.quantity,
+        0
+    );
+}
 
-    started_at: string | null;
-    completed_at: string | null;
-    snapshot_at: string | null;
+function drawProgress(draw: Draw): DrawProgress {
+    if (draw.status === 'completed') {
+        return {
+            label: 'Draw completed',
+            description: 'Winner selection has been completed.',
+            tone: 'text-green-700',
+        };
+    }
 
-    random_provider: string | null;
-    randomized_at: string | null;
+    if (draw.snapshot_at) {
+        return {
+            label: 'Ready to execute',
+            description: 'Eligible entries are locked.',
+            tone: 'text-blue-700',
+        };
+    }
 
-    eligible_entries_count: number;
-    required_winners: number;
-    can_prepare: boolean;
+    if ((draw.draw_prizes ?? []).length === 0) {
+        return {
+            label: 'Configure prizes',
+            description: 'Add prizes before preparing the draw.',
+            tone: 'text-amber-700',
+        };
+    }
 
-    draw_prizes: DrawPrize[];
-};
+    if (draw.can_prepare === false) {
+        return {
+            label: 'Not ready to prepare',
+            description:
+                draw.blocking_reason ??
+                'The draw requirements have not been met.',
+            tone: 'text-amber-700',
+        };
+    }
 
-type DrawListResponse = {
-    data: Draw[];
-};
-
-type CreateDrawResponse = {
-    message?: string;
-    data: Draw;
-};
+    return {
+        label: 'Ready to prepare',
+        description: 'Prize allocation is configured.',
+        tone: 'text-gray-700',
+    };
+}
 
 export default function Draws() {
-    const [
-        draws,
-        setDraws,
-    ] = useState<Draw[]>([]);
+    const [draws, setDraws] = useState<Draw[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    const [
-        loading,
-        setLoading,
-    ] = useState(true);
+    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [createLoading, setCreateLoading] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
+    const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
-    const [
-        error,
-        setError,
-    ] = useState<string | null>(
-        null
-    );
+    const [newWeekNumber, setNewWeekNumber] = useState<number | ''>('');
+    const [newDrawDate, setNewDrawDate] = useState('');
 
-    const [
-        showCreateForm,
-        setShowCreateForm,
-    ] = useState(false);
+    const loadDraws = useCallback(async () => {
+        setLoading(true);
+        setError(null);
 
-    const [
-        createLoading,
-        setCreateLoading,
-    ] = useState(false);
+        try {
+            const response = await api.get<DrawListResponse>(
+                '/admin/draws'
+            );
 
-    const [
-        createError,
-        setCreateError,
-    ] = useState<string | null>(
-        null
-    );
-
-    const [
-        createSuccess,
-        setCreateSuccess,
-    ] = useState<string | null>(
-        null
-    );
-
-    const [
-        newWeekNumber,
-        setNewWeekNumber,
-    ] = useState<number | ''>(
-        ''
-    );
-
-    const [
-        newDrawDate,
-        setNewDrawDate,
-    ] = useState('');
-
-    const loadDraws =
-        async () => {
-            setLoading(true);
-            setError(null);
-
-            try {
-                const response =
-                    await api.get<DrawListResponse>(
-                        '/admin/draws'
-                    );
-
-                setDraws(
-                    response.data
-                        .data ?? []
-                );
-            } catch (err) {
-                console.error(err);
-
-                setError(
-                    'Unable to load draws.'
-                );
-            } finally {
-                setLoading(false);
-            }
-        };
+            setDraws(response.data.data ?? []);
+        } catch (error: unknown) {
+            setError(
+                getApiErrorMessage(error, 'Unable to load draws.')
+            );
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         loadDraws();
-    }, []);
+    }, [loadDraws]);
 
-    const usedWeeks =
-        useMemo(
-            () =>
-                new Set(
-                    draws.map(
-                        (draw) =>
-                            draw.week_number
-                    )
-                ),
-            [draws]
+    const availableWeeks = useMemo(() => {
+        const usedWeeks = new Set(
+            draws.map((draw) => draw.week_number)
         );
 
-    const availableWeeks =
-        useMemo(
-            () =>
-                [
-                    1,
-                    2,
-                    3,
-                    4,
-                    5,
-                ].filter(
-                    (week) =>
-                        !usedWeeks.has(
-                            week
-                        )
-                ),
-            [usedWeeks]
+        return PROMOTION_WEEKS.filter(
+            (week) => !usedWeeks.has(week)
         );
+    }, [draws]);
 
-    const createDraw =
-        async () => {
-            if (
-                newWeekNumber === '' ||
-                !newDrawDate
-            ) {
-                return;
-            }
+    const closeCreateForm = () => {
+        setShowCreateForm(false);
+        setCreateError(null);
+        setNewWeekNumber('');
+        setNewDrawDate('');
+    };
 
-            setCreateLoading(true);
-            setCreateError(null);
-            setCreateSuccess(null);
+    const createDraw = async () => {
+        if (newWeekNumber === '' || !newDrawDate) {
+            return;
+        }
 
-            try {
-                const response =
-                    await api.post<CreateDrawResponse>(
-                        '/admin/draws',
-                        {
-                            week_number:
-                            newWeekNumber,
+        setCreateLoading(true);
+        setCreateError(null);
+        setCreateSuccess(null);
 
-                            draw_date:
-                            newDrawDate,
-                        }
-                    );
-
-                setCreateSuccess(
-                    response.data
-                        .message ??
-                    'Draw created successfully.'
-                );
-
-                setNewWeekNumber(
-                    ''
-                );
-
-                setNewDrawDate(
-                    ''
-                );
-
-                setShowCreateForm(
-                    false
-                );
-
-                await loadDraws();
-            } catch (err) {
-                console.error(err);
-
-                const apiError =
-                    err as ApiError;
-
-                const validationErrors =
-                    apiError.response
-                        ?.data
-                        ?.errors;
-
-                if (
-                    validationErrors
-                ) {
-                    const firstMessage =
-                        Object.values(
-                            validationErrors
-                        )[0]?.[0];
-
-                    setCreateError(
-                        firstMessage ??
-                        'Unable to create draw.'
-                    );
-                } else {
-                    setCreateError(
-                        apiError.response
-                            ?.data
-                            ?.message ??
-                        'Unable to create draw.'
-                    );
+        try {
+            const response = await api.post<CreateDrawResponse>(
+                '/admin/draws',
+                {
+                    week_number: newWeekNumber,
+                    draw_date: newDrawDate,
                 }
-            } finally {
-                setCreateLoading(
-                    false
-                );
-            }
-        };
+            );
 
-    const getTotalPrizes = (
-        draw: Draw
-    ) =>
-        draw.draw_prizes.reduce(
-            (
-                total,
-                drawPrize
-            ) =>
-                total +
-                drawPrize.quantity,
-            0
-        );
+            setCreateSuccess(
+                response.data.message ??
+                'Draw created successfully.'
+            );
 
-    const getProgress = (
-        draw: Draw
-    ) => {
-        if (
-            draw.status ===
-            'completed'
-        ) {
-            return {
-                label:
-                    'Draw completed',
-
-                description:
-                    'Winner selection has been completed.',
-
-                tone:
-                    'text-green-700',
-            };
+            closeCreateForm();
+            await loadDraws();
+        } catch (error: unknown) {
+            setCreateError(
+                getApiErrorMessage(
+                    error,
+                    'Unable to create draw.'
+                )
+            );
+        } finally {
+            setCreateLoading(false);
         }
-
-        if (
-            draw.status ===
-            'running' &&
-            draw.snapshot_at
-        ) {
-            return {
-                label:
-                    'Ready to execute',
-
-                description:
-                    `${draw.eligible_entries_count} frozen entries.`,
-
-                tone:
-                    'text-blue-700',
-            };
-        }
-
-        if (
-            draw.draw_prizes
-                .length ===
-            0
-        ) {
-            return {
-                label:
-                    'Configure prizes',
-
-                description:
-                    'Add prizes before preparing the draw.',
-
-                tone:
-                    'text-amber-700',
-            };
-        }
-
-        if (
-            draw.eligible_entries_count <
-            draw.required_winners
-        ) {
-            return {
-                label:
-                    'Not enough entries',
-
-                description:
-                    `${draw.eligible_entries_count} eligible / ${draw.required_winners} required.`,
-
-                tone:
-                    'text-red-700',
-            };
-        }
-
-        if (
-            draw.can_prepare
-        ) {
-            return {
-                label:
-                    'Ready to prepare',
-
-                description:
-                    `${draw.eligible_entries_count} eligible / ${draw.required_winners} required.`,
-
-                tone:
-                    'text-green-700',
-            };
-        }
-
-        return {
-            label:
-                'Review draw',
-
-            description:
-                'Open the draw to review its current state.',
-
-            tone:
-                'text-gray-700',
-        };
     };
 
     return (
-        <div className="space-y-6">
-
-            {/* Header */}
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
-                <div>
-
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Draws
-                    </h2>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                        Create, configure and execute weekly promotion draws.
-                    </p>
-
-                </div>
-
-                <button
-                    type="button"
-                    onClick={() => {
-                        setShowCreateForm(
-                            (current) =>
-                                !current
-                        );
-
-                        setCreateError(
-                            null
-                        );
-                    }}
-                    disabled={
-                        availableWeeks
-                            .length ===
-                        0
-                    }
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    Create Draw
-                </button>
-
-            </div>
-
-            {/* Success */}
-
-            {createSuccess && (
-                <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-
-                    <span>
-                        {createSuccess}
-                    </span>
-
+        <div className="space-y-5">
+            <PageHeader
+                title="Draws"
+                description="Create, configure and execute weekly promotion draws."
+                action={
                     <button
                         type="button"
-                        onClick={() =>
-                            setCreateSuccess(
-                                null
-                            )
-                        }
-                        className="font-medium"
+                        onClick={() => {
+                            setShowCreateForm((current) => !current);
+                            setCreateError(null);
+                        }}
+                        disabled={availableWeeks.length === 0}
+                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        ×
+                        Create Draw
                     </button>
+                }
+            />
 
-                </div>
+            {createSuccess && (
+                <Alert
+                    variant="success"
+                    onDismiss={() => setCreateSuccess(null)}
+                >
+                    {createSuccess}
+                </Alert>
             )}
 
-            {/* Create draw */}
-
             {showCreateForm && (
-
-                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                    <div className="border-b border-gray-200 px-5 py-4">
-
-                        <h3 className="font-semibold text-gray-900">
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="border-b border-gray-200 px-4 py-3">
+                        <h2 className="font-semibold text-gray-900">
                             Create Draw
-                        </h3>
+                        </h2>
 
-                        <p className="mt-1 text-sm text-gray-500">
-                            Create a weekly draw. Prize allocation can be configured afterward.
+                        <p className="mt-0.5 text-sm text-gray-500">
+                            Create a weekly draw. Prize allocation can
+                            be configured afterward.
                         </p>
-
                     </div>
 
-                    <div className="p-5">
-
+                    <div className="p-4">
                         {createError && (
-                            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                                {createError}
+                            <div className="mb-4">
+                                <Alert
+                                    variant="error"
+                                    onDismiss={() =>
+                                        setCreateError(null)
+                                    }
+                                >
+                                    {createError}
+                                </Alert>
                             </div>
                         )}
 
-                        <div className="grid gap-4 md:grid-cols-[200px_260px_auto] md:items-end">
-
+                        <div className="grid gap-3 md:grid-cols-[180px_250px_auto] md:items-end">
                             <div>
-
-                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                <label
+                                    htmlFor="draw-week"
+                                    className="mb-1 block text-sm font-medium text-gray-700"
+                                >
                                     Week
                                 </label>
 
                                 <select
-                                    value={
-                                        newWeekNumber
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
+                                    id="draw-week"
+                                    value={newWeekNumber}
+                                    onChange={(event) =>
                                         setNewWeekNumber(
-                                            event
-                                                .target
-                                                .value
+                                            event.target.value
                                                 ? Number(
-                                                    event
-                                                        .target
-                                                        .value
+                                                    event.target.value
                                                 )
                                                 : ''
                                         )
                                     }
-                                    disabled={
-                                        createLoading
-                                    }
+                                    disabled={createLoading}
                                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                                 >
-
                                     <option value="">
                                         Select week
                                     </option>
 
-                                    {availableWeeks.map(
-                                        (week) => (
-                                            <option
-                                                key={
-                                                    week
-                                                }
-                                                value={
-                                                    week
-                                                }
-                                            >
-                                                Week{' '}
-                                                {week}
-                                            </option>
-                                        )
-                                    )}
-
+                                    {availableWeeks.map((week) => (
+                                        <option
+                                            key={week}
+                                            value={week}
+                                        >
+                                            Week {week}
+                                        </option>
+                                    ))}
                                 </select>
-
                             </div>
 
                             <div>
-
-                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                <label
+                                    htmlFor="draw-date"
+                                    className="mb-1 block text-sm font-medium text-gray-700"
+                                >
                                     Draw Date
                                 </label>
 
                                 <input
+                                    id="draw-date"
                                     type="datetime-local"
-                                    value={
-                                        newDrawDate
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
+                                    value={newDrawDate}
+                                    onChange={(event) =>
                                         setNewDrawDate(
-                                            event
-                                                .target
-                                                .value
+                                            event.target.value
                                         )
                                     }
-                                    disabled={
-                                        createLoading
-                                    }
+                                    disabled={createLoading}
                                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
                                 />
-
                             </div>
 
                             <div className="flex gap-2">
-
                                 <button
                                     type="button"
-                                    onClick={
-                                        createDraw
-                                    }
+                                    onClick={createDraw}
                                     disabled={
                                         createLoading ||
-                                        newWeekNumber ===
-                                        '' ||
+                                        newWeekNumber === '' ||
                                         !newDrawDate
                                     }
                                     className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -571,325 +300,231 @@ export default function Draws() {
 
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowCreateForm(
-                                            false
-                                        );
-
-                                        setCreateError(
-                                            null
-                                        );
-
-                                        setNewWeekNumber(
-                                            ''
-                                        );
-
-                                        setNewDrawDate(
-                                            ''
-                                        );
-                                    }}
-                                    disabled={
-                                        createLoading
-                                    }
-                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    onClick={closeCreateForm}
+                                    disabled={createLoading}
+                                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
-
                             </div>
-
                         </div>
-
                     </div>
-
                 </section>
             )}
 
-            {/* Error */}
-
-            {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {error}
-                </div>
-            )}
-
-            {/* Draw list */}
-
-            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
-                {loading ? (
-
-                    <div className="flex min-h-64 items-center justify-center text-sm text-gray-500">
-                        Loading draws...
-                    </div>
-
-                ) : draws.length ===
-                0 ? (
-
-                    <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-
-                        <div className="text-sm font-medium text-gray-700">
-                            No draws created.
-                        </div>
-
-                        <p className="mt-1 text-sm text-gray-400">
-                            Create the first promotion draw to get started.
-                        </p>
-
-                    </div>
-
-                ) : (
-
-                    <div className="divide-y divide-gray-100">
-
-                        {draws.map(
-                            (draw) => {
-                                const progress =
-                                    getProgress(
-                                        draw
-                                    );
-
-                                const totalPrizes =
-                                    getTotalPrizes(
-                                        draw
-                                    );
-
-                                return (
-                                    <div
-                                        key={
-                                            draw.id
-                                        }
-                                        className="p-5 transition hover:bg-gray-50"
-                                    >
-
-                                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
-                                            {/* Draw */}
-
-                                            <div className="min-w-0 flex-1">
-
-                                                <div className="flex flex-wrap items-center gap-3">
-
-                                                    <div className="text-lg font-semibold text-gray-900">
-                                                        Week{' '}
-                                                        {draw.week_number}
-                                                    </div>
-
-                                                    <StatusBadge
-                                                        status={
-                                                            draw.status
-                                                        }
-                                                    />
-
-                                                </div>
-
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    {formatDateTime(
-                                                        draw.draw_date
-                                                    )}
-
-                                                    {' · '}
-
-                                                    Draw #
-                                                    {draw.id}
-                                                </div>
-
-                                            </div>
-
-                                            {/* Prize allocation */}
-
-                                            <div className="lg:w-80">
-
-                                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                    Prize Allocation
-                                                </div>
-
-                                                <div className="mt-1 text-sm font-medium text-gray-900">
-                                                    {totalPrizes}{' '}
-                                                    winner
-                                                    {totalPrizes ===
-                                                    1
-                                                        ? ''
-                                                        : 's'}
-                                                </div>
-
-                                                {draw.draw_prizes
-                                                        .length >
-                                                    0 && (
-
-                                                        <div className="mt-1 text-xs text-gray-500">
-
-                                                            {draw.draw_prizes
-                                                                .map(
-                                                                    (
-                                                                        item
-                                                                    ) =>
-                                                                        `${item.prize.name} × ${item.quantity}`
-                                                                )
-                                                                .join(
-                                                                    ' · '
-                                                                )}
-
-                                                        </div>
-                                                    )}
-
-                                                {!draw.snapshot_at &&
-                                                    draw.draw_prizes
-                                                        .length >
-                                                    0 && (
-
-                                                        <div className="mt-2 text-xs text-gray-500">
-
-                                                            Eligible:{' '}
-
-                                                            <span
-                                                                className={
-                                                                    draw.eligible_entries_count <
-                                                                    draw.required_winners
-                                                                        ? 'font-semibold text-red-700'
-                                                                        : 'font-semibold text-gray-700'
-                                                                }
-                                                            >
-                                                            {draw.eligible_entries_count}
-                                                        </span>
-
-                                                            {' · '}
-
-                                                            Required:{' '}
-
-                                                            <span className="font-semibold text-gray-700">
-                                                            {draw.required_winners}
-                                                        </span>
-
-                                                        </div>
-                                                    )}
-
-                                                {draw.snapshot_at && (
-
-                                                    <div className="mt-2 text-xs text-gray-500">
-                                                        Frozen entries:{' '}
-
-                                                        <span className="font-semibold text-gray-700">
-                                                            {draw.eligible_entries_count}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                            </div>
-
-                                            {/* Next step */}
-
-                                            <div className="lg:w-56">
-
-                                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                    Next Step
-                                                </div>
-
-                                                <div
-                                                    className={`mt-1 text-sm font-medium ${progress.tone}`}
-                                                >
-                                                    {progress.label}
-                                                </div>
-
-                                                <div className="mt-1 text-xs text-gray-400">
-                                                    {progress.description}
-                                                </div>
-
-                                            </div>
-
-                                            {/* Action */}
-
-                                            <div className="lg:w-28 lg:text-right">
-
-                                                <Link
-                                                    to={`/admin/draws/${draw.id}`}
-                                                    className="inline-flex rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                                                >
-                                                    Manage
-                                                </Link>
-
-                                            </div>
-
-                                        </div>
-
-                                    </div>
-                                );
-                            }
-                        )}
-
-                    </div>
-                )}
-
-            </section>
-
-            {/* Promotion schedule */}
-
             {draws.length > 0 && (
-
-                <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
+                <section className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-
-                            <h3 className="font-semibold text-gray-900">
+                            <h2 className="text-sm font-semibold text-gray-900">
                                 Promotion Schedule
-                            </h3>
+                            </h2>
 
-                            <p className="mt-1 text-sm text-gray-500">
-                                {draws.length} of 5 weekly draws have been created.
+                            <p className="mt-0.5 text-xs text-gray-500">
+                                {draws.length} of {PROMOTION_WEEKS.length}{' '}
+                                weekly draws created.
                             </p>
-
                         </div>
 
                         <div className="flex gap-2">
+                            {PROMOTION_WEEKS.map((week) => {
+                                const draw = draws.find(
+                                    (item) =>
+                                        item.week_number === week
+                                );
 
-                            {[
-                                1,
-                                2,
-                                3,
-                                4,
-                                5,
-                            ].map(
-                                (week) => {
-                                    const draw =
-                                        draws.find(
-                                            (
-                                                item
-                                            ) =>
-                                                item.week_number ===
-                                                week
-                                        );
-
-                                    return (
-                                        <div
-                                            key={
-                                                week
-                                            }
-                                            title={
-                                                draw
-                                                    ? `Week ${week}: ${draw.status}`
-                                                    : `Week ${week}: not created`
-                                            }
-                                            className={
-                                                draw
-                                                    ? 'flex h-10 w-10 items-center justify-center rounded-lg bg-gray-900 text-sm font-semibold text-white'
-                                                    : 'flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm font-medium text-gray-400'
-                                            }
-                                        >
-                                            {week}
-                                        </div>
-                                    );
-                                }
-                            )}
-
+                                return (
+                                    <div
+                                        key={week}
+                                        title={
+                                            draw
+                                                ? `Week ${week}: ${draw.status}`
+                                                : `Week ${week}: not created`
+                                        }
+                                        className={
+                                            draw
+                                                ? 'flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-sm font-semibold text-white'
+                                                : 'flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm font-medium text-gray-400'
+                                        }
+                                    >
+                                        {week}
+                                    </div>
+                                );
+                            })}
                         </div>
-
                     </div>
-
                 </section>
             )}
 
+            {error && (
+                <Alert
+                    variant="error"
+                    onDismiss={() => setError(null)}
+                >
+                    {error}
+                </Alert>
+            )}
+
+            <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {loading ? (
+                    <LoadingState message="Loading draws..." />
+                ) : draws.length === 0 ? (
+                    <EmptyState
+                        title="No draws created."
+                        description="Create the first promotion draw to get started."
+                    />
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[960px] text-left text-sm">
+                            <thead className="bg-gray-50">
+                            <tr>
+                                <TableHeader>Draw</TableHeader>
+                                <TableHeader>Prizes</TableHeader>
+                                <TableHeader>Entries</TableHeader>
+                                <TableHeader>Next Step</TableHeader>
+                                <th className="px-4 py-2.5" />
+                            </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-gray-100">
+                            {draws.map((draw) => {
+                                const prizes =
+                                    draw.draw_prizes ?? [];
+
+                                const prizeQuantity =
+                                    totalPrizeQuantity(draw);
+
+                                const progress =
+                                    drawProgress(draw);
+
+                                const entriesLabel = draw.snapshot_at
+                                    ? `${draw.entries_count ?? 0} frozen`
+                                    : `${
+                                        draw.eligible_entries_count ??
+                                        0
+                                    } eligible`;
+
+                                return (
+                                    <tr
+                                        key={draw.id}
+                                        className="transition hover:bg-gray-50"
+                                    >
+                                        <td className="px-4 py-3 align-top">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">
+                                                        Week{' '}
+                                                        {draw.week_number}
+                                                    </span>
+
+                                                <StatusBadge
+                                                    status={
+                                                        draw.status
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="mt-1 text-xs text-gray-500">
+                                                {formatDateTime(
+                                                    draw.draw_date
+                                                )}
+                                            </div>
+
+                                            <div className="mt-0.5 text-[11px] text-gray-400">
+                                                Draw #{draw.id}
+                                            </div>
+                                        </td>
+
+                                        <td className="px-4 py-3 align-top">
+                                            <div className="font-medium text-gray-900">
+                                                {prizeQuantity}{' '}
+                                                winner
+                                                {prizeQuantity === 1
+                                                    ? ''
+                                                    : 's'}
+                                            </div>
+
+                                            {prizes.length > 0 ? (
+                                                <div className="mt-1 max-w-[330px] text-xs text-gray-500">
+                                                    {prizes
+                                                        .map(
+                                                            (
+                                                                item
+                                                            ) =>
+                                                                `${
+                                                                    item
+                                                                        .prize
+                                                                        ?.name ??
+                                                                    'Prize'
+                                                                } × ${
+                                                                    item.quantity
+                                                                }`
+                                                        )
+                                                        .join(' · ')}
+                                                </div>
+                                            ) : (
+                                                <div className="mt-1 text-xs text-gray-400">
+                                                    No prizes
+                                                    configured
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        <td className="px-4 py-3 align-top">
+                                            <div className="font-medium text-gray-900">
+                                                {entriesLabel}
+                                            </div>
+
+                                            {!draw.snapshot_at && (
+                                                <div className="mt-1 text-xs text-gray-500">
+                                                    {draw.required_winners ??
+                                                        prizeQuantity}{' '}
+                                                    required
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        <td className="px-4 py-3 align-top">
+                                            <div
+                                                className={`font-medium ${progress.tone}`}
+                                            >
+                                                {progress.label}
+                                            </div>
+
+                                            <div className="mt-1 max-w-[260px] text-xs text-gray-400">
+                                                {
+                                                    progress.description
+                                                }
+                                            </div>
+                                        </td>
+
+                                        <td className="px-4 py-3 text-right align-top">
+                                            <Link
+                                                to={`/admin/draws/${draw.id}`}
+                                                className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                            >
+                                                Manage →
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
         </div>
+    );
+}
+
+function TableHeader({
+                         children,
+                     }: {
+    children: React.ReactNode;
+}) {
+    return (
+        <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            {children}
+        </th>
     );
 }

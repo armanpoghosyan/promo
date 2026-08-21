@@ -9,10 +9,8 @@ export type DrawStatus =
 
 export interface DrawPrize {
     id: number;
-
     draw_id: number;
     prize_id: number;
-
     quantity: number;
 
     created_at?: string;
@@ -21,14 +19,16 @@ export interface DrawPrize {
     prize?: Prize;
 }
 
+export interface DrawPrizeDetail
+    extends Omit<DrawPrize, 'prize'> {
+    prize: Prize;
+}
+
 export interface DrawEntry {
     id: number;
-
     draw_id: number;
     receipt_id: number;
-
     entry_number: number;
-
     created_at: string;
     updated_at: string;
 }
@@ -48,10 +48,8 @@ export interface DrawRandomResponse {
 
 export interface Draw {
     id: number;
-
     week_number: number;
-    draw_date: string;
-
+    draw_date: string | null;
     status: DrawStatus;
 
     completed_at: string | null;
@@ -59,10 +57,8 @@ export interface Draw {
 
     random_provider: string | null;
     random_request_id: string | null;
-
     random_request: DrawRandomRequest | null;
     random_response: DrawRandomResponse | null;
-
     randomized_at: string | null;
 
     created_by: number | null;
@@ -72,7 +68,6 @@ export interface Draw {
 
     eligible_entries_count?: number;
     required_winners?: number;
-
     can_prepare?: boolean;
     blocking_reason?: string | null;
 
@@ -83,12 +78,31 @@ export interface Draw {
     winners?: Winner[];
 }
 
+export interface DrawDetail
+    extends Omit<
+        Draw,
+        | 'eligible_entries_count'
+        | 'required_winners'
+        | 'can_prepare'
+        | 'draw_prizes'
+        | 'entries'
+        | 'winners'
+    > {
+    eligible_entries_count: number;
+    required_winners: number;
+    can_prepare: boolean;
+
+    draw_prizes: DrawPrizeDetail[];
+    entries: DrawEntry[];
+    winners: Winner[];
+}
+
 export interface DrawListResponse {
     data: Draw[];
 }
 
 export interface DrawResponse {
-    data: Draw;
+    data: DrawDetail;
 }
 
 export interface CreateDrawResponse {

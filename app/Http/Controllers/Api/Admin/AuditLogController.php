@@ -76,8 +76,7 @@ class AuditLogController extends Controller
             strtotime($filters['date_from'])
         ) {
             return response()->json([
-                'message' =>
-                    'The date to must be after or equal to date from.',
+                'message' => 'The date to must be after or equal to date from.',
 
                 'errors' => [
                     'date_to' => [
@@ -191,21 +190,16 @@ class AuditLogController extends Controller
                 trim($type)
             )
         ) {
-            'receipt' =>
-                Receipt::class,
+            'receipt' => Receipt::class,
 
-            'draw' =>
-                Draw::class,
+            'draw' => Draw::class,
 
             'winner',
-            'draw_winner' =>
-                DrawWinner::class,
+            'draw_winner' => DrawWinner::class,
 
-            'user' =>
-                User::class,
+            'user' => User::class,
 
-            default =>
-                $type,
+            default => $type,
         };
     }
 }

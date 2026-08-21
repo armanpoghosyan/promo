@@ -4,9 +4,7 @@ import {
     useState,
 } from 'react';
 
-import {
-    Link,
-} from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import Alert from '../Alert';
 import LoadingState from '../LoadingState';
@@ -19,22 +17,15 @@ import type {
     Receipt,
     ReceiptNoteResponse,
     ReceiptResponse,
-    SuspiciousReason,
 } from '../../types/receipt';
 
-import {
-    getApiErrorMessage,
-} from '../../utils/apiError';
-
-import {
-    formatDateTime,
-} from '../../utils/date';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { formatDateTime } from '../../utils/date';
+import { suspiciousReasonLabel } from '../../utils/receipt';
 
 type Props = {
     receiptId: number;
-
     backUrl: string;
-
     hideParticipant?: boolean;
 
     onClose: () => void;
@@ -43,46 +34,6 @@ type Props = {
         receipt: Receipt
     ) => void;
 };
-
-const suspiciousReasonLabels: Record<
-    string,
-    string
-> = {
-    duplicate_receipt_number:
-        'Duplicate receipt number',
-
-    duplicate_receipt_image:
-        'Duplicate receipt image',
-
-    phone_used_by_another_participant:
-        'Phone used by another participant',
-
-    email_used_by_another_participant:
-        'Email used by another participant',
-
-    receipt_number_non_numeric:
-        'Receipt number contains unexpected characters',
-};
-
-function suspiciousReasonLabel(
-    reason: SuspiciousReason
-): string {
-    return (
-        suspiciousReasonLabels[
-            reason
-            ] ??
-        reason
-            .replaceAll(
-                '_',
-                ' '
-            )
-            .replace(
-                /\b\w/g,
-                (character) =>
-                    character.toUpperCase()
-            )
-    );
-}
 
 export default function ReceiptQuickReviewModal({
                                                     receiptId,
@@ -94,16 +45,10 @@ export default function ReceiptQuickReviewModal({
     const [
         activeReceiptId,
         setActiveReceiptId,
-    ] = useState(
-        receiptId
-    );
+    ] = useState(receiptId);
 
-    const [
-        receipt,
-        setReceipt,
-    ] = useState<Receipt | null>(
-        null
-    );
+    const [receipt, setReceipt] =
+        useState<Receipt | null>(null);
 
     const [
         receiptHistory,
@@ -112,17 +57,11 @@ export default function ReceiptQuickReviewModal({
         receiptId,
     ]);
 
-    const [
-        loading,
-        setLoading,
-    ] = useState(true);
+    const [loading, setLoading] =
+        useState(true);
 
-    const [
-        error,
-        setError,
-    ] = useState<string | null>(
-        null
-    );
+    const [error, setError] =
+        useState<string | null>(null);
 
     const [
         actionLoading,
@@ -136,30 +75,24 @@ export default function ReceiptQuickReviewModal({
         null
     );
 
-    const [
-        showReject,
-        setShowReject,
-    ] = useState(false);
+    const [showReject, setShowReject] =
+        useState(false);
 
     const [
         rejectionReason,
         setRejectionReason,
     ] = useState('');
 
-    const [
-        imageOpen,
-        setImageOpen,
-    ] = useState(false);
+    const [imageOpen, setImageOpen] =
+        useState(false);
 
     const [
         showAddNote,
         setShowAddNote,
     ] = useState(false);
 
-    const [
-        newNote,
-        setNewNote,
-    ] = useState('');
+    const [newNote, setNewNote] =
+        useState('');
 
     const [
         noteLoading,
@@ -174,51 +107,24 @@ export default function ReceiptQuickReviewModal({
     );
 
     useEffect(() => {
-        setActiveReceiptId(
-            receiptId
-        );
-
+        setActiveReceiptId(receiptId);
         setReceiptHistory([
             receiptId,
         ]);
-    }, [
-        receiptId,
-    ]);
+    }, [receiptId]);
 
     useEffect(() => {
         const loadReceipt =
             async () => {
-                setLoading(
-                    true
-                );
+                setLoading(true);
+                setError(null);
+                setActionError(null);
+                setNoteError(null);
 
-                setError(
-                    null
-                );
-
-                setActionError(
-                    null
-                );
-
-                setNoteError(
-                    null
-                );
-
-                setShowReject(
-                    false
-                );
-
-                setRejectionReason(
-                    ''
-                );
-
-                setShowAddNote(
-                    false
-                );
-
-                setNewNote(
-                    ''
-                );
+                setShowReject(false);
+                setRejectionReason('');
+                setShowAddNote(false);
+                setNewNote('');
 
                 try {
                     const response =
@@ -232,9 +138,7 @@ export default function ReceiptQuickReviewModal({
                 } catch (
                     error: unknown
                     ) {
-                    setReceipt(
-                        null
-                    );
+                    setReceipt(null);
 
                     setError(
                         getApiErrorMessage(
@@ -243,67 +147,38 @@ export default function ReceiptQuickReviewModal({
                         )
                     );
                 } finally {
-                    setLoading(
-                        false
-                    );
+                    setLoading(false);
                 }
             };
 
         loadReceipt();
-    }, [
-        activeReceiptId,
-    ]);
+    }, [activeReceiptId]);
 
     useEffect(() => {
         const handleKeyDown = (
             event: KeyboardEvent
         ) => {
             if (
-                event.key !==
-                'Escape'
+                event.key !== 'Escape'
             ) {
                 return;
             }
 
-            if (
-                imageOpen
-            ) {
-                setImageOpen(
-                    false
-                );
-
+            if (imageOpen) {
+                setImageOpen(false);
                 return;
             }
 
-            if (
-                showReject
-            ) {
-                setShowReject(
-                    false
-                );
-
-                setRejectionReason(
-                    ''
-                );
-
+            if (showReject) {
+                setShowReject(false);
+                setRejectionReason('');
                 return;
             }
 
-            if (
-                showAddNote
-            ) {
-                setShowAddNote(
-                    false
-                );
-
-                setNewNote(
-                    ''
-                );
-
-                setNoteError(
-                    null
-                );
-
+            if (showAddNote) {
+                setShowAddNote(false);
+                setNewNote('');
+                setNoteError(null);
                 return;
             }
 
@@ -315,12 +190,11 @@ export default function ReceiptQuickReviewModal({
             handleKeyDown
         );
 
-        return () => {
+        return () =>
             window.removeEventListener(
                 'keydown',
                 handleKeyDown
             );
-        };
     }, [
         imageOpen,
         showReject,
@@ -341,6 +215,39 @@ export default function ReceiptQuickReviewModal({
                 previousOverflow;
         };
     }, []);
+
+    const participant =
+        receipt?.participant;
+
+    const otherReceipts =
+        useMemo(
+            () =>
+                (
+                    participant?.receipts ??
+                    []
+                ).filter(
+                    (item) =>
+                        item.id !==
+                        receipt?.id
+                ),
+            [
+                participant,
+                receipt?.id,
+            ]
+        );
+
+    const canReview =
+        receipt?.status ===
+        'submitted';
+
+    const suspicious =
+        Boolean(
+            receipt?.is_suspicious
+        );
+
+    const isRelatedReceipt =
+        activeReceiptId !==
+        receiptId;
 
     const openRelatedReceipt = (
         nextReceiptId: number
@@ -364,51 +271,42 @@ export default function ReceiptQuickReviewModal({
         );
     };
 
-    const goBackReceipt =
-        () => {
-            if (
-                receiptHistory.length <=
-                1
-            ) {
-                return;
-            }
+    const goBackReceipt = () => {
+        if (
+            receiptHistory.length <=
+            1
+        ) {
+            return;
+        }
 
-            const nextHistory =
-                receiptHistory.slice(
-                    0,
-                    -1
-                );
-
-            const previousReceiptId =
-                nextHistory[
-                nextHistory.length -
-                1
-                    ];
-
-            setReceiptHistory(
-                nextHistory
+        const nextHistory =
+            receiptHistory.slice(
+                0,
+                -1
             );
 
-            setActiveReceiptId(
-                previousReceiptId
-            );
-        };
+        const previousReceiptId =
+            nextHistory[
+            nextHistory.length - 1
+                ];
+
+        setReceiptHistory(
+            nextHistory
+        );
+
+        setActiveReceiptId(
+            previousReceiptId
+        );
+    };
 
     const approveReceipt =
         async () => {
-            if (
-                !receipt
-            ) {
+            if (!receipt) {
                 return;
             }
 
-            setActionLoading(
-                true
-            );
-
-            setActionError(
-                null
-            );
+            setActionLoading(true);
+            setActionError(null);
 
             try {
                 const response =
@@ -458,13 +356,8 @@ export default function ReceiptQuickReviewModal({
                 return;
             }
 
-            setActionLoading(
-                true
-            );
-
-            setActionError(
-                null
-            );
+            setActionLoading(true);
+            setActionError(null);
 
             try {
                 const response =
@@ -487,13 +380,8 @@ export default function ReceiptQuickReviewModal({
                     updatedReceipt
                 );
 
-                setShowReject(
-                    false
-                );
-
-                setRejectionReason(
-                    ''
-                );
+                setShowReject(false);
+                setRejectionReason('');
 
                 if (
                     receipt.id ===
@@ -517,121 +405,68 @@ export default function ReceiptQuickReviewModal({
             }
         };
 
-    const addNote =
-        async () => {
-            if (
-                !receipt ||
-                !newNote.trim()
-            ) {
-                return;
-            }
+    const addNote = async () => {
+        if (
+            !receipt ||
+            !newNote.trim()
+        ) {
+            return;
+        }
 
-            setNoteLoading(
-                true
-            );
+        setNoteLoading(true);
+        setNoteError(null);
 
-            setNoteError(
-                null
-            );
-
-            try {
-                const response =
-                    await api.post<ReceiptNoteResponse>(
-                        `/admin/receipts/${receipt.id}/notes`,
-                        {
-                            note:
-                                newNote.trim(),
-                        }
-                    );
-
-                const createdNote =
-                    response.data.data;
-
-                const updatedReceipt: Receipt =
+        try {
+            const response =
+                await api.post<ReceiptNoteResponse>(
+                    `/admin/receipts/${receipt.id}/notes`,
                     {
-                        ...receipt,
-
-                        notes: [
-                            createdNote,
-                            ...(receipt.notes ??
-                                []),
-                        ],
-                    };
-
-                setReceipt(
-                    updatedReceipt
+                        note:
+                            newNote.trim(),
+                    }
                 );
 
-                setNewNote(
-                    ''
-                );
+            const createdNote =
+                response.data.data;
 
-                setShowAddNote(
-                    false
-                );
+            const updatedReceipt: Receipt =
+                {
+                    ...receipt,
 
-                onChanged(
-                    updatedReceipt
-                );
-            } catch (
-                error: unknown
-                ) {
-                setNoteError(
-                    getApiErrorMessage(
-                        error,
-                        'Unable to add note.'
-                    )
-                );
-            } finally {
-                setNoteLoading(
-                    false
-                );
-            }
-        };
+                    notes: [
+                        createdNote,
+                        ...(receipt.notes ??
+                            []),
+                    ],
+                };
 
-    const participant =
-        receipt?.participant;
+            setReceipt(
+                updatedReceipt
+            );
 
-    const otherReceipts =
-        useMemo(
-            () =>
-                (
-                    participant
-                        ?.receipts ??
-                    []
-                ).filter(
-                    (
-                        participantReceipt
-                    ) =>
-                        participantReceipt.id !==
-                        receipt?.id
-                ),
-            [
-                participant,
-                receipt?.id,
-            ]
-        );
+            setNewNote('');
+            setShowAddNote(false);
 
-    const canReview =
-        receipt?.status ===
-        'submitted';
-
-    const suspicious =
-        Boolean(
-            receipt?.is_suspicious
-        );
-
-    const isRelatedReceipt =
-        activeReceiptId !==
-        receiptId;
+            onChanged(
+                updatedReceipt
+            );
+        } catch (error: unknown) {
+            setNoteError(
+                getApiErrorMessage(
+                    error,
+                    'Unable to add note.'
+                )
+            );
+        } finally {
+            setNoteLoading(false);
+        }
+    };
 
     return (
         <>
             <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                onMouseDown={(
-                    event
-                ) => {
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+                onMouseDown={(event) => {
                     if (
                         event.target ===
                         event.currentTarget
@@ -640,10 +475,10 @@ export default function ReceiptQuickReviewModal({
                     }
                 }}
             >
-                <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                     {/* Header */}
 
-                    <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+                    <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-4 py-3">
                         <div>
                             {isRelatedReceipt && (
                                 <button
@@ -651,13 +486,14 @@ export default function ReceiptQuickReviewModal({
                                     onClick={
                                         goBackReceipt
                                     }
-                                    className="mb-2 inline-flex text-xs font-medium text-blue-600 hover:text-blue-800"
+                                    className="mb-1.5 inline-flex text-xs font-medium text-blue-600 hover:text-blue-800"
                                 >
-                                    ← Back to previous receipt
+                                    ← Back to previous
+                                    receipt
                                 </button>
                             )}
 
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <h2 className="text-lg font-semibold text-gray-900">
                                     {receipt
                                         ? `Receipt #${receipt.id}`
@@ -673,20 +509,18 @@ export default function ReceiptQuickReviewModal({
                                 )}
 
                                 {receipt?.is_suspicious && (
-                                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                                        Suspicious
+                                    <span className="text-sm text-amber-600">
+                                        ⚠
                                     </span>
                                 )}
                             </div>
 
                             {receipt && (
-                                <div className="mt-1 text-sm text-gray-500">
+                                <div className="mt-0.5 text-sm text-gray-500">
                                     {
                                         receipt.receipt_number
                                     }
-
-                                    {' · Submitted '}
-
+                                    {' · '}
                                     {formatDateTime(
                                         receipt.submitted_at ??
                                         receipt.created_at
@@ -697,9 +531,7 @@ export default function ReceiptQuickReviewModal({
 
                         <button
                             type="button"
-                            onClick={
-                                onClose
-                            }
+                            onClick={onClose}
                             className="rounded-lg px-3 py-2 text-xl leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                             aria-label="Close"
                         >
@@ -708,12 +540,10 @@ export default function ReceiptQuickReviewModal({
                     </div>
 
                     {loading ? (
-                        <LoadingState
-                            message="Loading receipt..."
-                        />
+                        <LoadingState message="Loading receipt..." />
                     ) : error ||
                     !receipt ? (
-                        <div className="p-6">
+                        <div className="p-4">
                             <Alert variant="error">
                                 {error ??
                                     'Receipt not found.'}
@@ -723,9 +553,9 @@ export default function ReceiptQuickReviewModal({
                         <>
                             <div className="min-h-0 flex-1 overflow-y-auto">
                                 <div className="grid min-h-full grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-                                    {/* Receipt image */}
+                                    {/* Image */}
 
-                                    <div className="border-b border-gray-200 bg-gray-50 p-5 xl:border-b-0 xl:border-r">
+                                    <div className="border-b border-gray-200 bg-gray-50 p-4 xl:border-b-0 xl:border-r">
                                         <button
                                             type="button"
                                             onClick={() =>
@@ -733,31 +563,26 @@ export default function ReceiptQuickReviewModal({
                                                     true
                                                 )
                                             }
-                                            className="flex min-h-[500px] w-full cursor-zoom-in items-center justify-center rounded-xl border border-gray-200 bg-white p-4"
+                                            className="flex min-h-[460px] w-full cursor-zoom-in items-center justify-center rounded-xl border border-gray-200 bg-white p-3"
                                         >
                                             <img
                                                 src={`/api/admin/receipts/${receipt.id}/image`}
                                                 alt={`Receipt ${receipt.receipt_number}`}
-                                                className="max-h-[65vh] max-w-full object-contain"
+                                                className="max-h-[68vh] max-w-full object-contain"
                                             />
                                         </button>
-
-                                        <div className="mt-2 text-center text-xs text-gray-400">
-                                            Click image to enlarge
-                                        </div>
                                     </div>
 
                                     {/* Context */}
 
-                                    <div className="space-y-5 p-5">
-                                        {/* Receipt */}
-
+                                    <div className="space-y-4 p-4">
                                         <section>
                                             <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                                Receipt Number
+                                                Receipt
+                                                Number
                                             </div>
 
-                                            <div className="mt-1 break-all text-xl font-semibold text-gray-900">
+                                            <div className="mt-1 break-all text-lg font-semibold text-gray-900">
                                                 {
                                                     receipt.receipt_number
                                                 }
@@ -769,12 +594,12 @@ export default function ReceiptQuickReviewModal({
                                         {!hideParticipant &&
                                             participant && (
                                                 <section className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                                                    <div className="p-4">
+                                                    <div className="p-3">
                                                         <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                                                             Participant
                                                         </div>
 
-                                                        <div className="mt-2 font-semibold text-gray-900">
+                                                        <div className="mt-1 font-semibold text-gray-900">
                                                             {
                                                                 participant.first_name
                                                             }{' '}
@@ -783,14 +608,14 @@ export default function ReceiptQuickReviewModal({
                                                             }
                                                         </div>
 
-                                                        <div className="mt-3 space-y-1 text-sm text-gray-600">
+                                                        <div className="mt-1.5 text-sm text-gray-600">
                                                             <div>
                                                                 {
                                                                     participant.phone
                                                                 }
                                                             </div>
 
-                                                            <div className="break-all">
+                                                            <div className="break-all text-xs text-gray-500">
                                                                 {
                                                                     participant.email
                                                                 }
@@ -798,16 +623,15 @@ export default function ReceiptQuickReviewModal({
                                                         </div>
                                                     </div>
 
-                                                    {/* Other Receipts */}
-
                                                     {otherReceipts.length >
                                                         0 && (
                                                             <div className="border-t border-gray-200 bg-white">
-                                                                <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                    Other Receipts
+                                                                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                                    Other
+                                                                    Receipts
                                                                 </div>
 
-                                                                <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
+                                                                <div className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
                                                                     {otherReceipts.map(
                                                                         (
                                                                             participantReceipt
@@ -816,7 +640,7 @@ export default function ReceiptQuickReviewModal({
                                                                                 participantReceipt.suspicious_reasons ??
                                                                                 [];
 
-                                                                            const rejectionReasonTooltip =
+                                                                            const rejectionReason =
                                                                                 participantReceipt.status ===
                                                                                 'rejected' &&
                                                                                 participantReceipt.rejection_reason
@@ -828,10 +652,8 @@ export default function ReceiptQuickReviewModal({
                                                                                     key={
                                                                                         participantReceipt.id
                                                                                     }
-                                                                                    className="px-4 py-3"
+                                                                                    className="px-3 py-2.5"
                                                                                 >
-                                                                                    {/* Top row */}
-
                                                                                     <div className="flex min-w-0 items-center gap-2">
                                                                                     <span className="min-w-0 truncate text-sm font-medium text-gray-900">
                                                                                         {
@@ -846,7 +668,8 @@ export default function ReceiptQuickReviewModal({
                                                                                                     0 ? (
                                                                                                         <div>
                                                                                                             <div className="mb-1 font-semibold">
-                                                                                                                Suspicious reasons
+                                                                                                                Suspicious
+                                                                                                                reasons
                                                                                                             </div>
 
                                                                                                             <div className="space-y-1 text-gray-200">
@@ -869,71 +692,64 @@ export default function ReceiptQuickReviewModal({
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     ) : (
-                                                                                                        'This receipt was marked as suspicious.'
+                                                                                                        'This receipt is marked as suspicious.'
                                                                                                     )
                                                                                                 }
                                                                                                 maxWidth={
                                                                                                     360
                                                                                                 }
                                                                                             >
-                                                                                            <span className="shrink-0 cursor-help text-sm text-amber-600">
+                                                                                            <span className="shrink-0 cursor-help text-amber-600">
                                                                                                 ⚠
                                                                                             </span>
                                                                                             </Tooltip>
                                                                                         )}
 
-                                                                                        <span className="shrink-0">
                                                                                         <Tooltip
                                                                                             content={
-                                                                                                rejectionReasonTooltip
-                                                                                                    ? (
-                                                                                                        <div>
-                                                                                                            <div className="mb-1 font-semibold">
-                                                                                                                Rejection reason
-                                                                                                            </div>
-
-                                                                                                            <div className="text-gray-200">
-                                                                                                                {
-                                                                                                                    rejectionReasonTooltip
-                                                                                                                }
-                                                                                                            </div>
+                                                                                                rejectionReason ? (
+                                                                                                    <div>
+                                                                                                        <div className="mb-1 font-semibold">
+                                                                                                            Rejection
+                                                                                                            reason
                                                                                                         </div>
-                                                                                                    )
-                                                                                                    : null
+
+                                                                                                        <div className="text-gray-200">
+                                                                                                            {
+                                                                                                                rejectionReason
+                                                                                                            }
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ) : null
                                                                                             }
                                                                                             maxWidth={
                                                                                                 360
                                                                                             }
                                                                                         >
-                                                                                            <span
-                                                                                                className={
-                                                                                                    rejectionReasonTooltip
-                                                                                                        ? 'cursor-help'
-                                                                                                        : undefined
+                                                                                        <span
+                                                                                            className={
+                                                                                                rejectionReason
+                                                                                                    ? 'cursor-help'
+                                                                                                    : undefined
+                                                                                            }
+                                                                                        >
+                                                                                            <StatusBadge
+                                                                                                status={
+                                                                                                    participantReceipt.status
                                                                                                 }
-                                                                                            >
-                                                                                                <StatusBadge
-                                                                                                    status={
-                                                                                                        participantReceipt.status
-                                                                                                    }
-                                                                                                />
-                                                                                            </span>
+                                                                                            />
+                                                                                        </span>
                                                                                         </Tooltip>
-                                                                                    </span>
                                                                                     </div>
-
-                                                                                    {/* Bottom row */}
 
                                                                                     <div className="mt-1 flex items-center justify-between gap-3">
                                                                                         <div className="min-w-0 truncate text-[11px] text-gray-400">
-                                                                                            Receipt ID
+                                                                                            ID
                                                                                             #{' '}
                                                                                             {
                                                                                                 participantReceipt.id
                                                                                             }
-
                                                                                             {' · '}
-
                                                                                             {formatDateTime(
                                                                                                 participantReceipt.submitted_at ??
                                                                                                 participantReceipt.created_at
@@ -949,7 +765,8 @@ export default function ReceiptQuickReviewModal({
                                                                                             }
                                                                                             className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
                                                                                         >
-                                                                                            Review →
+                                                                                            Review
+                                                                                            →
                                                                                         </button>
                                                                                     </div>
                                                                                 </div>
@@ -960,49 +777,57 @@ export default function ReceiptQuickReviewModal({
                                                             </div>
                                                         )}
 
-                                                    <div className="border-t border-gray-200 px-4 py-3">
+                                                    <div className="border-t border-gray-200 px-3 py-2.5">
                                                         <Link
                                                             to={`/admin/participants/${participant.id}`}
                                                             className="text-xs font-medium text-blue-600 hover:text-blue-800"
                                                         >
-                                                            View Participant →
+                                                            View
+                                                            Participant
+                                                            →
                                                         </Link>
                                                     </div>
                                                 </section>
                                             )}
 
-                                        {/* Suspicious current receipt */}
+                                        {/* Suspicious */}
 
                                         {suspicious && (
-                                            <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                            <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                                                 <div className="font-semibold text-amber-900">
-                                                    Review flags
+                                                    ⚠ Review
+                                                    flags
                                                 </div>
 
-                                                <ul className="mt-3 space-y-2">
-                                                    {receipt.suspicious_reasons?.map(
-                                                        (
-                                                            reason
-                                                        ) => (
-                                                            <li
-                                                                key={
-                                                                    reason
-                                                                }
-                                                                className="flex gap-2 text-sm text-amber-900"
-                                                            >
-                                                                <span>
-                                                                    •
-                                                                </span>
-
-                                                                <span>
+                                                {receipt.suspicious_reasons
+                                                    ?.length ? (
+                                                    <ul className="mt-2 space-y-1">
+                                                        {receipt.suspicious_reasons.map(
+                                                            (
+                                                                reason
+                                                            ) => (
+                                                                <li
+                                                                    key={
+                                                                        reason
+                                                                    }
+                                                                    className="text-sm text-amber-900"
+                                                                >
+                                                                    •{' '}
                                                                     {suspiciousReasonLabel(
                                                                         reason
                                                                     )}
-                                                                </span>
-                                                            </li>
-                                                        )
-                                                    )}
-                                                </ul>
+                                                                </li>
+                                                            )
+                                                        )}
+                                                    </ul>
+                                                ) : (
+                                                    <div className="mt-1 text-sm text-amber-800">
+                                                        No
+                                                        suspicious
+                                                        reason
+                                                        recorded.
+                                                    </div>
+                                                )}
                                             </section>
                                         )}
 
@@ -1052,7 +877,7 @@ export default function ReceiptQuickReviewModal({
                                             </div>
 
                                             {showAddNote && (
-                                                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                                <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
                                                     <textarea
                                                         value={
                                                             newNote
@@ -1067,15 +892,15 @@ export default function ReceiptQuickReviewModal({
                                                             )
                                                         }
                                                         rows={
-                                                            3
+                                                            2
                                                         }
                                                         autoFocus
                                                         placeholder="Add a quick note..."
-                                                        className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+                                                        className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                                     />
 
                                                     {noteError && (
-                                                        <div className="mt-2 text-xs text-red-600">
+                                                        <div className="mt-1.5 text-xs text-red-600">
                                                             {
                                                                 noteError
                                                             }
@@ -1101,7 +926,7 @@ export default function ReceiptQuickReviewModal({
                                                                     null
                                                                 );
                                                             }}
-                                                            className="rounded-lg px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                                                            className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
                                                         >
                                                             Cancel
                                                         </button>
@@ -1115,7 +940,7 @@ export default function ReceiptQuickReviewModal({
                                                             onClick={
                                                                 addNote
                                                             }
-                                                            className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
                                                         >
                                                             {noteLoading
                                                                 ? 'Adding...'
@@ -1125,33 +950,34 @@ export default function ReceiptQuickReviewModal({
                                                 </div>
                                             )}
 
-                                            {!receipt
-                                                .notes
+                                            {!receipt.notes
                                                 ?.length ? (
-                                                <div className="mt-3 rounded-lg border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                                                    No notes yet.
+                                                <div className="mt-2 rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400">
+                                                    No
+                                                    notes
+                                                    yet.
                                                 </div>
                                             ) : (
-                                                <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
+                                                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
                                                     {receipt.notes.map(
                                                         (
-                                                            note
+                                                            item
                                                         ) => (
                                                             <div
                                                                 key={
-                                                                    note.id
+                                                                    item.id
                                                                 }
                                                                 className="rounded-lg border border-gray-200 p-3"
                                                             >
                                                                 <div className="whitespace-pre-wrap text-sm text-gray-700">
                                                                     {
-                                                                        note.note
+                                                                        item.note
                                                                     }
                                                                 </div>
 
-                                                                <div className="mt-2 flex justify-between gap-3 text-[11px] text-gray-400">
+                                                                <div className="mt-1.5 flex justify-between gap-3 text-[11px] text-gray-400">
                                                                     <span>
-                                                                        {note
+                                                                        {item
                                                                                 .user
                                                                                 ?.name ??
                                                                             'Organizer'}
@@ -1159,7 +985,7 @@ export default function ReceiptQuickReviewModal({
 
                                                                     <span>
                                                                         {formatDateTime(
-                                                                            note.created_at
+                                                                            item.created_at
                                                                         )}
                                                                     </span>
                                                                 </div>
@@ -1170,15 +996,16 @@ export default function ReceiptQuickReviewModal({
                                             )}
                                         </section>
 
-                                        {/* Rejection reason */}
+                                        {/* Existing rejection */}
 
                                         {receipt.rejection_reason && (
-                                            <section className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                            <section className="rounded-lg border border-red-200 bg-red-50 p-3">
                                                 <div className="text-xs font-semibold uppercase tracking-wide text-red-600">
-                                                    Rejection Reason
+                                                    Rejection
+                                                    Reason
                                                 </div>
 
-                                                <div className="mt-2 whitespace-pre-wrap text-sm text-red-800">
+                                                <div className="mt-1 whitespace-pre-wrap text-sm text-red-800">
                                                     {
                                                         receipt.rejection_reason
                                                     }
@@ -1204,12 +1031,13 @@ export default function ReceiptQuickReviewModal({
                                         {/* Reject */}
 
                                         {showReject && (
-                                            <section className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                            <section className="rounded-lg border border-red-200 bg-red-50 p-3">
                                                 <label
                                                     htmlFor="quick-review-rejection-reason"
                                                     className="text-sm font-medium text-red-800"
                                                 >
-                                                    Rejection reason
+                                                    Rejection
+                                                    reason
                                                 </label>
 
                                                 <textarea
@@ -1227,14 +1055,14 @@ export default function ReceiptQuickReviewModal({
                                                         )
                                                     }
                                                     rows={
-                                                        4
+                                                        3
                                                     }
                                                     autoFocus
                                                     placeholder="Why should this receipt be rejected?"
-                                                    className="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                                                    className="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm"
                                                 />
 
-                                                <div className="mt-3 flex justify-end gap-2">
+                                                <div className="mt-2 flex justify-end gap-2">
                                                     <button
                                                         type="button"
                                                         disabled={
@@ -1249,7 +1077,7 @@ export default function ReceiptQuickReviewModal({
                                                                 ''
                                                             );
                                                         }}
-                                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                                                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
                                                     >
                                                         Cancel
                                                     </button>
@@ -1263,7 +1091,7 @@ export default function ReceiptQuickReviewModal({
                                                         onClick={
                                                             rejectReceipt
                                                         }
-                                                        className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                                                     >
                                                         {actionLoading
                                                             ? 'Rejecting...'
@@ -1278,7 +1106,7 @@ export default function ReceiptQuickReviewModal({
 
                             {/* Footer */}
 
-                            <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-2 border-t border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                 <Link
                                     to={`/admin/receipts/${receipt.id}`}
                                     state={{
@@ -1319,10 +1147,10 @@ export default function ReceiptQuickReviewModal({
                                                 approveReceipt
                                             }
                                             className={[
-                                                'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50',
+                                                'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50',
                                                 suspicious
                                                     ? 'bg-gray-900 hover:bg-gray-800'
-                                                    : 'bg-green-600 hover:bg-green-700',
+                                                    : 'bg-emerald-600 hover:bg-emerald-700',
                                             ].join(
                                                 ' '
                                             )}
@@ -1341,41 +1169,34 @@ export default function ReceiptQuickReviewModal({
 
             {/* Enlarged image */}
 
-            {imageOpen &&
-                receipt && (
-                    <div
-                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+            {imageOpen && receipt && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+                    onClick={() =>
+                        setImageOpen(false)
+                    }
+                >
+                    <button
+                        type="button"
                         onClick={() =>
-                            setImageOpen(
-                                false
-                            )
+                            setImageOpen(false)
                         }
+                        className="absolute right-5 top-5 rounded-lg bg-black/40 px-4 py-2 text-2xl text-white hover:bg-black/60"
+                        aria-label="Close image"
                     >
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setImageOpen(
-                                    false
-                                )
-                            }
-                            className="absolute right-5 top-5 rounded-lg bg-black/40 px-4 py-2 text-2xl text-white hover:bg-black/60"
-                            aria-label="Close image"
-                        >
-                            ×
-                        </button>
+                        ×
+                    </button>
 
-                        <img
-                            src={`/api/admin/receipts/${receipt.id}/image`}
-                            alt={`Receipt ${receipt.receipt_number}`}
-                            className="max-h-full max-w-full object-contain"
-                            onClick={(
-                                event
-                            ) =>
-                                event.stopPropagation()
-                            }
-                        />
-                    </div>
-                )}
+                    <img
+                        src={`/api/admin/receipts/${receipt.id}/image`}
+                        alt={`Receipt ${receipt.receipt_number}`}
+                        className="max-h-full max-w-full object-contain"
+                        onClick={(event) =>
+                            event.stopPropagation()
+                        }
+                    />
+                </div>
+            )}
         </>
     );
 }

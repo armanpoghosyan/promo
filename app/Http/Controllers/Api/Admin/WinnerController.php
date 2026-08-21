@@ -240,11 +240,9 @@ class WinnerController extends Controller
                         now();
 
                     $winner->update([
-                        'status' =>
-                            DrawWinnerStatus::CONFIRMED,
+                        'status' => DrawWinnerStatus::CONFIRMED,
 
-                        'confirmed_at' =>
-                            $confirmedAt,
+                        'confirmed_at' => $confirmedAt,
                     ]);
 
                     $this->audit(
@@ -252,15 +250,12 @@ class WinnerController extends Controller
                         $winner,
                         'winner.confirmed',
                         [
-                            'status' =>
-                                $previousStatus->value,
+                            'status' => $previousStatus->value,
                         ],
                         [
-                            'status' =>
-                                DrawWinnerStatus::CONFIRMED->value,
+                            'status' => DrawWinnerStatus::CONFIRMED->value,
 
-                            'confirmed_at' =>
-                                $confirmedAt->toISOString(),
+                            'confirmed_at' => $confirmedAt->toISOString(),
                         ],
                         'Winner confirmed.'
                     );
@@ -270,23 +265,20 @@ class WinnerController extends Controller
             );
 
             return response()->json([
-                'message' =>
-                    'Winner confirmed successfully.',
+                'message' => 'Winner confirmed successfully.',
 
-                'data' =>
-                    $winner->fresh([
-                        'draw',
-                        'drawPrize.prize',
-                        'receipt.participant',
-                        'contactAttempts',
-                        'replacedWinner',
-                        'replacementWinner',
-                    ]),
+                'data' => $winner->fresh([
+                    'draw',
+                    'drawPrize.prize',
+                    'receipt.participant',
+                    'contactAttempts',
+                    'replacedWinner',
+                    'replacementWinner',
+                ]),
             ]);
         } catch (Throwable $e) {
             return response()->json([
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -344,17 +336,13 @@ class WinnerController extends Controller
                         $winner
                             ->contactAttempts()
                             ->create([
-                                'created_by' =>
-                                    $request->user()->id,
+                                'created_by' => $request->user()->id,
 
-                                'attempted_at' =>
-                                    now(),
+                                'attempted_at' => now(),
 
-                                'result' =>
-                                    $data['result'],
+                                'result' => $data['result'],
 
-                                'notes' =>
-                                    $data['notes'] ??
+                                'notes' => $data['notes'] ??
                                     null,
                             ]);
 
@@ -363,8 +351,7 @@ class WinnerController extends Controller
                         DrawWinnerStatus::SELECTED
                     ) {
                         $winner->update([
-                            'status' =>
-                                DrawWinnerStatus::CONTACTING,
+                            'status' => DrawWinnerStatus::CONTACTING,
                         ]);
                     }
 
@@ -373,21 +360,17 @@ class WinnerController extends Controller
                         $winner,
                         'winner.contact_attempt_added',
                         [
-                            'status' =>
-                                $previousStatus->value,
+                            'status' => $previousStatus->value,
                         ],
                         [
-                            'status' =>
-                                $winner
-                                    ->fresh()
-                                    ->status
-                                    ->value,
+                            'status' => $winner
+                                ->fresh()
+                                ->status
+                                ->value,
 
-                            'contact_attempt_id' =>
-                                $attempt->id,
+                            'contact_attempt_id' => $attempt->id,
 
-                            'result' =>
-                                $attempt->result->value,
+                            'result' => $attempt->result->value,
                         ],
                         'Winner contact attempt recorded.'
                     );
@@ -397,16 +380,13 @@ class WinnerController extends Controller
             );
 
             return response()->json([
-                'message' =>
-                    'Contact attempt recorded.',
+                'message' => 'Contact attempt recorded.',
 
-                'data' =>
-                    $attempt,
+                'data' => $attempt,
             ], 201);
         } catch (Throwable $e) {
             return response()->json([
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -457,14 +437,11 @@ class WinnerController extends Controller
                         now();
 
                     $winner->update([
-                        'status' =>
-                            DrawWinnerStatus::CANCELLED,
+                        'status' => DrawWinnerStatus::CANCELLED,
 
-                        'cancelled_at' =>
-                            $cancelledAt,
+                        'cancelled_at' => $cancelledAt,
 
-                        'cancellation_reason' =>
-                            $data['reason'],
+                        'cancellation_reason' => $data['reason'],
                     ]);
 
                     $this->audit(
@@ -472,18 +449,14 @@ class WinnerController extends Controller
                         $winner,
                         'winner.cancelled',
                         [
-                            'status' =>
-                                $previousStatus->value,
+                            'status' => $previousStatus->value,
                         ],
                         [
-                            'status' =>
-                                DrawWinnerStatus::CANCELLED->value,
+                            'status' => DrawWinnerStatus::CANCELLED->value,
 
-                            'cancelled_at' =>
-                                $cancelledAt->toISOString(),
+                            'cancelled_at' => $cancelledAt->toISOString(),
 
-                            'reason' =>
-                                $data['reason'],
+                            'reason' => $data['reason'],
                         ],
                         'Winner cancelled.'
                     );
@@ -493,23 +466,20 @@ class WinnerController extends Controller
             );
 
             return response()->json([
-                'message' =>
-                    'Winner cancelled successfully.',
+                'message' => 'Winner cancelled successfully.',
 
-                'data' =>
-                    $winner->fresh([
-                        'draw',
-                        'drawPrize.prize',
-                        'receipt.participant',
-                        'contactAttempts',
-                        'replacedWinner',
-                        'replacementWinner',
-                    ]),
+                'data' => $winner->fresh([
+                    'draw',
+                    'drawPrize.prize',
+                    'receipt.participant',
+                    'contactAttempts',
+                    'replacedWinner',
+                    'replacementWinner',
+                ]),
             ]);
         } catch (Throwable $e) {
             return response()->json([
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -530,20 +500,17 @@ class WinnerController extends Controller
                     );
 
             return response()->json([
-                'message' =>
-                    'Replacement winner selected successfully.',
+                'message' => 'Replacement winner selected successfully.',
 
-                'data' =>
-                    $replacement->fresh([
-                        'draw',
-                        'drawPrize.prize',
-                        'receipt.participant',
-                    ]),
+                'data' => $replacement->fresh([
+                    'draw',
+                    'drawPrize.prize',
+                    'receipt.participant',
+                ]),
             ], 201);
         } catch (Throwable $e) {
             return response()->json([
-                'message' =>
-                    $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 422);
         }
     }
@@ -557,32 +524,23 @@ class WinnerController extends Controller
         string $description
     ): void {
         AuditLog::create([
-            'user_id' =>
-                $request->user()->id,
+            'user_id' => $request->user()->id,
 
-            'action' =>
-                $action,
+            'action' => $action,
 
-            'auditable_type' =>
-                DrawWinner::class,
+            'auditable_type' => DrawWinner::class,
 
-            'auditable_id' =>
-                $winner->id,
+            'auditable_id' => $winner->id,
 
-            'old_values' =>
-                $oldValues,
+            'old_values' => $oldValues,
 
-            'new_values' =>
-                $newValues,
+            'new_values' => $newValues,
 
-            'description' =>
-                $description,
+            'description' => $description,
 
-            'ip_address' =>
-                $request->ip(),
+            'ip_address' => $request->ip(),
 
-            'user_agent' =>
-                $request->userAgent(),
+            'user_agent' => $request->userAgent(),
         ]);
     }
 }

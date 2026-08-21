@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useMemo,
     useState,
@@ -25,143 +26,50 @@ import type {
 
 import type {
     Receipt,
-    SuspiciousReason,
 } from '../../types/receipt';
 
-import {
-    getApiErrorMessage,
-} from '../../utils/apiError';
-
-import {
-    formatDateTime,
-} from '../../utils/date';
-
-const suspiciousReasonLabels: Record<
-    string,
-    string
-> = {
-    duplicate_receipt_number:
-        'Duplicate receipt number',
-
-    duplicate_receipt_image:
-        'Duplicate receipt image',
-
-    phone_used_by_another_participant:
-        'Phone used by another participant',
-
-    email_used_by_another_participant:
-        'Email used by another participant',
-
-    receipt_number_non_numeric:
-        'Receipt number contains unexpected characters',
-};
-
-function suspiciousReasonLabel(
-    reason: SuspiciousReason
-): string {
-    return (
-        suspiciousReasonLabels[
-            reason
-            ] ??
-        reason
-            .replaceAll(
-                '_',
-                ' '
-            )
-            .replace(
-                /\b\w/g,
-                (
-                    character
-                ) =>
-                    character.toUpperCase()
-            )
-    );
-}
-
-function ConsentStatus({
-                           value,
-                       }: {
-    value:
-        | string
-        | null
-        | undefined;
-}) {
-    if (value) {
-        return (
-            <span className="inline-flex rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                Accepted
-            </span>
-        );
-    }
-
-    return (
-        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
-            Not accepted
-        </span>
-    );
-}
+import { getApiErrorMessage } from '../../utils/apiError';
+import { formatDateTime } from '../../utils/date';
+import { suspiciousReasonLabel } from '../../utils/receipt';
 
 export default function ParticipantDetails() {
-    const {
-        id,
-    } = useParams();
-
-    const location =
-        useLocation();
+    const { id } = useParams();
+    const location = useLocation();
 
     const backUrl =
-        typeof location.state?.from ===
-        'string'
+        typeof location.state?.from === 'string'
             ? location.state.from
             : '/admin/participants';
 
     const [
         participant,
         setParticipant,
-    ] = useState<
-        Participant | null
-    >(null);
+    ] = useState<Participant | null>(null);
 
-    const [
-        loading,
-        setLoading,
-    ] = useState(true);
+    const [loading, setLoading] =
+        useState(true);
 
-    const [
-        error,
-        setError,
-    ] = useState<
-        string | null
-    >(null);
+    const [error, setError] =
+        useState<string | null>(null);
 
     const [
         quickReviewReceiptId,
         setQuickReviewReceiptId,
-    ] = useState<
-        number | null
-    >(null);
+    ] = useState<number | null>(null);
 
     const loadParticipant =
-        async () => {
+        useCallback(async () => {
             if (!id) {
                 setError(
                     'Participant ID is missing.'
                 );
 
-                setLoading(
-                    false
-                );
-
+                setLoading(false);
                 return;
             }
 
-            setLoading(
-                true
-            );
-
-            setError(
-                null
-            );
+            setLoading(true);
+            setError(null);
 
             try {
                 const response =
@@ -172,9 +80,7 @@ export default function ParticipantDetails() {
                 setParticipant(
                     response.data.data
                 );
-            } catch (
-                error: unknown
-                ) {
+            } catch (error: unknown) {
                 setError(
                     getApiErrorMessage(
                         error,
@@ -182,17 +88,13 @@ export default function ParticipantDetails() {
                     )
                 );
             } finally {
-                setLoading(
-                    false
-                );
+                setLoading(false);
             }
-        };
+        }, [id]);
 
     useEffect(() => {
         loadParticipant();
-    }, [
-        id,
-    ]);
+    }, [loadParticipant]);
 
     const receiptStats =
         useMemo(() => {
@@ -206,50 +108,36 @@ export default function ParticipantDetails() {
 
                 submitted:
                 receipts.filter(
-                    (
-                        receipt
-                    ) =>
+                    (receipt) =>
                         receipt.status ===
                         'submitted'
                 ).length,
 
                 approved:
                 receipts.filter(
-                    (
-                        receipt
-                    ) =>
+                    (receipt) =>
                         receipt.status ===
                         'approved'
                 ).length,
 
                 rejected:
                 receipts.filter(
-                    (
-                        receipt
-                    ) =>
+                    (receipt) =>
                         receipt.status ===
                         'rejected'
                 ).length,
 
                 suspicious:
                 receipts.filter(
-                    (
-                        receipt
-                    ) =>
+                    (receipt) =>
                         receipt.is_suspicious
                 ).length,
             };
-        }, [
-            participant,
-        ]);
+        }, [participant]);
 
-    if (
-        loading
-    ) {
+    if (loading) {
         return (
-            <LoadingState
-                message="Loading participant..."
-            />
+            <LoadingState message="Loading participant..." />
         );
     }
 
@@ -260,9 +148,7 @@ export default function ParticipantDetails() {
         return (
             <div className="space-y-4">
                 <Link
-                    to={
-                        backUrl
-                    }
+                    to={backUrl}
                     className="text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
                     ← Back to Participants
@@ -277,8 +163,7 @@ export default function ParticipantDetails() {
     }
 
     const receipts =
-        participant.receipts ??
-        [];
+        participant.receipts ?? [];
 
     const currentPageUrl =
         `${location.pathname}${location.search}`;
@@ -293,203 +178,118 @@ export default function ParticipantDetails() {
 
     return (
         <>
-            <div className="space-y-6">
+            <div className="space-y-5">
                 {/* Header */}
 
                 <header>
                     <Link
-                        to={
-                            backUrl
-                        }
+                        to={backUrl}
                         className="text-sm font-medium text-blue-600 hover:text-blue-800"
                     >
                         ← Back to Participants
                     </Link>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
                         <h1 className="text-2xl font-bold text-gray-900">
-                            {
-                                participant.first_name
-                            }{' '}
-                            {
-                                participant.last_name
-                            }
+                            {participant.first_name}{' '}
+                            {participant.last_name}
                         </h1>
 
                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                            Participant ID #
-                            {
-                                participant.id
-                            }
+                            ID #{participant.id}
                         </span>
                     </div>
 
                     <p className="mt-1 text-sm text-gray-500">
-                        Participant profile,
-                        consent records and
-                        complete receipt history.
+                        Participant profile, consent records and receipt history.
                     </p>
                 </header>
 
                 {/* Profile + Summary */}
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.6fr)]">
-                    {/* Profile */}
-
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.5fr)]">
                     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                        <div className="border-b border-gray-200 px-5 py-4">
-                            <h2 className="font-semibold text-gray-900">
-                                Participant Information
-                            </h2>
+                        <SectionHeader title="Participant Information" />
+
+                        <div className="grid gap-4 p-4 sm:grid-cols-2">
+                            <InfoItem
+                                label="Name"
+                                value={`${participant.first_name} ${participant.last_name}`}
+                            />
+
+                            <InfoItem
+                                label="Phone"
+                                value={participant.phone}
+                            />
+
+                            <InfoItem
+                                label="Email"
+                                value={participant.email}
+                            />
+
+                            <InfoItem
+                                label="First Submission"
+                                value={formatDateTime(
+                                    participant.created_at
+                                )}
+                            />
+
+                            <InfoItem
+                                label="Participant ID"
+                                value={`#${participant.id}`}
+                            />
+
+                            <InfoItem
+                                label="Last Updated"
+                                value={formatDateTime(
+                                    participant.updated_at
+                                )}
+                            />
                         </div>
-
-                        <dl className="grid gap-5 p-5 sm:grid-cols-2">
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    Name
-                                </dt>
-
-                                <dd className="mt-1 text-sm font-semibold text-gray-900">
-                                    {
-                                        participant.first_name
-                                    }{' '}
-                                    {
-                                        participant.last_name
-                                    }
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    Phone
-                                </dt>
-
-                                <dd className="mt-1 text-sm text-gray-700">
-                                    {
-                                        participant.phone
-                                    }
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    Email
-                                </dt>
-
-                                <dd className="mt-1 break-all text-sm text-gray-700">
-                                    {
-                                        participant.email
-                                    }
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    First Submission
-                                </dt>
-
-                                <dd className="mt-1 text-sm text-gray-700">
-                                    {formatDateTime(
-                                        participant.created_at
-                                    )}
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    Participant ID
-                                </dt>
-
-                                <dd className="mt-1 text-sm text-gray-700">
-                                    #
-                                    {
-                                        participant.id
-                                    }
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                    Last Updated
-                                </dt>
-
-                                <dd className="mt-1 text-sm text-gray-700">
-                                    {formatDateTime(
-                                        participant.updated_at
-                                    )}
-                                </dd>
-                            </div>
-                        </dl>
                     </section>
 
-                    {/* Summary */}
-
                     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                        <div className="border-b border-gray-200 px-5 py-4">
-                            <h2 className="font-semibold text-gray-900">
-                                Participation Summary
-                            </h2>
-                        </div>
+                        <SectionHeader title="Participation Summary" />
 
-                        <div className="grid grid-cols-2 gap-3 p-5">
-                            <div className="rounded-lg bg-gray-50 p-4">
-                                <div className="text-xs text-gray-500">
-                                    Total Receipts
-                                </div>
+                        <div className="grid grid-cols-2 gap-px bg-gray-200">
+                            <SummaryMetric
+                                label="Total"
+                                value={
+                                    receiptStats.total
+                                }
+                            />
 
-                                <div className="mt-1 text-2xl font-bold text-gray-900">
-                                    {
-                                        receiptStats.total
-                                    }
-                                </div>
-                            </div>
+                            <SummaryMetric
+                                label="Needs Review"
+                                value={
+                                    receiptStats.submitted
+                                }
+                            />
 
-                            <div className="rounded-lg bg-gray-50 p-4">
-                                <div className="text-xs text-gray-500">
-                                    Submitted
-                                </div>
+                            <SummaryMetric
+                                label="Approved"
+                                value={
+                                    receiptStats.approved
+                                }
+                                className="text-emerald-700"
+                            />
 
-                                <div className="mt-1 text-2xl font-bold text-gray-700">
-                                    {
-                                        receiptStats.submitted
-                                    }
-                                </div>
-                            </div>
+                            <SummaryMetric
+                                label="Rejected"
+                                value={
+                                    receiptStats.rejected
+                                }
+                                className="text-red-700"
+                            />
 
-                            <div className="rounded-lg bg-green-50 p-4">
-                                <div className="text-xs text-green-700">
-                                    Approved
-                                </div>
-
-                                <div className="mt-1 text-2xl font-bold text-green-800">
-                                    {
-                                        receiptStats.approved
-                                    }
-                                </div>
-                            </div>
-
-                            <div className="rounded-lg bg-red-50 p-4">
-                                <div className="text-xs text-red-700">
-                                    Rejected
-                                </div>
-
-                                <div className="mt-1 text-2xl font-bold text-red-800">
-                                    {
-                                        receiptStats.rejected
-                                    }
-                                </div>
-                            </div>
-
-                            <div className="col-span-2 rounded-lg bg-amber-50 p-4">
-                                <div className="text-xs text-amber-700">
-                                    Suspicious Receipts
-                                </div>
-
-                                <div className="mt-1 text-2xl font-bold text-amber-800">
-                                    {
+                            <div className="col-span-2">
+                                <SummaryMetric
+                                    label="Suspicious"
+                                    value={
                                         receiptStats.suspicious
                                     }
-                                </div>
+                                    className="text-amber-700"
+                                />
                             </div>
                         </div>
                     </section>
@@ -498,155 +298,86 @@ export default function ParticipantDetails() {
                 {/* Consents */}
 
                 <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="border-b border-gray-200 px-5 py-4">
-                        <h2 className="font-semibold text-gray-900">
-                            Consents
-                        </h2>
+                    <SectionHeader title="Consents" />
 
-                        <p className="mt-1 text-xs text-gray-500">
-                            Consent records captured
-                            during participation.
-                        </p>
-                    </div>
+                    <div className="grid divide-y divide-gray-100 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+                        <ConsentItem
+                            title="Privacy Policy"
+                            value={
+                                participant.privacy_policy_accepted_at
+                            }
+                        />
 
-                    <div className="divide-y divide-gray-100">
-                        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                    Privacy Policy
-                                </div>
+                        <ConsentItem
+                            title="Official Rules"
+                            value={
+                                participant.official_rules_accepted_at
+                            }
+                        />
 
-                                <div className="mt-1 text-xs text-gray-500">
-                                    {participant
-                                        .privacy_policy_accepted_at
-                                        ? formatDateTime(
-                                            participant.privacy_policy_accepted_at
-                                        )
-                                        : 'No acceptance recorded'}
-                                </div>
-                            </div>
-
-                            <ConsentStatus
-                                value={
-                                    participant.privacy_policy_accepted_at
-                                }
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                    Official Rules
-                                </div>
-
-                                <div className="mt-1 text-xs text-gray-500">
-                                    {participant
-                                        .official_rules_accepted_at
-                                        ? formatDateTime(
-                                            participant.official_rules_accepted_at
-                                        )
-                                        : 'No acceptance recorded'}
-                                </div>
-                            </div>
-
-                            <ConsentStatus
-                                value={
-                                    participant.official_rules_accepted_at
-                                }
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                    Personal Data Consent
-                                </div>
-
-                                <div className="mt-1 text-xs text-gray-500">
-                                    {participant
-                                        .personal_data_consent_at
-                                        ? formatDateTime(
-                                            participant.personal_data_consent_at
-                                        )
-                                        : 'No acceptance recorded'}
-                                </div>
-                            </div>
-
-                            <ConsentStatus
-                                value={
-                                    participant.personal_data_consent_at
-                                }
-                            />
-                        </div>
+                        <ConsentItem
+                            title="Personal Data Consent"
+                            value={
+                                participant.personal_data_consent_at
+                            }
+                        />
                     </div>
                 </section>
 
                 {/* Receipt History */}
 
                 <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-                        <div>
-                            <h2 className="font-semibold text-gray-900">
-                                Receipt History
-                            </h2>
-
-                            <p className="mt-1 text-xs text-gray-500">
-                                All receipts submitted
-                                by this participant.
-                            </p>
-                        </div>
-
-                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                            {
-                                receipts.length
-                            }{' '}
-                            receipt
-                            {receipts.length ===
-                            1
-                                ? ''
-                                : 's'}
-                        </span>
-                    </div>
+                    <SectionHeader
+                        title="Receipt History"
+                        action={
+                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                                {receipts.length}{' '}
+                                receipt
+                                {receipts.length ===
+                                1
+                                    ? ''
+                                    : 's'}
+                            </span>
+                        }
+                    />
 
                     {receipts.length ===
                     0 ? (
-                        <div className="p-6 text-sm text-gray-400">
+                        <div className="px-4 py-5 text-sm text-gray-400">
                             No receipts submitted.
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1000px] text-left text-sm">
+                            <table className="w-full min-w-[980px] text-left text-sm">
                                 <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <TableHeader>
                                         Receipt
-                                    </th>
+                                    </TableHeader>
 
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <TableHeader>
                                         Status
-                                    </th>
+                                    </TableHeader>
 
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <TableHeader>
                                         Suspicious
-                                    </th>
+                                    </TableHeader>
 
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <TableHeader>
                                         Submitted
-                                    </th>
+                                    </TableHeader>
 
-                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <TableHeader>
                                         Verified
-                                    </th>
+                                    </TableHeader>
 
-                                    <th className="px-5 py-3" />
+                                    <th className="px-4 py-2.5" />
                                 </tr>
                                 </thead>
 
                                 <tbody className="divide-y divide-gray-100">
                                 {receipts.map(
-                                    (
-                                        receipt
-                                    ) => {
+                                    (receipt) => {
                                         const reasons =
                                             receipt.suspicious_reasons ??
                                             [];
@@ -661,7 +392,7 @@ export default function ParticipantDetails() {
                                                 0
                                             );
 
-                                        const rejectionTooltip =
+                                        const rejectionReason =
                                             receipt.status ===
                                             'rejected' &&
                                             receipt.rejection_reason
@@ -687,17 +418,15 @@ export default function ParticipantDetails() {
                                                     ' '
                                                 )}
                                             >
-                                                {/* Receipt */}
-
-                                                <td className="px-5 py-4 align-top">
+                                                <td className="px-4 py-3 align-top">
                                                     <div className="font-semibold text-gray-900">
                                                         {
                                                             receipt.receipt_number
                                                         }
                                                     </div>
 
-                                                    <div className="mt-1 text-xs text-gray-400">
-                                                        Receipt ID
+                                                    <div className="mt-0.5 text-xs text-gray-400">
+                                                        ID
                                                         #{' '}
                                                         {
                                                             receipt.id
@@ -705,26 +434,23 @@ export default function ParticipantDetails() {
                                                     </div>
                                                 </td>
 
-                                                {/* Status */}
-
-                                                <td className="px-5 py-4 align-top">
+                                                <td className="px-4 py-3 align-top">
                                                     <Tooltip
                                                         content={
-                                                            rejectionTooltip
-                                                                ? (
-                                                                    <div>
-                                                                        <div className="mb-1 font-semibold">
-                                                                            Rejection reason
-                                                                        </div>
-
-                                                                        <div className="text-gray-200">
-                                                                            {
-                                                                                rejectionTooltip
-                                                                            }
-                                                                        </div>
+                                                            rejectionReason ? (
+                                                                <div>
+                                                                    <div className="mb-1 font-semibold">
+                                                                        Rejection
+                                                                        reason
                                                                     </div>
-                                                                )
-                                                                : null
+
+                                                                    <div className="text-gray-200">
+                                                                        {
+                                                                            rejectionReason
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            ) : null
                                                         }
                                                         maxWidth={
                                                             360
@@ -732,7 +458,7 @@ export default function ParticipantDetails() {
                                                     >
                                                             <span
                                                                 className={
-                                                                    rejectionTooltip
+                                                                    rejectionReason
                                                                         ? 'cursor-help'
                                                                         : undefined
                                                                 }
@@ -751,9 +477,7 @@ export default function ParticipantDetails() {
                                                     </Tooltip>
                                                 </td>
 
-                                                {/* Suspicious */}
-
-                                                <td className="px-5 py-4 align-top">
+                                                <td className="px-4 py-3 align-top">
                                                     {receipt.is_suspicious &&
                                                     firstReason ? (
                                                         <div>
@@ -765,56 +489,60 @@ export default function ParticipantDetails() {
 
                                                             {extraReasons >
                                                                 0 && (
-                                                                    <Tooltip
-                                                                        content={
-                                                                            <div>
-                                                                                <div className="mb-1 font-semibold">
-                                                                                    Additional suspicious reasons
-                                                                                </div>
+                                                                    <div className="mt-1">
+                                                                        <Tooltip
+                                                                            content={
+                                                                                <div>
+                                                                                    <div className="mb-1 font-semibold">
+                                                                                        Additional
+                                                                                        suspicious
+                                                                                        reasons
+                                                                                    </div>
 
-                                                                                <div className="space-y-1 text-gray-200">
-                                                                                    {reasons
-                                                                                        .slice(
-                                                                                            1
-                                                                                        )
-                                                                                        .map(
-                                                                                            (
-                                                                                                reason
-                                                                                            ) => (
-                                                                                                <div
-                                                                                                    key={
-                                                                                                        reason
-                                                                                                    }
-                                                                                                >
-                                                                                                    •{' '}
-                                                                                                    {suspiciousReasonLabel(
-                                                                                                        reason
-                                                                                                    )}
-                                                                                                </div>
+                                                                                    <div className="space-y-1 text-gray-200">
+                                                                                        {reasons
+                                                                                            .slice(
+                                                                                                1
                                                                                             )
-                                                                                        )}
+                                                                                            .map(
+                                                                                                (
+                                                                                                    reason
+                                                                                                ) => (
+                                                                                                    <div
+                                                                                                        key={
+                                                                                                            reason
+                                                                                                        }
+                                                                                                    >
+                                                                                                        •{' '}
+                                                                                                        {suspiciousReasonLabel(
+                                                                                                            reason
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )
+                                                                                            )}
+                                                                                    </div>
                                                                                 </div>
-                                                                            </div>
-                                                                        }
-                                                                        maxWidth={
-                                                                            360
-                                                                        }
-                                                                    >
-                                                                        <span
-                                                                            onClick={(
-                                                                                event
-                                                                            ) =>
-                                                                                event.stopPropagation()
                                                                             }
-                                                                            className="mt-1 inline-flex cursor-help rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                                                                            maxWidth={
+                                                                                360
+                                                                            }
                                                                         >
-                                                                            +
-                                                                            {
-                                                                                extraReasons
-                                                                            }{' '}
-                                                                            more
-                                                                        </span>
-                                                                    </Tooltip>
+                                                                            <span
+                                                                                className="cursor-help rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                                                                                onClick={(
+                                                                                    event
+                                                                                ) =>
+                                                                                    event.stopPropagation()
+                                                                                }
+                                                                            >
+                                                                                +
+                                                                                {
+                                                                                    extraReasons
+                                                                                }{' '}
+                                                                                more
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                    </div>
                                                                 )}
                                                         </div>
                                                     ) : (
@@ -824,18 +552,14 @@ export default function ParticipantDetails() {
                                                     )}
                                                 </td>
 
-                                                {/* Submitted */}
-
-                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                <td className="whitespace-nowrap px-4 py-3 align-top text-gray-500">
                                                     {formatDateTime(
                                                         receipt.submitted_at ??
                                                         receipt.created_at
                                                     )}
                                                 </td>
 
-                                                {/* Verified */}
-
-                                                <td className="whitespace-nowrap px-5 py-4 align-top text-sm text-gray-500">
+                                                <td className="whitespace-nowrap px-4 py-3 align-top text-gray-500">
                                                     {receipt.verified_at
                                                         ? formatDateTime(
                                                             receipt.verified_at
@@ -843,24 +567,23 @@ export default function ParticipantDetails() {
                                                         : '—'}
                                                 </td>
 
-                                                {/* Full details */}
-
-                                                <td className="px-5 py-4 text-right align-top">
-                                                    <Link
-                                                        to={`/admin/receipts/${receipt.id}`}
-                                                        state={{
-                                                            from:
-                                                            currentPageUrl,
-                                                        }}
+                                                <td className="px-4 py-3 text-right align-top">
+                                                    <button
+                                                        type="button"
                                                         onClick={(
                                                             event
-                                                        ) =>
-                                                            event.stopPropagation()
-                                                        }
-                                                        className="inline-flex rounded-lg px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                                        ) => {
+                                                            event.stopPropagation();
+
+                                                            openQuickReview(
+                                                                receipt
+                                                            );
+                                                        }}
+                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
                                                     >
-                                                        Full Details →
-                                                    </Link>
+                                                        Review
+                                                        →
+                                                    </button>
                                                 </td>
                                             </tr>
                                         );
@@ -871,9 +594,41 @@ export default function ParticipantDetails() {
                         </div>
                     )}
                 </section>
-            </div>
 
-            {/* Receipt Quick Review */}
+                {/* Technical */}
+
+                <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <SectionHeader title="Technical & Audit Details" />
+
+                    <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <InfoItem
+                            label="Participant ID"
+                            value={`#${participant.id}`}
+                        />
+
+                        <InfoItem
+                            label="Created"
+                            value={formatDateTime(
+                                participant.created_at
+                            )}
+                        />
+
+                        <InfoItem
+                            label="Updated"
+                            value={formatDateTime(
+                                participant.updated_at
+                            )}
+                        />
+
+                        <InfoItem
+                            label="Total Receipts"
+                            value={
+                                receiptStats.total
+                            }
+                        />
+                    </div>
+                </section>
+            </div>
 
             {quickReviewReceiptId !==
                 null && (
@@ -891,14 +646,140 @@ export default function ParticipantDetails() {
                             )
                         }
                         onChanged={() => {
-                            setQuickReviewReceiptId(
-                                null
-                            );
-
                             loadParticipant();
                         }}
                     />
                 )}
         </>
+    );
+}
+
+function SectionHeader({
+                           title,
+                           action,
+                       }: {
+    title: string;
+    action?: React.ReactNode;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3">
+            <h2 className="font-semibold text-gray-900">
+                {title}
+            </h2>
+
+            {action}
+        </div>
+    );
+}
+
+function InfoItem({
+                      label,
+                      value,
+                  }: {
+    label: string;
+    value: React.ReactNode;
+}) {
+    return (
+        <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                {label}
+            </div>
+
+            <div className="mt-1 break-all text-sm text-gray-700">
+                {value}
+            </div>
+        </div>
+    );
+}
+
+function SummaryMetric({
+                           label,
+                           value,
+                           className = 'text-gray-900',
+                       }: {
+    label: string;
+    value: number;
+    className?: string;
+}) {
+    return (
+        <div className="bg-white p-3">
+            <div className="text-xs text-gray-500">
+                {label}
+            </div>
+
+            <div
+                className={`mt-0.5 text-xl font-bold ${className}`}
+            >
+                {value}
+            </div>
+        </div>
+    );
+}
+
+function ConsentItem({
+                         title,
+                         value,
+                     }: {
+    title: string;
+    value:
+        | string
+        | null
+        | undefined;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <div>
+                <div className="text-sm font-medium text-gray-900">
+                    {title}
+                </div>
+
+                <div className="mt-0.5 text-xs text-gray-500">
+                    {value
+                        ? formatDateTime(
+                            value
+                        )
+                        : 'No acceptance recorded'}
+                </div>
+            </div>
+
+            <ConsentStatus
+                value={value}
+            />
+        </div>
+    );
+}
+
+function ConsentStatus({
+                           value,
+                       }: {
+    value:
+        | string
+        | null
+        | undefined;
+}) {
+    if (value) {
+        return (
+            <span className="inline-flex shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                Accepted
+            </span>
+        );
+    }
+
+    return (
+        <span className="inline-flex shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+            Not accepted
+        </span>
+    );
+}
+
+function TableHeader({
+                         children,
+                     }: {
+    children: React.ReactNode;
+}) {
+    return (
+        <th className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            {children}
+        </th>
     );
 }
