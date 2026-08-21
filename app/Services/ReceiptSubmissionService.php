@@ -47,6 +47,8 @@ class ReceiptSubmissionService
                 $duplicateCheck = $this->duplicateDetector->check(
                     receiptNumber: $receiptNumber,
                     participant: $participant,
+                    firstName: $participantData['first_name'],
+                    lastName: $participantData['last_name'],
                     phoneNormalized: $phoneNormalized,
                     emailNormalized: $emailNormalized,
                     image: $receiptImage
@@ -57,6 +59,10 @@ class ReceiptSubmissionService
 
                 $receipt = Receipt::create([
                     'participant_id' => $participant->id,
+                    'submitted_first_name' => trim($participantData['first_name']),
+                    'submitted_last_name' => trim($participantData['last_name']),
+                    'submitted_phone' => trim($participantData['phone']),
+                    'submitted_email' => trim($participantData['email']),
                     'receipt_number' => trim($receiptNumber),
                     'receipt_image' => $path,
                     'image_hash' => $duplicateCheck['image_hash'],
@@ -79,6 +85,7 @@ class ReceiptSubmissionService
                         'participant_id' => $participant->id,
                         'status' => ReceiptStatus::SUBMITTED->value,
                         'is_suspicious' => $receipt->is_suspicious,
+                        'suspicious_reasons' => $receipt->suspicious_reasons,
                         'privacy_policy_accepted_at' => $submittedAt->toISOString(),
                         'official_rules_accepted_at' => $submittedAt->toISOString(),
                         'personal_data_consent_at' => $submittedAt->toISOString(),

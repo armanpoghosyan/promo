@@ -44,6 +44,22 @@ Current campaign prize inventory:
 
 Prize quantities are allocated across weekly draws by the organizer.
 
+### Participant and receipt review rules
+
+- A participant is identified by the exact normalized Armenian phone number and lowercase email pair.
+- Different receipts submitted with the same participant identity belong to that participant.
+- Participants do not have approval, rejection or suspicious statuses. Review state belongs to each receipt.
+- Every accepted submission starts as `submitted` and must be permanently `approved` or `rejected` by an administrator.
+- Only approved receipts are eligible for a draw. Approving a suspicious receipt keeps its review flags for audit history.
+- A suspicious receipt requires an administrator review note before approval. Rejection always requires a reason.
+- Receipt numbers are stored as trimmed strings, including leading zeroes. Non-numeric and duplicate numbers are review signals, not automatic rejection reasons.
+- Exact duplicate images, reused phone/email identities and participant name mismatches are also receipt-level review signals.
+- A rejected receipt may be resubmitted for correction; the new submission is independently reviewed and duplicate signals remain visible.
+
+Production receipt submissions require `CAMPAIGN_START_AT` and
+`CAMPAIGN_END_AT`. Both values are interpreted in `APP_TIMEZONE`; production
+fails closed when the window is missing or invalid.
+
 ## Draw Process
 
 A draw follows these states:

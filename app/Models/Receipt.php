@@ -16,6 +16,10 @@ class Receipt extends Model
 
     protected $fillable = [
         'participant_id',
+        'submitted_first_name',
+        'submitted_last_name',
+        'submitted_phone',
+        'submitted_email',
         'receipt_number',
         'receipt_image',
         'image_hash',

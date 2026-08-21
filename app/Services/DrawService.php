@@ -301,6 +301,12 @@ class DrawService
             );
         }
 
+        if ($draw->draw_date->isFuture()) {
+            throw new RuntimeException(
+                'This draw cannot be executed before its scheduled date.'
+            );
+        }
+
         if (! $draw->snapshot_at) {
             throw new RuntimeException(
                 'The participant snapshot has not been created.'

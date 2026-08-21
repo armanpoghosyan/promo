@@ -78,6 +78,12 @@ export default function ReceiptQuickReviewModal({
     const [showReject, setShowReject] =
         useState(false);
 
+    const [showApprove, setShowApprove] =
+        useState(false);
+
+    const [approvalNote, setApprovalNote] =
+        useState('');
+
     const [
         rejectionReason,
         setRejectionReason,
@@ -123,6 +129,8 @@ export default function ReceiptQuickReviewModal({
 
                 setShowReject(false);
                 setRejectionReason('');
+                setShowApprove(false);
+                setApprovalNote('');
                 setShowAddNote(false);
                 setNewNote('');
 
@@ -175,6 +183,12 @@ export default function ReceiptQuickReviewModal({
                 return;
             }
 
+            if (showApprove) {
+                setShowApprove(false);
+                setApprovalNote('');
+                return;
+            }
+
             if (showAddNote) {
                 setShowAddNote(false);
                 setNewNote('');
@@ -198,6 +212,7 @@ export default function ReceiptQuickReviewModal({
     }, [
         imageOpen,
         showReject,
+        showApprove,
         showAddNote,
         onClose,
     ]);
@@ -301,7 +316,10 @@ export default function ReceiptQuickReviewModal({
 
     const approveReceipt =
         async () => {
-            if (!receipt) {
+            if (
+                !receipt ||
+                (receipt.is_suspicious && !approvalNote.trim())
+            ) {
                 return;
             }
 
@@ -311,7 +329,12 @@ export default function ReceiptQuickReviewModal({
             try {
                 const response =
                     await api.post<ReceiptResponse>(
-                        `/admin/receipts/${receipt.id}/approve`
+                        `/admin/receipts/${receipt.id}/approve`,
+                        {
+                            review_note:
+                                approvalNote.trim() ||
+                                undefined,
+                        }
                     );
 
                 const updatedReceipt =
@@ -320,6 +343,9 @@ export default function ReceiptQuickReviewModal({
                 setReceipt(
                     updatedReceipt
                 );
+
+                setShowApprove(false);
+                setApprovalNote('');
 
                 onChanged(
                     updatedReceipt
@@ -790,6 +816,23 @@ export default function ReceiptQuickReviewModal({
                                                 </section>
                                             )}
 
+                                        {(receipt.submitted_first_name || receipt.submitted_last_name) && (
+                                            <section className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                    Submitted identity snapshot
+                                                </div>
+                                                <div className="mt-2 text-sm text-gray-700">
+                                                    <div className="font-medium text-gray-900">
+                                                        {`${receipt.submitted_first_name ?? ''} ${receipt.submitted_last_name ?? ''}`.trim()}
+                                                    </div>
+                                                    <div>{receipt.submitted_phone ?? '—'}</div>
+                                                    <div className="break-all text-xs text-gray-500">
+                                                        {receipt.submitted_email ?? '—'}
+                                                    </div>
+                                                </div>
+                                            </section>
+                                        )}
+
                                         {/* Suspicious */}
 
                                         {suspicious && (
@@ -828,6 +871,37 @@ export default function ReceiptQuickReviewModal({
                                                         recorded.
                                                     </div>
                                                 )}
+                                            </section>
+                                        )}
+
+                                        {(receipt.duplicate_matches?.length ?? 0) > 0 && (
+                                            <section className="overflow-hidden rounded-xl border border-amber-200 bg-white">
+                                                <div className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                                                    Duplicate evidence
+                                                </div>
+                                                <div className="divide-y divide-gray-100">
+                                                    {receipt.duplicate_matches?.map((match) => (
+                                                        <div key={match.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                                                            <div>
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    Receipt #{match.id} · {match.receipt_number}
+                                                                </div>
+                                                                <div className="mt-0.5 text-xs text-gray-500">
+                                                                    Matched by {match.matched_by
+                                                                        .map((reason) => reason === 'receipt_image' ? 'image' : 'receipt number')
+                                                                        .join(' and ')}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openRelatedReceipt(match.id)}
+                                                                className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                            >
+                                                                Review →
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </section>
                                         )}
 
@@ -1028,10 +1102,64 @@ export default function ReceiptQuickReviewModal({
                                             </Alert>
                                         )}
 
+                                        {/* Approve */}
+
+                                        {showApprove && (
+                                            <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                                <div className="text-sm font-semibold text-emerald-900">
+                                                    Confirm permanent approval
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-emerald-800">
+                                                    This decision cannot be reversed in v1.
+                                                </p>
+
+                                                <label
+                                                    htmlFor="quick-review-approval-note"
+                                                    className="mt-3 block text-sm font-medium text-emerald-900"
+                                                >
+                                                    Review note {suspicious ? '(required)' : '(optional)'}
+                                                </label>
+                                                <textarea
+                                                    id="quick-review-approval-note"
+                                                    value={approvalNote}
+                                                    onChange={(event) => setApprovalNote(event.target.value)}
+                                                    rows={3}
+                                                    autoFocus
+                                                    placeholder="Explain why this receipt is valid..."
+                                                    className="mt-2 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"
+                                                />
+
+                                                <div className="mt-2 flex justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading}
+                                                        onClick={() => {
+                                                            setShowApprove(false);
+                                                            setApprovalNote('');
+                                                        }}
+                                                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading || (suspicious && !approvalNote.trim())}
+                                                        onClick={approveReceipt}
+                                                        className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                                                    >
+                                                        {actionLoading ? 'Approving...' : 'Confirm Approve'}
+                                                    </button>
+                                                </div>
+                                            </section>
+                                        )}
+
                                         {/* Reject */}
 
                                         {showReject && (
                                             <section className="rounded-lg border border-red-200 bg-red-50 p-3">
+                                                <p className="mb-3 text-xs leading-5 text-red-800">
+                                                    Rejection is permanent in v1 and cannot be reversed.
+                                                </p>
                                                 <label
                                                     htmlFor="quick-review-rejection-reason"
                                                     className="text-sm font-medium text-red-800"
@@ -1120,45 +1248,40 @@ export default function ReceiptQuickReviewModal({
 
                                 {canReview && (
                                     <div className="flex flex-wrap justify-end gap-2">
-                                        {!showReject && (
+                                        {!showReject && !showApprove && (
                                             <button
                                                 type="button"
                                                 disabled={
                                                     actionLoading
                                                 }
-                                                onClick={() =>
-                                                    setShowReject(
-                                                        true
-                                                    )
-                                                }
+                                                onClick={() => {
+                                                    setShowReject(true);
+                                                    setShowApprove(false);
+                                                }}
                                                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                                             >
                                                 Reject
                                             </button>
                                         )}
 
-                                        <button
-                                            type="button"
-                                            disabled={
-                                                actionLoading ||
-                                                showReject
-                                            }
-                                            onClick={
-                                                approveReceipt
-                                            }
-                                            className={[
-                                                'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50',
-                                                suspicious
-                                                    ? 'bg-gray-900 hover:bg-gray-800'
-                                                    : 'bg-emerald-600 hover:bg-emerald-700',
-                                            ].join(
-                                                ' '
-                                            )}
-                                        >
-                                            {actionLoading
-                                                ? 'Processing...'
-                                                : 'Approve'}
-                                        </button>
+                                        {!showReject && !showApprove && (
+                                            <button
+                                                type="button"
+                                                disabled={actionLoading}
+                                                onClick={() => {
+                                                    setShowApprove(true);
+                                                    setShowReject(false);
+                                                }}
+                                                className={[
+                                                    'rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50',
+                                                    suspicious
+                                                        ? 'bg-gray-900 hover:bg-gray-800'
+                                                        : 'bg-emerald-600 hover:bg-emerald-700',
+                                                ].join(' ')}
+                                            >
+                                                Approve
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>

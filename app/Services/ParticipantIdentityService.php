@@ -44,4 +44,11 @@ class ParticipantIdentityService
     {
         return mb_strtolower(trim($email));
     }
+
+    public function normalizeName(string $name): string
+    {
+        $name = preg_replace('/\s+/u', ' ', trim($name)) ?? '';
+
+        return mb_strtolower($name);
+    }
 }

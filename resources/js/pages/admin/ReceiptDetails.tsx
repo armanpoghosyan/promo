@@ -22,6 +22,8 @@ export default function ReceiptDetails() {
     const [actionSuccess, setActionSuccess] = useState<string | null>(null);
     const [showRejectForm, setShowRejectForm] = useState(false);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [showApproveForm, setShowApproveForm] = useState(false);
+    const [approvalNote, setApprovalNote] = useState('');
     const [showNoteForm, setShowNoteForm] = useState(false);
     const [note, setNote] = useState('');
     const [imageViewerOpen, setImageViewerOpen] = useState(false);
@@ -61,7 +63,7 @@ export default function ReceiptDetails() {
     };
 
     const approveReceipt = async () => {
-        if (!receipt) {
+        if (!receipt || (receipt.is_suspicious && !approvalNote.trim())) {
             return;
         }
 
@@ -69,13 +71,19 @@ export default function ReceiptDetails() {
         resetMessages();
 
         try {
-            const response =
-                await api.post<ReceiptResponse>(`/admin/receipts/${receipt.id}/approve`);
+            const response = await api.post<ReceiptResponse>(
+                `/admin/receipts/${receipt.id}/approve`,
+                {
+                    review_note: approvalNote.trim() || undefined,
+                }
+            );
 
             setReceipt(response.data.data);
 
             setShowRejectForm(false);
             setRejectionReason('');
+            setShowApproveForm(false);
+            setApprovalNote('');
 
             setActionSuccess('Receipt approved successfully.');
         } catch (error: unknown) {
@@ -194,6 +202,7 @@ export default function ReceiptDetails() {
     const participant = receipt.participant;
     const notes = receipt.notes ?? [];
     const relatedReceipts = (participant?.receipts ?? []).filter((item) => item.id !== receipt.id);
+    const duplicateMatches = receipt.duplicate_matches ?? [];
     const canReview = receipt.status === 'submitted';
     const currentReceiptUrl = `/admin/receipts/${receipt.id}`;
 
@@ -311,6 +320,41 @@ export default function ReceiptDetails() {
                             </section>
                         )}
 
+                        {duplicateMatches.length > 0 && (
+                            <section className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
+                                <SectionHeader title={`Duplicate Evidence (${duplicateMatches.length})`} />
+
+                                <div className="divide-y divide-gray-100">
+                                    {duplicateMatches.map((match) => (
+                                        <div key={match.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                                            <div>
+                                                <div className="font-medium text-gray-900">
+                                                    Receipt #{match.id} · {match.receipt_number}
+                                                </div>
+                                                <div className="mt-1 text-xs text-gray-500">
+                                                    Matched by{' '}
+                                                    {match.matched_by
+                                                        .map((reason) => reason === 'receipt_image' ? 'image' : 'receipt number')
+                                                        .join(' and ')}
+                                                    {match.participant
+                                                        ? ` · ${match.participant.first_name} ${match.participant.last_name}`
+                                                        : ''}
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuickReviewReceiptId(match.id)}
+                                                className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800"
+                                            >
+                                                Review →
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
                         {participant && (
                             <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                                 <SectionHeader
@@ -331,6 +375,22 @@ export default function ReceiptDetails() {
                                     <InfoItem label="Email" value={participant.email}/>
                                     <InfoItem label="Total Receipts" value={participant.receipts_count ?? relatedReceipts.length + 1}/>
                                 </div>
+
+                                {(receipt.submitted_first_name || receipt.submitted_last_name) && (
+                                    <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+                                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            Submitted identity snapshot
+                                        </div>
+                                        <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                                            <InfoItem
+                                                label="Name"
+                                                value={`${receipt.submitted_first_name ?? ''} ${receipt.submitted_last_name ?? ''}`.trim()}
+                                            />
+                                            <InfoItem label="Phone" value={receipt.submitted_phone ?? '—'} />
+                                            <InfoItem label="Email" value={receipt.submitted_email ?? '—'} />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {relatedReceipts.length > 0 && (
                                         <div className="border-t border-gray-100">
@@ -416,6 +476,7 @@ export default function ReceiptDetails() {
                                             onClick={() => {
                                                 setShowNoteForm(true);
                                                 setShowRejectForm(false);
+                                                setShowApproveForm(false);
                                             }}
                                             className="text-xs font-medium text-blue-600 hover:text-blue-800"
                                         >
@@ -500,12 +561,16 @@ export default function ReceiptDetails() {
                             <div className="p-4">
                                 {canReview ? (
                                     <>
-                                        {!showRejectForm && (
+                                        {!showRejectForm && !showApproveForm && (
                                             <div className="grid grid-cols-2 gap-2">
                                                 <button
                                                     type="button"
                                                     disabled={actionLoading}
-                                                    onClick={approveReceipt}
+                                                    onClick={() => {
+                                                        setShowApproveForm(true);
+                                                        setShowRejectForm(false);
+                                                        setShowNoteForm(false);
+                                                    }}
                                                     className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                                                 >
                                                     {actionLoading ? 'Processing...' : 'Approve'}
@@ -516,6 +581,7 @@ export default function ReceiptDetails() {
                                                     disabled={actionLoading}
                                                     onClick={() => {
                                                         setShowRejectForm(true);
+                                                        setShowApproveForm(false);
                                                         setShowNoteForm(false);
                                                     }}
                                                     className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -525,8 +591,60 @@ export default function ReceiptDetails() {
                                             </div>
                                         )}
 
+                                        {showApproveForm && (
+                                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                                                <div className="text-sm font-semibold text-emerald-900">
+                                                    Confirm permanent approval
+                                                </div>
+                                                <p className="mt-1 text-xs leading-5 text-emerald-800">
+                                                    This decision cannot be reversed in v1. Verify the receipt and participant before continuing.
+                                                </p>
+
+                                                <label
+                                                    htmlFor="receipt-approval-note"
+                                                    className="mt-3 block text-sm font-medium text-emerald-900"
+                                                >
+                                                    Review note {receipt.is_suspicious ? '(required)' : '(optional)'}
+                                                </label>
+                                                <textarea
+                                                    id="receipt-approval-note"
+                                                    value={approvalNote}
+                                                    onChange={(event) => setApprovalNote(event.target.value)}
+                                                    rows={3}
+                                                    autoFocus
+                                                    placeholder="Explain why this receipt is valid..."
+                                                    className="mt-2 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm"
+                                                />
+
+                                                <div className="mt-3 flex justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading}
+                                                        onClick={() => {
+                                                            setShowApproveForm(false);
+                                                            setApprovalNote('');
+                                                        }}
+                                                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading || (receipt.is_suspicious && !approvalNote.trim())}
+                                                        onClick={approveReceipt}
+                                                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                                                    >
+                                                        {actionLoading ? 'Approving...' : 'Confirm Approve'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {showRejectForm && (
                                             <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                                                <p className="mb-3 text-xs leading-5 text-red-800">
+                                                    Rejection is permanent in v1. Confirm this receipt should never become eligible for a draw.
+                                                </p>
                                                 <label
                                                     htmlFor="receipt-rejection-reason"
                                                     className="text-sm font-medium text-red-800"

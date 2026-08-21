@@ -52,6 +52,18 @@ const initialForm: FormState = {
 
 const turnstileEnabled = import.meta.env.VITE_TURNSTILE_ENABLED === 'true';
 
+function isValidArmenianPhone(value: string): boolean {
+    if (!/^\+?[0-9\s().-]+$/.test(value)) {
+        return false;
+    }
+
+    const digits = value.replace(/\D+/g, '');
+
+    return /^[1-9]\d{7}$/.test(digits)
+        || /^0[1-9]\d{7}$/.test(digits)
+        || /^374[1-9]\d{7}$/.test(digits);
+}
+
 const faqItems = [
     {
         question: 'How can I participate?',
@@ -123,6 +135,8 @@ export default function Landing() {
 
         if (!form.phone.trim()) {
             errors.phone = tr('This field is required.');
+        } else if (!isValidArmenianPhone(form.phone.trim())) {
+            errors.phone = tr('Please enter a valid Armenian phone number.');
         }
 
         if (!form.email.trim()) {
@@ -229,7 +243,6 @@ export default function Landing() {
 
             setError(tr(err.response?.data?.message) ?? tr('Unable to submit participation. Please try again.'));
         } finally {
-            setSubmitting(false);
             setSubmitting(false);
             setTurnstileToken('');
             setTurnstileResetKey((current) => current + 1);

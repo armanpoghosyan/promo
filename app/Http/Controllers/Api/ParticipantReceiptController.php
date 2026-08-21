@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SubmitReceiptRequest;
+use App\Services\CampaignWindowService;
 use App\Services\ReceiptSubmissionService;
 use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
@@ -13,9 +14,17 @@ class ParticipantReceiptController extends Controller
 {
     public function store(
         SubmitReceiptRequest $request,
+        CampaignWindowService $campaignWindow,
         ReceiptSubmissionService $service,
         TurnstileService $turnstile
     ): JsonResponse {
+        $campaignStatus = $campaignWindow->submissionStatus();
+
+        if (! $campaignStatus['open']) {
+            return response()->json([
+                'message' => $campaignStatus['message'],
+            ], $campaignStatus['status']);
+        }
 
         try {
             $captchaValid = $turnstile->verify(
