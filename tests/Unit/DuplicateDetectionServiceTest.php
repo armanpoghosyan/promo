@@ -38,6 +38,10 @@ class DuplicateDetectionServiceTest extends TestCase
 
                 participant: $participant,
 
+                firstName: $participant->first_name,
+
+                lastName: $participant->last_name,
+
                 phoneNormalized: '37499111222',
 
                 emailNormalized: 'test@example.com',
@@ -79,6 +83,10 @@ class DuplicateDetectionServiceTest extends TestCase
                 receiptNumber: 'ABC-12345',
 
                 participant: $participant,
+
+                firstName: $participant->first_name,
+
+                lastName: $participant->last_name,
 
                 phoneNormalized: '37499111222',
 
@@ -128,6 +136,10 @@ class DuplicateDetectionServiceTest extends TestCase
 
                 participant: $participant,
 
+                firstName: $participant->first_name,
+
+                lastName: $participant->last_name,
+
                 phoneNormalized: '37499111222',
 
                 emailNormalized: 'test@example.com',
@@ -147,6 +159,32 @@ class DuplicateDetectionServiceTest extends TestCase
 
         $this->assertTrue(
             $result['is_suspicious']
+        );
+    }
+
+    public function test_name_mismatch_marks_only_the_receipt_as_suspicious(): void
+    {
+        $participant = Participant::factory()->create([
+            'first_name' => 'Aram',
+            'last_name' => 'Petrosyan',
+            'phone_normalized' => '37499111222',
+            'email_normalized' => 'test@example.com',
+        ]);
+
+        $result = app(DuplicateDetectionService::class)->check(
+            receiptNumber: '123456789',
+            participant: $participant,
+            firstName: 'Ani',
+            lastName: 'Petrosyan',
+            phoneNormalized: '37499111222',
+            emailNormalized: 'test@example.com',
+            image: UploadedFile::fake()->image('receipt.jpg')
+        );
+
+        $this->assertTrue($result['is_suspicious']);
+        $this->assertContains(
+            'participant_name_mismatch',
+            $result['reasons']
         );
     }
 }

@@ -16,6 +16,7 @@ export type SuspiciousReason =
     | 'duplicate_receipt_image'
     | 'phone_used_by_another_participant'
     | 'email_used_by_another_participant'
+    | 'participant_name_mismatch'
     | 'receipt_number_non_numeric'
     | string;
 
@@ -46,6 +47,11 @@ export interface Receipt {
     id: number;
 
     participant_id: number;
+
+    submitted_first_name?: string | null;
+    submitted_last_name?: string | null;
+    submitted_phone?: string | null;
+    submitted_email?: string | null;
 
     receipt_number: string;
     receipt_image: string;
@@ -108,6 +114,19 @@ export interface Receipt {
     verified_by_user?:
         | AdminUser
         | null;
+
+    duplicate_matches?: ReceiptDuplicateMatch[];
+}
+
+export interface ReceiptDuplicateMatch {
+    id: number;
+    participant_id: number;
+    receipt_number: string;
+    status: ReceiptStatus;
+    is_suspicious: boolean;
+    submitted_at: string | null;
+    matched_by: Array<'receipt_number' | 'receipt_image'>;
+    participant?: Participant | null;
 }
 
 export interface ReceiptResponse {

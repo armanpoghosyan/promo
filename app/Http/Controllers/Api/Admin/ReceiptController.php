@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ReceiptController extends Controller
 {
@@ -229,6 +230,14 @@ class ReceiptController extends Controller
         Request $request,
         Receipt $receipt
     ): JsonResponse {
+        $data = $request->validate([
+            'review_note' => [
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+        ]);
+
         if (
             $receipt->status !==
             ReceiptStatus::SUBMITTED
@@ -242,7 +251,8 @@ class ReceiptController extends Controller
             DB::transaction(
                 function () use (
                     $request,
-                    $receipt
+                    $receipt,
+                    $data
                 ) {
                     $receipt =
                         Receipt::query()
@@ -260,6 +270,16 @@ class ReceiptController extends Controller
                             422,
                             'Only submitted receipts can be approved.'
                         );
+                    }
+
+                    $reviewNote = trim(
+                        $data['review_note'] ?? ''
+                    );
+
+                    if ($receipt->is_suspicious && $reviewNote === '') {
+                        throw ValidationException::withMessages([
+                            'review_note' => 'A review note is required to approve a suspicious receipt.',
+                        ]);
                     }
 
                     $oldStatus =
@@ -281,6 +301,17 @@ class ReceiptController extends Controller
 
                         'rejection_reason' => null,
                     ]);
+
+                    $reviewNoteId = null;
+
+                    if ($reviewNote !== '') {
+                        $note = $receipt->notes()->create([
+                            'user_id' => $request->user()->id,
+                            'note' => $reviewNote,
+                        ]);
+
+                        $reviewNoteId = $note->id;
+                    }
 
                     AuditLog::create([
                         'user_id' => $request
@@ -307,6 +338,8 @@ class ReceiptController extends Controller
                             'verified_by' => $request
                                 ->user()
                                 ->id,
+
+                            'review_note_id' => $reviewNoteId,
                         ],
 
                         'description' => 'Receipt approved by organizer.',
@@ -579,5 +612,68 @@ class ReceiptController extends Controller
 
             'notes.user',
         ]);
+
+        $duplicateMatches = Receipt::query()
+            ->whereKeyNot($receipt->id)
+            ->where(function ($query) use ($receipt) {
+                $query->where(
+                    'receipt_number',
+                    $receipt->receipt_number
+                );
+
+                if ($receipt->image_hash) {
+                    $query->orWhere(
+                        'image_hash',
+                        $receipt->image_hash
+                    );
+                }
+            })
+            ->with([
+                'participant:id,first_name,last_name,phone,email',
+            ])
+            ->latest('submitted_at')
+            ->get([
+                'id',
+                'participant_id',
+                'receipt_number',
+                'image_hash',
+                'status',
+                'is_suspicious',
+                'submitted_at',
+            ])
+            ->map(function (Receipt $match) use ($receipt) {
+                $matchedBy = [];
+
+                if (
+                    mb_strtolower($match->receipt_number) ===
+                    mb_strtolower($receipt->receipt_number)
+                ) {
+                    $matchedBy[] = 'receipt_number';
+                }
+
+                if (
+                    $receipt->image_hash
+                    && $match->image_hash === $receipt->image_hash
+                ) {
+                    $matchedBy[] = 'receipt_image';
+                }
+
+                return [
+                    'id' => $match->id,
+                    'participant_id' => $match->participant_id,
+                    'receipt_number' => $match->receipt_number,
+                    'status' => $match->status->value,
+                    'is_suspicious' => $match->is_suspicious,
+                    'submitted_at' => $match->submitted_at,
+                    'matched_by' => $matchedBy,
+                    'participant' => $match->participant,
+                ];
+            })
+            ->values();
+
+        $receipt->setAttribute(
+            'duplicate_matches',
+            $duplicateMatches
+        );
     }
 }

@@ -8,9 +8,15 @@ use Illuminate\Http\UploadedFile;
 
 class DuplicateDetectionService
 {
+    public function __construct(
+        private ParticipantIdentityService $participantIdentity
+    ) {}
+
     public function check(
         string $receiptNumber,
         Participant $participant,
+        string $firstName,
+        string $lastName,
         string $phoneNormalized,
         string $emailNormalized,
         UploadedFile $image
@@ -43,6 +49,15 @@ class DuplicateDetectionService
 
         if ($emailUsedByAnotherParticipant) {
             $reasons[] = 'email_used_by_another_participant';
+        }
+
+        if (
+            $this->participantIdentity->normalizeName($participant->first_name) !==
+                $this->participantIdentity->normalizeName($firstName)
+            || $this->participantIdentity->normalizeName($participant->last_name) !==
+                $this->participantIdentity->normalizeName($lastName)
+        ) {
+            $reasons[] = 'participant_name_mismatch';
         }
 
         $imageHash = hash_file('sha256', $image->getRealPath());

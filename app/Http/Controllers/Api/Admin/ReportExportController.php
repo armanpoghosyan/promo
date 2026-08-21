@@ -41,7 +41,7 @@ class ReportExportController extends Controller
                     "\xEF\xBB\xBF"
                 );
 
-                fputcsv($handle, [
+                $this->writeCsvRow($handle, [
                     'ID',
                     'Participant ID',
                     'First Name',
@@ -72,7 +72,7 @@ class ReportExportController extends Controller
                             foreach (
                                 $receipts as $receipt
                             ) {
-                                fputcsv(
+                                $this->writeCsvRow(
                                     $handle,
                                     [
                                         $receipt->id,
@@ -158,7 +158,7 @@ class ReportExportController extends Controller
                     "\xEF\xBB\xBF"
                 );
 
-                fputcsv($handle, [
+                $this->writeCsvRow($handle, [
                     'Winner Record ID',
                     'Draw ID',
                     'Week',
@@ -201,7 +201,7 @@ class ReportExportController extends Controller
                                         ->receipt
                                         ?->participant;
 
-                                fputcsv(
+                                $this->writeCsvRow(
                                     $handle,
                                     [
                                         $winner->id,
@@ -290,7 +290,7 @@ class ReportExportController extends Controller
                     "\xEF\xBB\xBF"
                 );
 
-                fputcsv($handle, [
+                $this->writeCsvRow($handle, [
                     'Draw ID',
                     'Week',
                     'Draw Date',
@@ -379,7 +379,7 @@ class ReportExportController extends Controller
                                     $draw
                                         ->drawPrizes as $drawPrize
                                 ) {
-                                    fputcsv(
+                                    $this->writeCsvRow(
                                         $handle,
                                         [
                                             $draw->id,
@@ -454,5 +454,32 @@ class ReportExportController extends Controller
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+    }
+
+    /**
+     * @param resource $handle
+     */
+    private function writeCsvRow($handle, array $values): void
+    {
+        fputcsv(
+            $handle,
+            array_map(
+                fn (mixed $value): mixed => $this->sanitizeCsvCell($value),
+                $values
+            )
+        );
+    }
+
+    private function sanitizeCsvCell(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        if (preg_match('/^\\s*[=+\-@]/u', $value) === 1) {
+            return "'".$value;
+        }
+
+        return $value;
     }
 }
