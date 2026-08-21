@@ -276,10 +276,16 @@ class WinnerController extends Controller
                     'replacementWinner',
                 ]),
             ]);
-        } catch (Throwable $e) {
+        } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to confirm winner.',
+            ], 500);
         }
     }
 
@@ -384,10 +390,16 @@ class WinnerController extends Controller
 
                 'data' => $attempt,
             ], 201);
-        } catch (Throwable $e) {
+        } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to record contact attempt.',
+            ], 500);
         }
     }
 
@@ -477,10 +489,16 @@ class WinnerController extends Controller
                     'replacementWinner',
                 ]),
             ]);
-        } catch (Throwable $e) {
+        } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to cancel winner.',
+            ], 500);
         }
     }
 
@@ -508,10 +526,16 @@ class WinnerController extends Controller
                     'receipt.participant',
                 ]),
             ], 201);
-        } catch (Throwable $e) {
+        } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to select replacement winner.',
+            ], 500);
         }
     }
 

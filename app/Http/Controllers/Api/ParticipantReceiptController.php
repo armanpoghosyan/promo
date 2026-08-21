@@ -7,6 +7,7 @@ use App\Http\Requests\SubmitReceiptRequest;
 use App\Services\ReceiptSubmissionService;
 use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
+use Throwable;
 
 class ParticipantReceiptController extends Controller
 {
@@ -15,10 +16,19 @@ class ParticipantReceiptController extends Controller
         ReceiptSubmissionService $service,
         TurnstileService $turnstile
     ): JsonResponse {
-        $captchaValid = $turnstile->verify(
-            token: $request->string('turnstile_token')->toString(),
-            ip: $request->ip()
-        );
+
+        try {
+            $captchaValid = $turnstile->verify(
+                token: $request->string('turnstile_token')->toString(),
+                ip: $request->ip()
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'CAPTCHA verification is temporarily unavailable.',
+            ], 503);
+        }
 
         if (! $captchaValid) {
             return response()->json([
@@ -46,7 +56,6 @@ class ParticipantReceiptController extends Controller
                 'receipt_number' => $receipt->receipt_number,
                 'status' => $receipt->status->value,
                 'submitted_at' => $receipt->submitted_at,
-                'is_suspicious' => $receipt->is_suspicious,
             ],
         ], 201);
     }

@@ -11,7 +11,8 @@ export type IconType =
     | 'prizes'
     | 'reports'
     | 'menu'
-    | 'logout';
+    | 'logout'
+    | 'activity';
 
 export type IconProps = SVGProps<SVGSVGElement> & {type: IconType;
 };
@@ -116,6 +117,12 @@ export default function Icon({type, className = defaultClassName, strokeWidth = 
                     <path d="M10 17l5-5-5-5" />
                     <path d="M15 12H3" />
                     <path d="M13 4h7v16h-7" />
+                </svg>
+            );
+        case 'activity':
+            return (
+                <svg {...commonProps}>
+                    <path d="M3 12h4l2-6 4 12 2-6h6" />
                 </svg>
             );
 

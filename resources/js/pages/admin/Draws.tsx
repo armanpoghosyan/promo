@@ -170,7 +170,7 @@ export default function Draws() {
             <PageHeader
                 title="Draws"
                 description="Create, configure and execute weekly promotion draws."
-                action={
+                actions={
                     <button
                         type="button"
                         onClick={() => {

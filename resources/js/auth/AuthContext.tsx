@@ -7,6 +7,8 @@ import {
     useState,
 } from 'react';
 
+import axios from 'axios';
+
 import { useLocation } from 'react-router-dom';
 
 import api from '../services/api';
@@ -44,56 +46,34 @@ export function AuthProvider({
     const [loading, setLoading] =
         useState(true);
 
-    const refreshUser = useCallback(
-        async () => {
-            const token =
-                localStorage.getItem(
-                    'admin_access_token'
+    const refreshUser = useCallback(async () => {
+        try {
+            const response =
+                await api.get<CurrentUserResponse>(
+                    '/admin/me'
                 );
 
-            if (!token) {
-                setUser(null);
-                setLoading(false);
-
-                return;
-            }
-
-            try {
-                const response =
-                    await api.get<CurrentUserResponse>(
-                        '/admin/me'
-                    );
-
-                setUser(response.data.data);
-            } catch (error: unknown) {
-                setUser(null);
-            } finally {
-                setLoading(false);
-            }
-        },
-        []
-    );
+            setUser(response.data.data);
+        } catch (error: unknown) {
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     const login = async (
         credentials: LoginCredentials
     ) => {
-        const response =
-            await api.post<LoginResponse>(
-                '/admin/login',
-                credentials
-            );
+        await axios.get('/sanctum/csrf-cookie', {
+            withCredentials: true,
+        });
 
-        const {
-            token,
-            user: loggedInUser,
-        } = response.data.data;
-
-        localStorage.setItem(
-            'admin_access_token',
-            token
+        const response = await api.post<LoginResponse>(
+            '/admin/login',
+            credentials
         );
 
-        setUser(loggedInUser);
+        setUser(response.data.data.user);
         setLoading(false);
     };
 
@@ -101,10 +81,6 @@ export function AuthProvider({
         try {
             await api.post('/admin/logout');
         } finally {
-            localStorage.removeItem(
-                'admin_access_token'
-            );
-
             setUser(null);
         }
     };

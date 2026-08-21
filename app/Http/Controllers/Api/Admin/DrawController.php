@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Throwable;
 
 class DrawController extends Controller
@@ -464,10 +465,16 @@ class DrawController extends Controller
                 'message' => 'Draw executed successfully.',
                 'data' => $draw,
             ]);
-        } catch (Throwable $e) {
+        } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to execute the draw.',
+            ], 500);
         }
     }
 

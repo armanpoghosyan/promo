@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
@@ -57,9 +58,8 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken(
-            'admin-panel'
-        )->plainTextToken;
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
 
         AuditLog::create([
             'user_id' => $user->id,
@@ -78,7 +78,6 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful.',
             'data' => [
-                'token' => $token,
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -107,7 +106,9 @@ class AuthController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        $user->currentAccessToken()?->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'message' => 'Logout successful.',
