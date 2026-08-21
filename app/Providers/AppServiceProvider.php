@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,7 +25,14 @@ class AppServiceProvider extends ServiceProvider
             function () {
                 return match (config('services.random.provider')) {
                     'random_org' => app(RandomOrgProvider::class),
-                    default => app(LocalRandomProvider::class),
+                    'local' => app()->environment('production')
+                        ? throw new RuntimeException(
+                            'The local random provider is disabled in production.'
+                        )
+                        : app(LocalRandomProvider::class),
+                    default => throw new RuntimeException(
+                        'The configured random provider is not supported.'
+                    ),
                 };
             }
         );

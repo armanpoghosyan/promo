@@ -88,3 +88,65 @@ Used for local development and testing.
 
 ```env
 RANDOM_PROVIDER=local
+```
+
+### Random.org provider
+
+Production draws use Random.org. Configure the key, then make one real request before opening the campaign:
+
+```env
+RANDOM_PROVIDER=random_org
+RANDOM_ORG_API_KEY=your-production-key
+```
+
+```bash
+php artisan promo:random-org-smoke
+```
+
+The command validates that Random.org returned a complete permutation and prints the provider request ID. It does not create or modify a campaign draw.
+
+## Local Setup
+
+Requirements: PHP 8.3+, Composer, MySQL, and Node.js `^20.19.0` or `>=22.12.0` with npm 10+.
+
+```bash
+composer setup
+composer dev
+```
+
+`composer setup` uses `npm ci`, so frontend dependencies are installed exactly from `package-lock.json`. CAPTCHA is disabled in local development by default. Demo data remains disabled unless `SEED_DATASET=light` or `SEED_DATASET=full` is explicitly selected.
+
+## Production Release
+
+Start from `.env.production.example`, replace every placeholder, and keep the production file outside version control. In particular, set the real application URL, database credentials, campaign window, organizer identity, privacy contact, Turnstile keys and hostname, Random.org key, and initial administrator credentials.
+
+Run the release process in this order:
+
+```bash
+composer install --no-dev --prefer-dist --optimize-autoloader
+npm ci --ignore-scripts
+npm run check
+php artisan test
+php artisan migrate --force
+php artisan db:seed --force
+php artisan storage:link
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan promo:release-check
+php artisan promo:random-org-smoke
+```
+
+The release check fails unless production uses HTTPS, secure database-backed sessions, no demo data, a valid campaign window, real public/legal identity values, Turnstile, and Random.org.
+
+After deployment, manually verify:
+
+1. English and Armenian landing content, Privacy Policy, Official Rules, CAPTCHA and a real receipt submission.
+2. Administrator login/logout and expired-session handling.
+3. Receipt approval, suspicious-review note requirement, rejection reason and permanent decisions.
+4. Draw preparation, prevention of early execution, successful Random.org execution and stored request ID.
+5. Winner contact, confirmation, cancellation and reserve replacement.
+6. Receipt, winner and draw CSV downloads in spreadsheet software.
+7. Dashboard counts, Recent activity links and receipt/winner review links.
+
+Back up the database and private receipt storage before deployment and before every migration. Confirm a restore procedure with the production host before the campaign opens.

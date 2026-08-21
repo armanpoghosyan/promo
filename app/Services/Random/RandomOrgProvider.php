@@ -52,7 +52,9 @@ class RandomOrgProvider implements RandomProvider
 
         $apiRequest['params']['apiKey'] = $apiKey;
 
-        $response = Http::timeout(30)
+        $response = Http::connectTimeout(5)
+            ->timeout(30)
+            ->retry(2, 300)
             ->post(
                 'https://api.random.org/json-rpc/4/invoke',
                 $apiRequest
@@ -89,10 +91,19 @@ class RandomOrgProvider implements RandomProvider
             );
         }
 
+        if (count(array_unique($randomIndexes, SORT_REGULAR)) !== $count) {
+            throw new RuntimeException(
+                'Random.org returned duplicate indexes.'
+            );
+        }
+
         $shuffled = [];
 
         foreach ($randomIndexes as $index) {
-            if (! array_key_exists($index, $values)) {
+            if (
+                ! is_int($index)
+                || ! array_key_exists($index, $values)
+            ) {
                 throw new RuntimeException(
                     'Random.org returned an invalid index.'
                 );

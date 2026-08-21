@@ -9,10 +9,8 @@ import Draws from './pages/admin/Draws';
 import Login from './pages/admin/Login';
 import ParticipantDetails from './pages/admin/ParticipantDetails';
 import Participants from './pages/admin/Participants';
-import Prizes from './pages/admin/Prizes';
 import ReceiptDetails from './pages/admin/ReceiptDetails';
 import Receipts from './pages/admin/Receipts';
-import Reports from './pages/admin/Reports';
 import WinnerDetails from './pages/admin/WinnerDetails';
 import Winners from './pages/admin/Winners';
 
@@ -32,10 +30,8 @@ export default function App() {
                     <Route path="draws/:id"         element={<DrawDetails />}/>
                     <Route path="participants"      element={<Participants />}/>
                     <Route path="participants/:id"  element={<ParticipantDetails />}/>
-                    <Route path="prizes"            element={<Prizes />}/>
                     <Route path="winners"           element={<Winners />}/>
                     <Route path="winners/:id"       element={<WinnerDetails />}/>
-                    <Route path="reports"           element={<Reports />}/>
                     <Route path="activity"          element={<ActivityLog />}/>
                     <Route path="*"                 element={<AdminNotFound />}/>
 

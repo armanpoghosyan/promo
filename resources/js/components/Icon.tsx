@@ -10,6 +10,7 @@ export type IconType =
     | 'winners'
     | 'prizes'
     | 'reports'
+    | 'exports'
     | 'menu'
     | 'logout'
     | 'activity';
@@ -99,6 +100,15 @@ export default function Icon({type, className = defaultClassName, strokeWidth = 
                     <path d="M10 20V4" />
                     <path d="M16 20v-7" />
                     <path d="M22 20H2" />
+                </svg>
+            );
+
+        case 'exports':
+            return (
+                <svg {...commonProps}>
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 21h14" />
                 </svg>
             );
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     useLocation,
     useNavigate,
@@ -11,47 +11,62 @@ import LoadingState from '../../components/LoadingState';
 import PageHeader from '../../components/PageHeader';
 import Pagination from '../../components/Pagination';
 import StatusBadge from '../../components/StatusBadge';
+import WorkQueueTabs from '../../components/admin/WorkQueueTabs';
 
 import api from '../../services/api';
 
 import type { PaginatedResponse } from '../../types/api';
 import type {
     WinnerDetail,
-    WinnerStatus,
 } from '../../types/winner';
 
 import { getApiErrorMessage } from '../../utils/apiError';
 import { formatDateTime } from '../../utils/date';
 import { positiveIntegerParam } from '../../utils/query';
 
-const WINNER_STATUSES: Array<{
-    value: WinnerStatus;
-    label: string;
-}> = [
-    {
-        value: 'selected',
-        label: 'Selected',
-    },
-    {
-        value: 'contacting',
-        label: 'Contacting',
-    },
-    {
-        value: 'confirmed',
-        label: 'Confirmed',
-    },
-    {
-        value: 'cancelled',
-        label: 'Cancelled',
-    },
-];
+type WinnerQueue =
+    | 'needs_action'
+    | 'confirmed'
+    | 'cancelled'
+    | 'all';
 
-function winnerStatusParam(value: string | null): WinnerStatus | '' {
-    return WINNER_STATUSES.some(
-        (option) => option.value === value
-    )
-        ? (value as WinnerStatus)
-        : '';
+interface WinnerCounts {
+    needs_action: number;
+    confirmed: number;
+    cancelled: number;
+    all: number;
+}
+
+interface WinnerListResponse
+    extends PaginatedResponse<WinnerDetail> {
+    counts: WinnerCounts;
+}
+
+const emptyCounts: WinnerCounts = {
+    needs_action: 0,
+    confirmed: 0,
+    cancelled: 0,
+    all: 0,
+};
+
+function winnerQueueParam(
+    queueValue: string | null,
+    statusValue: string | null
+): WinnerQueue {
+    if (
+        queueValue === 'needs_action' ||
+        queueValue === 'confirmed' ||
+        queueValue === 'cancelled' ||
+        queueValue === 'all'
+    ) {
+        return queueValue;
+    }
+
+    if (statusValue === 'confirmed' || statusValue === 'cancelled') {
+        return statusValue;
+    }
+
+    return 'needs_action';
 }
 
 export default function Winners() {
@@ -60,12 +75,16 @@ export default function Winners() {
 
     const [searchParams, setSearchParams] = useSearchParams();
 
-    const status = winnerStatusParam(searchParams.get('status'));
+    const queue = winnerQueueParam(
+        searchParams.get('queue'),
+        searchParams.get('status')
+    );
     const page = positiveIntegerParam(searchParams.get('page'));
 
     const [winners, setWinners] = useState<WinnerDetail[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [counts, setCounts] = useState<WinnerCounts>(emptyCounts);
 
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -75,11 +94,11 @@ export default function Winners() {
     });
 
     const updateUrl = useCallback(
-        (nextStatus: WinnerStatus | '', nextPage: number) => {
+        (nextQueue: WinnerQueue, nextPage: number) => {
             const params = new URLSearchParams();
 
-            if (nextStatus) {
-                params.set('status', nextStatus);
+            if (nextQueue !== 'needs_action') {
+                params.set('queue', nextQueue);
             }
 
             if (nextPage > 1) {
@@ -99,16 +118,17 @@ export default function Winners() {
 
         try {
             const response = await api.get<
-                PaginatedResponse<WinnerDetail>
+                WinnerListResponse
             >('/admin/winners', {
                 params: {
-                    status: status || undefined,
+                    queue,
                     page,
                     per_page: 20,
                 },
             });
 
             setWinners(response.data.data ?? []);
+            setCounts(response.data.counts ?? emptyCounts);
 
             setPagination({
                 current_page: response.data.current_page,
@@ -126,28 +146,35 @@ export default function Winners() {
         } finally {
             setLoading(false);
         }
-    }, [status, page]);
+    }, [queue, page]);
 
     useEffect(() => {
         loadWinners();
     }, [loadWinners]);
 
-    const stats = useMemo(
-        () => ({
-            needsAction: winners.filter(
-                (winner) =>
-                    winner.status === 'selected' ||
-                    winner.status === 'contacting'
-            ).length,
-            confirmed: winners.filter(
-                (winner) => winner.status === 'confirmed'
-            ).length,
-            cancelled: winners.filter(
-                (winner) => winner.status === 'cancelled'
-            ).length,
-        }),
-        [winners]
-    );
+    const tabs = [
+        {
+            value: 'needs_action',
+            label: 'Needs Action',
+            count: counts.needs_action,
+            attention: true,
+        },
+        {
+            value: 'confirmed',
+            label: 'Confirmed',
+            count: counts.confirmed,
+        },
+        {
+            value: 'cancelled',
+            label: 'Cancelled',
+            count: counts.cancelled,
+        },
+        {
+            value: 'all',
+            label: 'All',
+            count: counts.all,
+        },
+    ];
 
     const currentListUrl =
         `${location.pathname}${location.search}`;
@@ -164,72 +191,17 @@ export default function Winners() {
         <div className="space-y-5">
             <PageHeader
                 title="Winners"
-                description="Contact selected winners, confirm eligibility and manage replacements."
+                description="Start with winners needing contact or confirmation, then manage completed outcomes."
             />
 
-            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="w-full sm:max-w-xs">
-                        <label
-                            htmlFor="winner-status"
-                            className="mb-1 block text-sm font-medium text-gray-700"
-                        >
-                            Status
-                        </label>
-
-                        <select
-                            id="winner-status"
-                            value={status}
-                            onChange={(event) =>
-                                updateUrl(
-                                    event.target
-                                        .value as WinnerStatus | '',
-                                    1
-                                )
-                            }
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                        >
-                            <option value="">All statuses</option>
-
-                            {WINNER_STATUSES.map((option) => (
-                                <option
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="text-xs text-gray-500">
-                        {pagination.total} winner
-                        {pagination.total === 1 ? '' : 's'}
-                    </div>
-                </div>
-            </section>
-
-            {!loading && winners.length > 0 && (
-                <div className="grid gap-3 sm:grid-cols-3">
-                    <SummaryCard
-                        label="Needs Action"
-                        value={stats.needsAction}
-                        valueClassName="text-blue-700"
-                    />
-
-                    <SummaryCard
-                        label="Confirmed"
-                        value={stats.confirmed}
-                        valueClassName="text-green-700"
-                    />
-
-                    <SummaryCard
-                        label="Cancelled"
-                        value={stats.cancelled}
-                        valueClassName="text-red-700"
-                    />
-                </div>
-            )}
+            <WorkQueueTabs
+                active={queue}
+                ariaLabel="Winner work queues"
+                tabs={tabs}
+                onChange={(value) =>
+                    updateUrl(value as WinnerQueue, 1)
+                }
+            />
 
             {error && (
                 <Alert
@@ -247,9 +219,11 @@ export default function Winners() {
                     <EmptyState
                         title="No winners found."
                         description={
-                            status
-                                ? 'No winners match the selected status.'
-                                : 'Winners will appear here after a draw is executed.'
+                            queue === 'needs_action'
+                                ? 'No winners currently need administrator action.'
+                                : queue === 'all'
+                                    ? 'Winners will appear here after a draw is executed.'
+                                    : 'No winners are in this queue.'
                         }
                     />
                 ) : (
@@ -448,40 +422,12 @@ export default function Winners() {
                             total={pagination.total}
                             loading={loading}
                             onPageChange={(nextPage) =>
-                                updateUrl(status, nextPage)
+                                updateUrl(queue, nextPage)
                             }
                         />
                     </>
                 )}
             </section>
-        </div>
-    );
-}
-
-function SummaryCard({
-                         label,
-                         value,
-                         valueClassName = 'text-gray-900',
-                     }: {
-    label: string;
-    value: number;
-    valueClassName?: string;
-}) {
-    return (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                {label}
-            </div>
-
-            <div
-                className={`mt-1 text-2xl font-bold ${valueClassName}`}
-            >
-                {value}
-            </div>
-
-            <div className="mt-0.5 text-xs text-gray-400">
-                On this page
-            </div>
         </div>
     );
 }

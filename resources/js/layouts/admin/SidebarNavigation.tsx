@@ -83,24 +83,6 @@ export default function SidebarNavigation({
                         </NavLink>
 
                         <NavLink
-                            to="/admin/draws"
-                            onClick={
-                                onNavigate
-                            }
-                            className={
-                                linkClassName
-                            }
-                        >
-                            <Icon type="draws" />
-
-                            <span>
-                                {tr(
-                                    'Draws'
-                                )}
-                            </span>
-                        </NavLink>
-
-                        <NavLink
                             to="/admin/winners"
                             onClick={
                                 onNavigate
@@ -114,6 +96,24 @@ export default function SidebarNavigation({
                             <span>
                                 {tr(
                                     'Winners'
+                                )}
+                            </span>
+                        </NavLink>
+
+                        <NavLink
+                            to="/admin/draws"
+                            onClick={
+                                onNavigate
+                            }
+                            className={
+                                linkClassName
+                            }
+                        >
+                            <Icon type="draws" />
+
+                            <span>
+                                {tr(
+                                    'Draws'
                                 )}
                             </span>
                         </NavLink>
@@ -148,73 +148,9 @@ export default function SidebarNavigation({
                             </span>
                         </NavLink>
 
-                        <NavLink
-                            to="/admin/prizes"
-                            onClick={
-                                onNavigate
-                            }
-                            className={
-                                linkClassName
-                            }
-                        >
-                            <Icon type="prizes" />
-
-                            <span>
-                                {tr(
-                                    'Prizes'
-                                )}
-                            </span>
-                        </NavLink>
                     </div>
                 </div>
 
-                {/* Insights */}
-
-                <div>
-                    <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                        {tr(
-                            'Insights'
-                        )}
-                    </div>
-
-                    <div className="space-y-1">
-                        <NavLink
-                            to="/admin/reports"
-                            onClick={
-                                onNavigate
-                            }
-                            className={
-                                linkClassName
-                            }
-                        >
-                            <Icon type="reports" />
-
-                            <span>
-                                {tr(
-                                    'Reports'
-                                )}
-                            </span>
-                        </NavLink>
-
-                        <NavLink
-                            to="/admin/activity"
-                            onClick={
-                                onNavigate
-                            }
-                            className={
-                                linkClassName
-                            }
-                        >
-                            <Icon type="activity" />
-
-                            <span>
-                                {tr(
-                                    'Activity Log'
-                                )}
-                            </span>
-                        </NavLink>
-                    </div>
-                </div>
             </nav>
         </div>
     );

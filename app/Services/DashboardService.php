@@ -150,7 +150,7 @@ class DashboardService
                 $actions
             )
             ->latest()
-            ->limit(5)
+            ->limit(8)
             ->get()
             ->map(function (
                 AuditLog $log
@@ -219,7 +219,7 @@ class DashboardService
                 $actions
             )
             ->latest()
-            ->limit(5)
+            ->limit(8)
             ->get()
             ->map(function (
                 AuditLog $log
